@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bodega Guaripola</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #21253a;
+  --border: #2e3350;
+  --text: #e2e8f0;
+  --text2: #8892a4;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --teal: #14b8a6;
+  --pink: #ec4899;
+  --radius: 8px;
+  --sidebar: 220px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; display: flex; height: 100vh; overflow: hidden; }
+
+/* SIDEBAR */
+#sidebar {
+  width: var(--sidebar); background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+#sidebar .logo {
+  padding: 20px 16px 16px; border-bottom: 1px solid var(--border);
+}
+#sidebar .logo h1 { font-size: 15px; font-weight: 700; color: var(--text); }
+#sidebar .logo p { font-size: 11px; color: var(--text2); margin-top: 2px; }
+#sidebar nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+#sidebar nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+  color: var(--text2); text-decoration: none; font-size: 13px; cursor: pointer;
+  border-left: 3px solid transparent; transition: all 0.15s;
+}
+#sidebar nav a:hover { background: var(--bg3); color: var(--text); }
+#sidebar nav a.active { background: var(--bg3); color: var(--accent2); border-left-color: var(--accent); }
+#sidebar nav a .ico { font-size: 16px; width: 18px; text-align: center; }
+#sidebar .cfg-btn {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text2); cursor: pointer;
+}
+#sidebar .cfg-btn:hover { color: var(--text); }
+
+/* MAIN */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#topbar {
+  height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 12px; flex-shrink: 0;
+}
+#topbar h2 { font-size: 15px; font-weight: 600; flex: 1; }
+#topbar .badge { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text2); }
+#content { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* CARDS / STATS */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.stat-card .label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+.stat-card .sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+/* TABLES */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.card-header { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 10px; }
+.card-header h3 { font-size: 14px; font-weight: 600; flex: 1; }
+table { width: 100%; border-collapse: collapse; }
+thead th { background: var(--bg3); padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+tbody tr:hover { background: var(--bg3); }
+tbody td { padding: 10px 14px; font-size: 13px; }
+tbody tr:last-child { border-bottom: none; }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent2); }
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--border); }
+.btn-danger:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-green { background: var(--green); color: #fff; }
+.btn-green:hover { opacity: 0.85; }
+
+/* FORMS */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: 12px; color: var(--text2); font-weight: 500; }
+input, select, textarea {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); padding: 8px 10px; font-size: 13px; outline: none; width: 100%;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--bg2); }
+
+/* MODAL */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; }
+.overlay.show { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 680px; max-height: 85vh; overflow-y: auto; }
+.modal-header { display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.modal-header h3 { flex: 1; font-size: 15px; font-weight: 600; }
+.modal-header .close { background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; padding: 4px; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+/* BADGES */
+.badge-cat { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.stock-ok { color: var(--green); }
+.stock-low { color: var(--amber); }
+.stock-zero { color: var(--red); }
+
+/* SEARCH */
+.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-bar input { flex: 1; }
+
+/* VENTA CARRITO */
+#cart-area { display: grid; grid-template-columns: 1fr 320px; gap: 16px; height: calc(100vh - 132px); }
+#prod-picker { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; }
+#prod-picker .picker-search { padding: 10px; border-bottom: 1px solid var(--border); }
+#prod-picker .picker-list { flex: 1; overflow-y: auto; }
+.prod-item { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; gap: 10px; transition: background 0.1s; }
+.prod-item:hover { background: var(--bg3); }
+.prod-item .pname { font-size: 13px; flex: 1; }
+.prod-item .pprice { font-size: 13px; color: var(--accent2); font-weight: 600; }
+.prod-item .pstock { font-size: 11px; color: var(--text2); }
+#cart-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; }
+#cart-panel .cart-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+#cart-items { flex: 1; overflow-y: auto; }
+.cart-item { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 8px; }
+.cart-item .cname { flex: 1; font-size: 12px; }
+.cart-item .cqty { display: flex; align-items: center; gap: 4px; }
+.cart-item .cqty button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.cart-item .cqty input { width: 40px; text-align: center; padding: 3px; }
+.cart-item .csub { font-size: 12px; font-weight: 600; color: var(--accent2); min-width: 70px; text-align: right; }
+#cart-footer { padding: 14px 16px; border-top: 1px solid var(--border); }
+.cart-total-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+.cart-total-row.total { font-size: 16px; font-weight: 700; color: var(--accent2); }
+
+/* TABS */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 13px; color: var(--text2); border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+/* ALERTS */
+.alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 12px; }
+.alert-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: var(--amber); }
+.alert-success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: var(--green); }
+.alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+
+/* CONFIG */
+#config-area { max-width: 600px; }
+.config-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.config-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+
+/* LOADING */
+#loading { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; flex-direction: column; gap: 12px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+#toast { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.toast-msg { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; font-size: 13px; animation: slideIn 0.2s ease; }
+.toast-msg.ok { border-left: 3px solid var(--green); }
+.toast-msg.err { border-left: 3px solid var(--red); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* SETUP */
+#setup { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 998; }
+.setup-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 32px; max-width: 480px; width: 100%; }
+.setup-card h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.setup-card p { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+
+/* PAGINATOR */
+.paginator { display: flex; gap: 6px; align-items: center; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border); }
+.paginator span { font-size: 12px; color: var(--text2); }
+
+/* IMPORTAR PDF */
+.import-note { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+
+.section-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="setup-card">
+    <h2>⚙️ Configuración inicial</h2>
+    <p>Ingresá los datos de tu proyecto Supabase para conectar el sistema. Solo se hace una vez.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="form-group">
+        <label>Supabase URL</label>
+        <input id="cfg-url" type="text" placeholder="https://xxxx.supabase.co">
+      </div>
+      <div class="form-group">
+        <label>Anon Key</label>
+        <input id="cfg-key" type="text" placeholder="eyJhbGci...">
+      </div>
+      <div id="cfg-error" class="alert alert-error" style="display:none"></div>
+      <button class="btn btn-primary" onclick="saveConfig()" style="width:100%;justify-content:center;margin-top:4px">Conectar</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <span style="color:var(--text2);font-size:13px">Cargando...</span>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="logo">
+    <h1>🏪 Bodega Guaripola</h1>
+    <p>Sistema de gestión</p>
+  </div>
+  <nav>
+    <a onclick="goTo('dashboard')" class="active" id="nav-dashboard">
+      <span class="ico">📊</span> Dashboard
+    </a>
+    <a onclick="goTo('productos')" id="nav-productos">
+      <span class="ico">📦</span> Productos
+    </a>
+    <a onclick="goTo('ventas')" id="nav-ventas">
+      <span class="ico">🛒</span> Nueva venta
+    </a>
+    <a onclick="goTo('historial-ventas')" id="nav-historial-ventas">
+      <span class="ico">📋</span> Historial ventas
+    </a>
+    <a onclick="goTo('compras')" id="nav-compras">
+      <span class="ico">🚛</span> Compras
+    </a>
+    <a onclick="goTo('historial-compras')" id="nav-historial-compras">
+      <span class="ico">📄</span> Historial compras
+    </a>
+    <a onclick="goTo('proveedores')" id="nav-proveedores">
+      <span class="ico">🏭</span> Proveedores
+    </a>
+    <a onclick="goTo('ajustes')" id="nav-ajustes">
+      <span class="ico">🔧</span> Ajuste de stock
+    </a>
+    <a onclick="goTo('reportes')" id="nav-reportes">
+      <span class="ico">📈</span> Reportes
+    </a>
+    <a onclick="goTo('categorias')" id="nav-categorias">
+      <span class="ico">🏷️</span> Categorías
+    </a>
+  </nav>
+  <div class="cfg-btn" onclick="resetConfig()">⚙️ Cambiar conexión</div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="topbar">
+    <h2 id="page-title">Dashboard</h2>
+    <span class="badge" id="db-badge">Conectando...</span>
+  </div>
+  <div id="content"></div>
+</div>
+
+<!-- MODAL GENÉRICO -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal" id="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title">Modal</h3>
+      <button class="close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="modal-confirm">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const { createClient } = supabase;
+let sb = null;
+let currentPage = 'dashboard';
+let cart = [];
+let prodCache = [];
+let catCache = [];
+let provCache = [];
+
+// ─── CONFIG / INIT ───────────────────────────────────────────
+function saveConfig() {
+  const url = document.getElementById('cfg-url').value.trim();
+  const key = document.getElementById('cfg-key').value.trim();
+  if (!url || !key) { showCfgError('Completá ambos campos.'); return; }
+  localStorage.setItem('bg_url', url);
+  localStorage.setItem('bg_key', key);
+  initSupabase(url, key);
+}
+function resetConfig() {
+  localStorage.removeItem('bg_url');
+  localStorage.removeItem('bg_key');
+  location.reload();
+}
+function showCfgError(msg) {
+  const el = document.getElementById('cfg-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+async function initSupabase(url, key) {
+  try {
+    sb = createClient(url, key);
+    const { data, error } = await sb.from('bodega_categorias').select('id').limit(1);
+    if (error) throw error;
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('db-badge').textContent = '● Conectado';
+    document.getElementById('db-badge').style.color = 'var(--green)';
+    await loadCaches();
+    goTo('dashboard');
+  } catch(e) {
+    document.getElementById('setup').style.display = 'flex';
+    document.getElementById('loading').style.display = 'none';
+    showCfgError('Error de conexión: ' + e.message);
+  }
+}
+async function loadCaches() {
+  const [cats, provs, prods] = await Promise.all([
+    sb.from('bodega_categorias').select('*').order('nombre'),
+    sb.from('bodega_proveedores').select('id,nombre').eq('activo', true).order('nombre'),
+    sb.from('bodega_productos').select('id,nombre,codigo_barra,stock,precio_venta,precio_mayorista,precio_libre,precio_costo,categoria_id').eq('activo',true).order('nombre')
+  ]);
+  catCache = cats.data || [];
+  provCache = provs.data || [];
+  prodCache = prods.data || [];
+}
+
+// ─── ROUTER ──────────────────────────────────────────────────
+const pages = {
+  dashboard: renderDashboard,
+  productos: renderProductos,
+  ventas: renderVentas,
+  'historial-ventas': renderHistorialVentas,
+  compras: renderCompras,
+  'historial-compras': renderHistorialCompras,
+  proveedores: renderProveedores,
+  ajustes: renderAjustes,
+  reportes: renderReportes,
+  categorias: renderCategorias,
+};
+const titles = {
+  dashboard:'Dashboard', productos:'Productos', ventas:'Nueva venta',
+  'historial-ventas':'Historial de ventas', compras:'Nueva compra',
+  'historial-compras':'Historial de compras', proveedores:'Proveedores',
+  ajustes:'Ajuste de stock', reportes:'Reportes', categorias:'Categorías'
+};
+async function goTo(page) {
+  currentPage = page;
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  const nav = document.getElementById('nav-' + page);
+  if (nav) nav.classList.add('active');
+  document.getElementById('page-title').textContent = titles[page] || page;
+  document.getElementById('content').innerHTML = '<div style="color:var(--text2);padding:40px;text-align:center"><div class="spinner" style="margin:0 auto 12px"></div>Cargando...</div>';
+  if (pages[page]) await pages[page]();
+}
+
+// ─── UTILS ───────────────────────────────────────────────────
+const gs = (id) => document.getElementById(id);
+const fmtGs = (n) => 'Gs. ' + (n||0).toLocaleString('es-PY');
+const fmtDate = (d) => d ? new Date(d+'T00:00:00').toLocaleDateString('es-PY') : '-';
+
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = 'toast-msg ' + type;
+  el.textContent = msg;
+  gs('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+function getCatName(id) { const c = catCache.find(x=>x.id===id); return c?.nombre||'-'; }
+function getCatColor(id) { const c = catCache.find(x=>x.id===id); return c?.color||'#6b7280'; }
+function getProvName(id) { const p = provCache.find(x=>x.id===id); return p?.nombre||'-'; }
+
+function openModal(title, body, confirmFn, confirmText='Guardar') {
+  gs('modal-title').textContent = title;
+  gs('modal-body').innerHTML = body;
+  gs('modal-confirm').textContent = confirmText;
+  gs('modal-confirm').onclick = confirmFn;
+  gs('modal-overlay').classList.add('show');
+}
+function closeModal() { gs('modal-overlay').classList.remove('show'); }
+
+// ─── DASHBOARD ───────────────────────────────────────────────
+async function renderDashboard() {
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = today.slice(0,7) + '-01';
+
+  const [venHoy, venMes, comMes, stockBajo] = await Promise.all([
+    sb.from('bodega_ventas').select('total_final').eq('fecha', today),
+    sb.from('bodega_ventas').select('total_final').gte('fecha', firstDay),
+    sb.from('bodega_compras').select('total').gte('fecha', firstDay),
+    sb.from('bodega_productos').select('id').lt('stock', 5).gt('stock', -9999).eq('activo', true)
+  ]);
+
+  const totalHoy = (venHoy.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
+  const totalMes = (venMes.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
+  const totalCom = (comMes.data||[]).reduce((s,v)=>s+(v.total||0),0);
+  const bajoCant = (stockBajo.data||[]).length;
+
+  const ultVentas = await sb.from('bodega_ventas')
+    .select('id,fecha,tipo,total_final,metodo_pago').order('created_at',{ascending:false}).limit(8);
+
+  gs('content').innerHTML = `
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Ventas hoy</div>
+      <div class="value" style="color:var(--green)">${fmtGs(totalHoy)}</div>
+      <div class="sub">${(venHoy.data||[]).length} transacciones</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Ventas del mes</div>
+      <div class="value" style="color:var(--accent2)">${fmtGs(totalMes)}</div>
+      <div class="sub">${(venMes.data||[]).length} transacciones</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Compras del mes</div>
+      <div class="value" style="color:var(--amber)">${fmtGs(totalCom)}</div>
+      <div class="sub">${(comMes.data||[]).length} órdenes</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Stock bajo</div>
+      <div class="value" style="color:${bajoCant>0?'var(--red)':'var(--green)'}">${bajoCant}</div>
+      <div class="sub">productos con stock < 5</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Productos activos</div>
+      <div class="value">${prodCache.length}</div>
+      <div class="sub">${catCache.length} categorías</div>
+    </div>
+  </div>
+  ${bajoCant>0?`<div class="alert alert-warning">⚠️ Hay ${bajoCant} productos con stock bajo. <a onclick="goTo('productos')" style="cursor:pointer;text-decoration:underline">Ver productos</a></div>`:''}
+  <div class="card">
+    <div class="card-header"><h3>Últimas ventas</h3><button class="btn btn-secondary btn-sm" onclick="goTo('historial-ventas')">Ver todo</button></div>
+    <table>
+      <thead><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Método pago</th><th>Total</th></tr></thead>
+      <tbody>
+        ${(ultVentas.data||[]).map(v=>`
+          <tr>
+            <td style="color:var(--text2);font-size:11px">${v.id.slice(0,8)}</td>
+            <td>${fmtDate(v.fecha)}</td>
+            <td><span class="badge-cat" style="background:rgba(99,102,241,0.15);color:var(--accent2)">${v.tipo||'minorista'}</span></td>
+            <td>${v.metodo_pago||'-'}</td>
+            <td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ─── PRODUCTOS ───────────────────────────────────────────────
+let prodPage = 1, prodSearch = '', prodCatFilter = '';
+async function renderProductos() {
+  const limit = 50;
+  const from = (prodPage-1)*limit, to = from+limit-1;
+  let q = sb.from('bodega_productos').select('*', {count:'exact'})
+    .eq('activo',true).order('nombre').range(from, to);
+  if (prodSearch) q = q.ilike('nombre', `%${prodSearch}%`);
+  if (prodCatFilter) q = q.eq('categoria_id', prodCatFilter);
+  const { data, count } = await q;
+
+  gs('content').innerHTML = `
+  <div class="search-bar">
+    <input id="prod-search" placeholder="🔍 Buscar por nombre o código..." value="${prodSearch}" oninput="prodSearch=this.value;prodPage=1;renderProductos()">
+    <select id="prod-cat-filter" onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
+      <option value="">Todas las categorías</option>
+      ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${c.nombre}</option>`).join('')}
+    </select>
+    <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo producto</button>
+    <button class="btn btn-secondary" onclick="openImportModal()">📥 Importar CSV</button>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h3>Productos (${count||0})</h3>
+    </div>
+    <table>
+      <thead><tr><th>Cód. barra</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P. Venta</th><th>P. Mayorista</th><th>Acciones</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(p=>`
+          <tr>
+            <td style="font-size:11px;color:var(--text2)">${p.codigo_barra||'-'}</td>
+            <td style="font-weight:500">${p.nombre}</td>
+            <td><span class="badge-cat" style="background:${getCatColor(p.categoria_id)}22;color:${getCatColor(p.categoria_id)}">${getCatName(p.categoria_id)}</span></td>
+            <td class="${p.stock<=0?'stock-zero':p.stock<5?'stock-low':'stock-ok'}" style="font-weight:600">${p.stock}</td>
+            <td>${fmtGs(p.precio_costo)}</td>
+            <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
+            <td style="color:var(--teal)">${fmtGs(p.precio_mayorista)}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="paginator">
+      <span>Página ${prodPage} · ${count||0} registros</span>
+      ${prodPage>1?`<button class="btn btn-secondary btn-sm" onclick="prodPage--;renderProductos()">← Ant.</button>`:''}
+      ${(count||0)>prodPage*limit?`<button class="btn btn-secondary btn-sm" onclick="prodPage++;renderProductos()">Sig. →</button>`:''}
+    </div>
+  </div>`;
+}
+
+function openProdModal(prod=null) {
+  const isEdit = !!prod;
+  const body = `
+  <div class="form-grid">
+    <div class="form-group"><label>Código de barra</label><input id="p-cod" value="${prod?.codigo_barra||''}"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${prod?.nombre||''}"></div>
+    <div class="form-group"><label>Categoría</label>
+      <select id="p-cat">
+        <option value="">Sin categoría</option>
+        ${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${c.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Proveedor</label>
+      <select id="p-prov">
+        <option value="">Sin proveedor</option>
+        ${provCache.map(p=>`<option value="${p.id}" ${prod?.proveedor_id===p.id?'selected':''}>${p.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Unidad</label>
+      <select id="p-uni">
+        ${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
+    <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
+    <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}"></div>
+    <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}"></div>
+    <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}"></div>
+    <div class="form-group"><label>Precio libre</label>
+      <select id="p-libre"><option value="false" ${!prod?.precio_libre?'selected':''}>No</option><option value="true" ${prod?.precio_libre?'selected':''}>Sí</option></select>
+    </div>
+    <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${prod?.notas||''}</textarea></div>
+  </div>`;
+  openModal(isEdit?'Editar producto':'Nuevo producto', body, ()=>saveProd(prod?.id));
+}
+
+async function editProd(id) {
+  const { data } = await sb.from('bodega_productos').select('*').eq('id',id).single();
+  if (data) openProdModal(data);
+}
+async function saveProd(id=null) {
+  const obj = {
+    codigo_barra: gs('p-cod').value||null,
+    nombre: gs('p-nom').value.trim(),
+    categoria_id: gs('p-cat').value||null,
+    proveedor_id: gs('p-prov').value||null,
+    unidad: gs('p-uni').value,
+    stock: parseInt(gs('p-stock').value)||0,
+    stock_minimo: parseInt(gs('p-stmin').value)||0,
+    precio_costo: parseFloat(gs('p-costo').value)||0,
+    precio_venta: parseFloat(gs('p-venta').value)||0,
+    precio_mayorista: parseFloat(gs('p-mayor').value)||0,
+    precio_libre: gs('p-libre').value==='true',
+    notas: gs('p-notas').value||null,
+  };
+  if (!obj.nombre) { toast('El nombre es obligatorio','err'); return; }
+  let err;
+  if (id) ({ error: err } = await sb.from('bodega_productos').update(obj).eq('id',id));
+  else ({ error: err } = await sb.from('bodega_productos').insert(obj));
+  if (err) { toast('Error: '+err.message,'err'); return; }
+  toast(id?'Producto actualizado':'Producto creado');
+  closeModal();
+  await loadCaches();
+  renderProductos();
+}
+async function deleteProd(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+  const { error } = await sb.from('bodega_productos').update({activo:false}).eq('id',id);
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  toast('Producto eliminado');
+  await loadCaches();
+  renderProductos();
+}
+
+function openImportModal() {
+  const body = `
+  <div class="import-note">💡 Pegá el contenido CSV con columnas: <b>codigo_barra, nombre, categoria, precio_costo, precio_venta</b></div>
+  <div class="form-group"><label>Datos CSV (una fila por línea, separado por comas)</label>
+    <textarea id="csv-data" rows="10" placeholder="7840058003874,AGUA CON GAS DASANI 2250 ML,AGUA,3960,5000&#10;7840058002105,AGUA CON GAS DASANI 500 ML,AGUA,2445,3500"></textarea>
+  </div>
+  <div id="import-result"></div>`;
+  openModal('Importar productos', body, importCSV, 'Importar');
+}
+async function importCSV() {
+  const lines = gs('csv-data').value.trim().split('\n');
+  let ok = 0, fail = 0;
+  for (const line of lines) {
+    const parts = line.split(',').map(s=>s.trim());
+    if (parts.length < 2) continue;
+    const [cod, nom, catNom, costo, venta] = parts;
+    if (!nom) continue;
+    const cat = catCache.find(c=>c.nombre.toUpperCase()===catNom?.toUpperCase());
+    const obj = {
+      codigo_barra: cod||null, nombre: nom, stock: 0,
+      categoria_id: cat?.id||null,
+      precio_costo: parseFloat(costo)||0,
+      precio_venta: parseFloat(venta)||0,
+    };
+    const { error } = await sb.from('bodega_productos').upsert(obj, {onConflict:'codigo_barra'});
+    if (error) fail++; else ok++;
+  }
+  gs('import-result').innerHTML = `<div class="alert ${fail?'alert-warning':'alert-success'}">✓ ${ok} importados. ${fail} errores.</div>`;
+  if (ok) { await loadCaches(); }
+}
+
+// ─── VENTAS ──────────────────────────────────────────────────
+let ventaTipo = 'minorista';
+function renderVentas() {
+  cart = [];
+  gs('content').innerHTML = `
+  <div id="cart-area">
+    <div id="prod-picker">
+      <div class="picker-search">
+        <input placeholder="🔍 Buscar producto..." id="picker-search" oninput="filterPicker(this.value)" autofocus>
+      </div>
+      <div class="picker-list" id="picker-list"></div>
+    </div>
+    <div id="cart-panel">
+      <div class="cart-header">
+        🛒 Carrito
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-sm ${ventaTipo==='minorista'?'btn-primary':'btn-secondary'}" onclick="setVentaTipo('minorista')">Minorista</button>
+          <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVentaTipo('mayorista')">Mayorista</button>
+        </div>
+      </div>
+      <div id="cart-items"></div>
+      <div id="cart-footer">
+        <div class="form-group" style="margin-bottom:10px"><label>Cliente (opcional)</label><input id="venta-cliente" placeholder="Nombre del cliente"></div>
+        <div class="cart-total-row"><span>Subtotal</span><span id="cart-sub">Gs. 0</span></div>
+        <div class="form-group" style="margin-bottom:8px"><label>Descuento (Gs.)</label><input id="venta-desc" type="number" value="0" oninput="updateCartTotals()"></div>
+        <div class="cart-total-row total"><span>TOTAL</span><span id="cart-total">Gs. 0</span></div>
+        <div style="margin:10px 0 8px;font-size:12px;color:var(--text2);font-weight:600">Pago</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          <div class="form-group"><label>Efectivo</label><input id="pago-efec" type="number" value="0" oninput="updateCartTotals()"></div>
+          <div class="form-group"><label>Transf.</label><input id="pago-transf" type="number" value="0" oninput="updateCartTotals()"></div>
+          <div class="form-group"><label>Otro</label><input id="pago-otro" type="number" value="0" oninput="updateCartTotals()"></div>
+        </div>
+        <div id="vuelto-row" style="display:none" class="cart-total-row"><span>Vuelto</span><span id="cart-vuelto" style="color:var(--green)">Gs. 0</span></div>
+        <button class="btn btn-green" style="width:100%;justify-content:center;margin-top:6px" onclick="finalizarVenta()">✓ Confirmar venta</button>
+      </div>
+    </div>
+  </div>`;
+  filterPicker('');
+}
+function setVentaTipo(tipo) {
+  ventaTipo = tipo;
+  cart.forEach(item => {
+    const prod = prodCache.find(p=>p.id===item.producto_id);
+    if (!prod) return;
+    item.precio = tipo==='mayorista' && prod.precio_mayorista > 0 ? prod.precio_mayorista : prod.precio_venta;
+  });
+  renderVentas();
+  setTimeout(()=>{ cart.forEach(item=>addToCart(item.producto_id)); },0);
+  // Re-render picker after rebuild
+}
+function filterPicker(q) {
+  const list = gs('picker-list');
+  if (!list) return;
+  const results = prodCache.filter(p => !q || p.nombre.toLowerCase().includes(q.toLowerCase()) || (p.codigo_barra||'').includes(q)).slice(0,80);
+  list.innerHTML = results.map(p=>`
+    <div class="prod-item" onclick="addToCart('${p.id}')">
+      <div>
+        <div class="pname">${p.nombre}</div>
+        <div class="pstock">Stock: ${p.stock}</div>
+      </div>
+      <div class="pprice">${fmtGs(ventaTipo==='mayorista'&&p.precio_mayorista>0?p.precio_mayorista:p.precio_venta)}</div>
+    </div>`).join('');
+}
+function addToCart(prodId) {
+  const prod = prodCache.find(p=>p.id===prodId);
+  if (!prod) return;
+  const precio = ventaTipo==='mayorista' && prod.precio_mayorista>0 ? prod.precio_mayorista : prod.precio_venta;
+  const exist = cart.find(c=>c.producto_id===prodId);
+  if (exist) exist.cantidad++;
+  else cart.push({producto_id:prodId, nombre:prod.nombre, precio, cantidad:1});
+  renderCart();
+}
+function renderCart() {
+  const el = gs('cart-items');
+  if (!el) return;
+  el.innerHTML = cart.map((item,i)=>`
+    <div class="cart-item">
+      <div class="cname">${item.nombre}</div>
+      <div class="cqty">
+        <button onclick="cartQty(${i},-1)">-</button>
+        <input type="number" value="${item.cantidad}" min="1" onchange="cartQtySet(${i},this.value)" style="width:40px">
+        <button onclick="cartQty(${i},1)">+</button>
+      </div>
+      <div class="csub">${fmtGs(item.precio*item.cantidad)}</div>
+      <button class="btn btn-danger btn-sm" onclick="cartRemove(${i})">✕</button>
+    </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Agregá productos desde la lista</div>';
+  updateCartTotals();
+}
+function cartQty(i, delta) { cart[i].cantidad = Math.max(1, cart[i].cantidad + delta); renderCart(); }
+function cartQtySet(i, v) { cart[i].cantidad = Math.max(1, parseInt(v)||1); renderCart(); }
+function cartRemove(i) { cart.splice(i,1); renderCart(); }
+function updateCartTotals() {
+  const sub = cart.reduce((s,c)=>s+c.precio*c.cantidad,0);
+  const desc = parseFloat(gs('venta-desc')?.value)||0;
+  const total = Math.max(0, sub-desc);
+  const efec = parseFloat(gs('pago-efec')?.value)||0;
+  const transf = parseFloat(gs('pago-transf')?.value)||0;
+  const otro = parseFloat(gs('pago-otro')?.value)||0;
+  const pagado = efec+transf+otro;
+  const vuelto = pagado - total;
+  if (gs('cart-sub')) gs('cart-sub').textContent = fmtGs(sub);
+  if (gs('cart-total')) gs('cart-total').textContent = fmtGs(total);
+  if (gs('cart-vuelto')) { gs('cart-vuelto').textContent = fmtGs(Math.abs(vuelto)); gs('vuelto-row').style.display=efec>0?'flex':'none'; }
+}
+async function finalizarVenta() {
+  if (!cart.length) { toast('El carrito está vacío','err'); return; }
+  const desc = parseFloat(gs('venta-desc').value)||0;
+  const total = cart.reduce((s,c)=>s+c.precio*c.cantidad,0);
+  const totalFinal = Math.max(0,total-desc);
+  const venta = {
+    fecha: new Date().toISOString().split('T')[0],
+    tipo: ventaTipo,
+    cliente_nombre: gs('venta-cliente').value||null,
+    total, descuento: desc, total_final: totalFinal,
+    metodo_pago: 'mixto',
+    monto_efectivo: parseFloat(gs('pago-efec').value)||0,
+    monto_transferencia: parseFloat(gs('pago-transf').value)||0,
+    monto_otro: parseFloat(gs('pago-otro').value)||0,
+  };
+  const { data: vData, error: vErr } = await sb.from('bodega_ventas').insert(venta).select().single();
+  if (vErr) { toast('Error al guardar venta: '+vErr.message,'err'); return; }
+
+  const detalles = cart.map(c=>({venta_id:vData.id, producto_id:c.producto_id, cantidad:c.cantidad, precio_unitario:c.precio}));
+  const { error: dErr } = await sb.from('bodega_ventas_detalle').insert(detalles);
+  if (dErr) { toast('Error en detalle: '+dErr.message,'err'); return; }
+
+  // Actualizar stock
+  for (const c of cart) {
+    const prod = prodCache.find(p=>p.id===c.producto_id);
+    if (!prod) continue;
+    const newStock = (prod.stock||0) - c.cantidad;
+    await sb.from('bodega_productos').update({stock:newStock}).eq('id',c.producto_id);
+    await sb.from('bodega_ajustes_stock').insert({
+      producto_id:c.producto_id, tipo:'salida', cantidad:c.cantidad,
+      motivo:'Venta', stock_anterior:prod.stock, stock_nuevo:newStock,
+      referencia_id:vData.id, referencia_tipo:'venta'
+    });
+  }
+  toast('✓ Venta registrada: '+fmtGs(totalFinal));
+  await loadCaches();
+  cart = [];
+  renderVentas();
+}
+
+// ─── HISTORIAL VENTAS ────────────────────────────────────────
+async function renderHistorialVentas() {
+  const { data } = await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
+  gs('content').innerHTML = `
+  <div class="card">
+    <div class="card-header"><h3>Historial de ventas</h3></div>
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Descuento</th><th>Total</th><th>Pago</th><th>Acc.</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(v=>`
+          <tr>
+            <td>${fmtDate(v.fecha)}</td>
+            <td><span class="badge-cat" style="background:rgba(99,102,241,0.15);color:var(--accent2)">${v.tipo}</span></td>
+            <td>${v.cliente_nombre||'-'}</td>
+            <td>${fmtGs(v.total)}</td>
+            <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
+            <td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td>
+            <td style="font-size:12px;color:var(--text2)">${v.metodo_pago}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">👁</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+async function verVenta(id) {
+  const { data } = await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre)').eq('venta_id',id);
+  const body = `<table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th></tr></thead><tbody>
+    ${(data||[]).map(d=>`<tr><td>${d.bodega_productos?.nombre||'-'}</td><td>${d.cantidad}</td><td>${fmtGs(d.precio_unitario)}</td><td style="font-weight:600">${fmtGs(d.subtotal)}</td></tr>`).join('')}
+  </tbody></table>`;
+  openModal('Detalle de venta', body, null, '');
+  gs('modal-confirm').style.display='none';
+  setTimeout(()=>gs('modal-confirm').style.display='',100);
+}
+
+// ─── COMPRAS ─────────────────────────────────────────────────
+let compraItems = [];
+async function renderCompras() {
+  compraItems = [];
+  gs('content').innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;height:calc(100vh - 132px)">
+    <div id="prod-picker">
+      <div class="picker-search">
+        <input placeholder="🔍 Buscar producto para agregar..." id="cpicker-search" oninput="filterCPicker(this.value)">
+      </div>
+      <div class="picker-list" id="cpicker-list"></div>
+    </div>
+    <div id="cart-panel">
+      <div class="cart-header">🚛 Orden de compra</div>
+      <div style="padding:10px;border-bottom:1px solid var(--border)">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr">
+          <div class="form-group"><label>Proveedor</label>
+            <select id="comp-prov">
+              <option value="">Sin proveedor</option>
+              ${provCache.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+          <div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>
+          <div class="form-group"><label>Método pago</label>
+            <select id="comp-metpago">
+              <option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="ccomp-items"></div>
+      <div id="cart-footer">
+        <div class="cart-total-row total"><span>TOTAL</span><span id="comp-total">Gs. 0</span></div>
+        <div class="form-group" style="margin:8px 0"><label>Notas</label><textarea id="comp-notas" rows="2"></textarea></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="finalizarCompra()">✓ Registrar compra</button>
+      </div>
+    </div>
+  </div>`;
+  filterCPicker('');
+}
+function filterCPicker(q) {
+  const list = gs('cpicker-list');
+  if (!list) return;
+  const results = prodCache.filter(p => !q || p.nombre.toLowerCase().includes(q.toLowerCase())).slice(0,80);
+  list.innerHTML = results.map(p=>`
+    <div class="prod-item" onclick="addToCompra('${p.id}')">
+      <div><div class="pname">${p.nombre}</div><div class="pstock">Stock actual: ${p.stock}</div></div>
+      <div class="pprice">${fmtGs(p.precio_costo)}</div>
+    </div>`).join('');
+}
+function addToCompra(prodId) {
+  const prod = prodCache.find(p=>p.id===prodId);
+  if (!prod) return;
+  const exist = compraItems.find(c=>c.producto_id===prodId);
+  if (exist) exist.cantidad++;
+  else compraItems.push({producto_id:prodId, nombre:prod.nombre, costo:prod.precio_costo, cantidad:1});
+  renderCompraItems();
+}
+function renderCompraItems() {
+  const el = gs('ccomp-items');
+  if (!el) return;
+  el.innerHTML = compraItems.map((item,i)=>`
+    <div class="cart-item">
+      <div class="cname">${item.nombre}</div>
+      <div class="cqty">
+        <button onclick="compraQty(${i},-1)">-</button>
+        <input type="number" value="${item.cantidad}" min="1" onchange="compraQtySet(${i},this.value)" style="width:40px">
+        <button onclick="compraQty(${i},1)">+</button>
+      </div>
+      <input type="number" value="${item.costo}" onchange="compraCosto(${i},this.value)" style="width:80px;text-align:right" placeholder="Costo">
+      <button class="btn btn-danger btn-sm" onclick="compraRemove(${i})">✕</button>
+    </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
+  const total = compraItems.reduce((s,c)=>s+c.costo*c.cantidad,0);
+  if (gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
+}
+function compraQty(i,d){ compraItems[i].cantidad=Math.max(1,compraItems[i].cantidad+d); renderCompraItems(); }
+function compraQtySet(i,v){ compraItems[i].cantidad=Math.max(1,parseInt(v)||1); renderCompraItems(); }
+function compraCosto(i,v){ compraItems[i].costo=parseFloat(v)||0; renderCompraItems(); }
+function compraRemove(i){ compraItems.splice(i,1); renderCompraItems(); }
+
+async function finalizarCompra() {
+  if (!compraItems.length) { toast('No hay productos','err'); return; }
+  const total = compraItems.reduce((s,c)=>s+c.costo*c.cantidad,0);
+  const compra = {
+    fecha: gs('comp-fecha').value,
+    proveedor_id: gs('comp-prov').value||null,
+    numero_factura: gs('comp-factura').value||null,
+    total, metodo_pago: gs('comp-metpago').value,
+    notas: gs('comp-notas').value||null,
+  };
+  const { data: cData, error: cErr } = await sb.from('bodega_compras').insert(compra).select().single();
+  if (cErr) { toast('Error: '+cErr.message,'err'); return; }
+
+  const detalles = compraItems.map(c=>({compra_id:cData.id,producto_id:c.producto_id,cantidad:c.cantidad,costo_unitario:c.costo}));
+  await sb.from('bodega_compras_detalle').insert(detalles);
+
+  for (const c of compraItems) {
+    const prod = prodCache.find(p=>p.id===c.producto_id);
+    if (!prod) continue;
+    const newStock = (prod.stock||0) + c.cantidad;
+    await sb.from('bodega_productos').update({stock:newStock, precio_costo:c.costo}).eq('id',c.producto_id);
+    await sb.from('bodega_ajustes_stock').insert({
+      producto_id:c.producto_id, tipo:'entrada', cantidad:c.cantidad,
+      motivo:'Compra', stock_anterior:prod.stock, stock_nuevo:newStock,
+      referencia_id:cData.id, referencia_tipo:'compra'
+    });
+  }
+  toast('✓ Compra registrada: '+fmtGs(total));
+  await loadCaches();
+  compraItems = [];
+  renderCompras();
+}
+
+// ─── HISTORIAL COMPRAS ───────────────────────────────────────
+async function renderHistorialCompras() {
+  const { data } = await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  gs('content').innerHTML = `
+  <div class="card">
+    <div class="card-header"><h3>Historial de compras</h3></div>
+    <table>
+      <thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Método pago</th><th>Total</th><th>Acc.</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(c=>`
+          <tr>
+            <td>${fmtDate(c.fecha)}</td>
+            <td>${c.bodega_proveedores?.nombre||'-'}</td>
+            <td style="font-size:11px;color:var(--text2)">${c.numero_factura||'-'}</td>
+            <td>${c.metodo_pago||'-'}</td>
+            <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
+            <td><button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">👁</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+async function verCompra(id) {
+  const { data } = await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre)').eq('compra_id',id);
+  const body = `<table><thead><tr><th>Producto</th><th>Cantidad</th><th>Costo unit.</th><th>Subtotal</th></tr></thead><tbody>
+    ${(data||[]).map(d=>`<tr><td>${d.bodega_productos?.nombre||'-'}</td><td>${d.cantidad}</td><td>${fmtGs(d.costo_unitario)}</td><td style="font-weight:600">${fmtGs(d.subtotal)}</td></tr>`).join('')}
+  </tbody></table>`;
+  openModal('Detalle de compra', body, null, '');
+  gs('modal-confirm').style.display='none';
+  setTimeout(()=>gs('modal-confirm').style.display='',100);
+}
+
+// ─── PROVEEDORES ─────────────────────────────────────────────
+async function renderProveedores() {
+  const { data } = await sb.from('bodega_proveedores').select('*').eq('activo',true).order('nombre');
+  gs('content').innerHTML = `
+  <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="openProvModal()">+ Nuevo proveedor</button></div>
+  <div class="card">
+    <div class="card-header"><h3>Proveedores (${(data||[]).length})</h3></div>
+    <table>
+      <thead><tr><th>Nombre</th><th>RUC</th><th>Teléfono</th><th>Email</th><th>Contacto</th><th>Acciones</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(p=>`
+          <tr>
+            <td style="font-weight:500">${p.nombre}</td>
+            <td>${p.ruc||'-'}</td>
+            <td>${p.telefono||'-'}</td>
+            <td>${p.email||'-'}</td>
+            <td>${p.contacto||'-'}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="editProv('${p.id}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProv('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+function openProvModal(prov=null) {
+  const body = `<div class="form-grid">
+    <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="pv-nom" value="${prov?.nombre||''}"></div>
+    <div class="form-group"><label>RUC</label><input id="pv-ruc" value="${prov?.ruc||''}"></div>
+    <div class="form-group"><label>Teléfono</label><input id="pv-tel" value="${prov?.telefono||''}"></div>
+    <div class="form-group"><label>Email</label><input id="pv-email" value="${prov?.email||''}"></div>
+    <div class="form-group"><label>Contacto</label><input id="pv-cont" value="${prov?.contacto||''}"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="pv-dir" value="${prov?.direccion||''}"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="pv-notas" rows="2">${prov?.notas||''}</textarea></div>
+  </div>`;
+  openModal(prov?'Editar proveedor':'Nuevo proveedor', body, ()=>saveProv(prov?.id));
+}
+async function editProv(id) {
+  const { data } = await sb.from('bodega_proveedores').select('*').eq('id',id).single();
+  if (data) openProvModal(data);
+}
+async function saveProv(id=null) {
+  const obj = {
+    nombre:gs('pv-nom').value.trim(),
+    ruc:gs('pv-ruc').value||null, telefono:gs('pv-tel').value||null,
+    email:gs('pv-email').value||null, contacto:gs('pv-cont').value||null,
+    direccion:gs('pv-dir').value||null, notas:gs('pv-notas').value||null,
+  };
+  if (!obj.nombre) { toast('Nombre obligatorio','err'); return; }
+  let err;
+  if (id) ({ error:err } = await sb.from('bodega_proveedores').update(obj).eq('id',id));
+  else ({ error:err } = await sb.from('bodega_proveedores').insert(obj));
+  if (err) { toast('Error: '+err.message,'err'); return; }
+  toast('Proveedor guardado');
+  closeModal();
+  await loadCaches();
+  renderProveedores();
+}
+async function deleteProv(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+  await sb.from('bodega_proveedores').update({activo:false}).eq('id',id);
+  toast('Proveedor eliminado');
+  await loadCaches();
+  renderProveedores();
+}
+
+// ─── AJUSTE DE STOCK ─────────────────────────────────────────
+async function renderAjustes() {
+  const { data } = await sb.from('bodega_ajustes_stock').select('*,bodega_productos(nombre)')
+    .order('created_at',{ascending:false}).limit(80);
+  gs('content').innerHTML = `
+  <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="openAjusteModal()">+ Nuevo ajuste</button></div>
+  <div class="card">
+    <div class="card-header"><h3>Movimientos de stock</h3></div>
+    <table>
+      <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Stock ant.</th><th>Stock nuevo</th><th>Motivo</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(a=>`
+          <tr>
+            <td style="font-size:11px">${new Date(a.created_at).toLocaleDateString('es-PY')}</td>
+            <td>${a.bodega_productos?.nombre||'-'}</td>
+            <td><span class="badge-cat" style="background:${a.tipo==='entrada'?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'};color:${a.tipo==='entrada'?'var(--green)':'var(--red)'}">${a.tipo}</span></td>
+            <td style="font-weight:600">${a.tipo==='entrada'?'+':''}${a.tipo==='salida'?'-':''}${a.cantidad}</td>
+            <td style="color:var(--text2)">${a.stock_anterior??'-'}</td>
+            <td style="font-weight:600">${a.stock_nuevo??'-'}</td>
+            <td style="font-size:12px;color:var(--text2)">${a.motivo||'-'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+function openAjusteModal() {
+  const body = `<div class="form-grid">
+    <div class="form-group" style="grid-column:1/-1"><label>Producto *</label>
+      <select id="aj-prod">
+        <option value="">Seleccionar...</option>
+        ${prodCache.map(p=>`<option value="${p.id}">${p.nombre} (Stock: ${p.stock})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Tipo</label>
+      <select id="aj-tipo">
+        <option value="ajuste_positivo">Ajuste positivo (+)</option>
+        <option value="ajuste_negativo">Ajuste negativo (-)</option>
+        <option value="entrada">Entrada</option>
+        <option value="salida">Salida</option>
+        <option value="inventario">Inventario (fija stock)</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Cantidad</label><input id="aj-cant" type="number" value="1" min="1"></div>
+    <div class="form-group" style="grid-column:1/-1"><label>Motivo</label><input id="aj-motivo" placeholder="Ej: Merma, inventario físico..."></div>
+  </div>`;
+  openModal('Ajuste de stock', body, saveAjuste);
+}
+async function saveAjuste() {
+  const prodId = gs('aj-prod').value;
+  const tipo = gs('aj-tipo').value;
+  const cant = parseInt(gs('aj-cant').value)||1;
+  const motivo = gs('aj-motivo').value;
+  if (!prodId) { toast('Seleccioná un producto','err'); return; }
+  const prod = prodCache.find(p=>p.id===prodId);
+  let newStock = prod.stock;
+  if (tipo==='ajuste_positivo'||tipo==='entrada') newStock += cant;
+  else if (tipo==='ajuste_negativo'||tipo==='salida') newStock -= cant;
+  else if (tipo==='inventario') newStock = cant;
+  await sb.from('bodega_productos').update({stock:newStock}).eq('id',prodId);
+  await sb.from('bodega_ajustes_stock').insert({
+    producto_id:prodId, tipo, cantidad:cant, motivo,
+    stock_anterior:prod.stock, stock_nuevo:newStock, referencia_tipo:'ajuste_manual'
+  });
+  toast('Ajuste guardado');
+  closeModal();
+  await loadCaches();
+  renderAjustes();
+}
+
+// ─── REPORTES ────────────────────────────────────────────────
+async function renderReportes() {
+  const today = new Date().toISOString().split('T')[0];
+  const firstDay = today.slice(0,7)+'-01';
+
+  const [ventasMes, comprasMes, stockBajo, topProds] = await Promise.all([
+    sb.from('bodega_ventas').select('total_final,fecha,tipo').gte('fecha',firstDay),
+    sb.from('bodega_compras').select('total,fecha').gte('fecha',firstDay),
+    sb.from('bodega_productos').select('nombre,stock,precio_venta').lt('stock',5).eq('activo',true).order('stock'),
+    sb.from('bodega_ventas_detalle').select('producto_id,cantidad,bodega_productos(nombre)').limit(500)
+  ]);
+
+  const totVentas = (ventasMes.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
+  const totCompras = (comprasMes.data||[]).reduce((s,c)=>s+(c.total||0),0);
+  const ganancia = totVentas - totCompras;
+
+  // Agrupar por producto más vendido
+  const topMap = {};
+  (topProds.data||[]).forEach(d=>{
+    const n = d.bodega_productos?.nombre||'Desconocido';
+    topMap[n] = (topMap[n]||0)+d.cantidad;
+  });
+  const topList = Object.entries(topMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  gs('content').innerHTML = `
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Ventas del mes</div>
+      <div class="value" style="color:var(--green)">${fmtGs(totVentas)}</div>
+      <div class="sub">${(ventasMes.data||[]).length} transacciones</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Compras del mes</div>
+      <div class="value" style="color:var(--amber)">${fmtGs(totCompras)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Ganancia bruta</div>
+      <div class="value" style="color:${ganancia>=0?'var(--teal)':'var(--red)'}">${fmtGs(ganancia)}</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header"><h3>Productos más vendidos</h3></div>
+      <table>
+        <thead><tr><th>Producto</th><th>Unidades</th></tr></thead>
+        <tbody>
+          ${topList.map(([n,c])=>`<tr><td>${n}</td><td style="font-weight:600;color:var(--accent2)">${c}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Stock bajo (< 5 unidades)</h3></div>
+      <table>
+        <thead><tr><th>Producto</th><th>Stock</th></tr></thead>
+        <tbody>
+          ${(stockBajo.data||[]).slice(0,15).map(p=>`<tr><td>${p.nombre}</td><td class="${p.stock<=0?'stock-zero':'stock-low'}" style="font-weight:600">${p.stock}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ─── CATEGORÍAS ──────────────────────────────────────────────
+async function renderCategorias() {
+  const { data } = await sb.from('bodega_categorias').select('*').order('nombre');
+  gs('content').innerHTML = `
+  <div style="margin-bottom:14px"><button class="btn btn-primary" onclick="openCatModal()">+ Nueva categoría</button></div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Color</th><th>Nombre</th><th>Acciones</th></tr></thead>
+      <tbody>
+        ${(data||[]).map(c=>`
+          <tr>
+            <td><span style="display:inline-block;width:18px;height:18px;background:${c.color};border-radius:4px"></span></td>
+            <td style="font-weight:500">${c.nombre}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="editCat('${c.id}','${c.nombre.replace(/'/g,"\\'")}','${c.color}')">✏️</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+function openCatModal(id=null,nombre='',color='#6366f1') {
+  const body = `<div class="form-grid">
+    <div class="form-group"><label>Nombre *</label><input id="cat-nom" value="${nombre}"></div>
+    <div class="form-group"><label>Color</label><input id="cat-color" type="color" value="${color}" style="height:38px;padding:2px"></div>
+  </div>`;
+  openModal(id?'Editar categoría':'Nueva categoría', body, ()=>saveCat(id));
+}
+async function editCat(id,nombre,color) { openCatModal(id,nombre,color); }
+async function saveCat(id=null) {
+  const obj = { nombre:gs('cat-nom').value.trim(), color:gs('cat-color').value };
+  if (!obj.nombre) { toast('Nombre obligatorio','err'); return; }
+  let err;
+  if (id) ({ error:err } = await sb.from('bodega_categorias').update(obj).eq('id',id));
+  else ({ error:err } = await sb.from('bodega_categorias').insert(obj));
+  if (err) { toast('Error: '+err.message,'err'); return; }
+  toast('Categoría guardada');
+  closeModal();
+  await loadCaches();
+  renderCategorias();
+}
+
+// ─── ARRANQUE ────────────────────────────────────────────────
+(async function() {
+  const url = localStorage.getItem('bg_url');
+  const key = localStorage.getItem('bg_key');
+  if (url && key) {
+    document.getElementById('setup').style.display = 'none';
+    await initSupabase(url, key);
+  } else {
+    document.getElementById('loading').style.display = 'none';
+  }
+})();
+</script>
+</body>
+</html>
