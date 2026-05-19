@@ -2099,6 +2099,297 @@ initMobileShell();
 })();
 
 
+/* ─── PARCHE: cámara en crear producto y ajuste de stock ─── */
+(function(){
+  let inlineReader=null, inlineControls=null, inlineStream=null, inlineTimer=null, inlineBusy=false;
+
+  function escapeHtml(s){
+    return String(s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  }
+
+  window.stopInlineBarcodeScanner = function(){
+    try{ if(inlineControls && inlineControls.stop) inlineControls.stop(); }catch(e){}
+    try{ if(inlineReader && inlineReader.reset) inlineReader.reset(); }catch(e){}
+    if(inlineTimer){ clearInterval(inlineTimer); inlineTimer=null; }
+    if(inlineStream){ inlineStream.getTracks().forEach(t=>t.stop()); inlineStream=null; }
+    inlineReader=null; inlineControls=null; inlineBusy=false;
+    const box=gs('inline-scan-box');
+    if(box) box.remove();
+  };
+
+  window.applyInlineBarcode = function(targetId, mode, code){
+    code=String(code||'').trim();
+    if(!code){ toast('Ingresá o escaneá un código','err'); return; }
+    const input=gs(targetId);
+    if(input){
+      input.value=code;
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    stopInlineBarcodeScanner();
+
+    if(mode==='ajuste'){
+      const exact=(prodCache||[]).find(p=>String(p.codigo_barra||'')===code);
+      if(exact){
+        ajAcResults=[exact];
+        selectAjProd(0);
+        toast('Producto seleccionado por código');
+      }else{
+        onAjSearch(code);
+        toast('No encontré código exacto. Revisá resultados o cargá manual.','err');
+      }
+    }else{
+      toast('Código cargado');
+    }
+  };
+
+  window.startInlineBarcodeScanner = async function(targetId, mode='input'){
+    const input=gs(targetId);
+    if(!input){ toast('No encontré el campo para cargar el código','err'); return; }
+    stopInlineBarcodeScanner();
+
+    const holder=document.createElement('div');
+    holder.id='inline-scan-box';
+    holder.className='scanner-box';
+    holder.style.marginTop='10px';
+    holder.innerHTML=`
+      <div class="scanner-help">Apuntá la cámara al código de barras. Si no detecta, escribí el código manual.</div>
+      <video id="inline-scanner-video" class="scanner-video" playsinline webkit-playsinline muted autoplay></video>
+      <div class="scanner-manual">
+        <input id="inline-manual-code" inputmode="numeric" placeholder="Código manual">
+        <button type="button" class="btn btn-primary" onclick="applyInlineBarcode('${targetId}','${mode}',gs('inline-manual-code').value)">Usar código</button>
+      </div>
+      <div class="scanner-actions">
+        <button type="button" class="btn btn-secondary" onclick="stopInlineBarcodeScanner()">Cerrar cámara</button>
+      </div>`;
+    const parent=input.closest('.form-group') || input.parentNode;
+    parent.appendChild(holder);
+
+    const video=gs('inline-scanner-video');
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false};
+
+    try{
+      if(window.ZXing && ZXing.BrowserMultiFormatReader){
+        inlineReader=new ZXing.BrowserMultiFormatReader();
+        inlineControls=await inlineReader.decodeFromConstraints(constraints, video, (result, err)=>{
+          if(result && result.text){ applyInlineBarcode(targetId,mode,result.text); }
+        });
+        toast('Cámara abierta. Acercá el código de barras.');
+        return;
+      }
+
+      if('BarcodeDetector' in window){
+        const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
+        inlineStream=await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject=inlineStream;
+        await video.play();
+        inlineTimer=setInterval(async()=>{
+          if(inlineBusy || !video.videoWidth) return;
+          inlineBusy=true;
+          try{
+            const codes=await detector.detect(video);
+            if(codes && codes.length && codes[0].rawValue){
+              applyInlineBarcode(targetId,mode,codes[0].rawValue);
+            }
+          }catch(e){}
+          inlineBusy=false;
+        },350);
+        toast('Cámara abierta. Acercá el código de barras.');
+        return;
+      }
+
+      toast('Este navegador no tiene lector automático. Usá código manual.','err');
+    }catch(e){
+      toast('No pude abrir la cámara. Revisá permiso de cámara o usá código manual.','err');
+    }
+  };
+
+  const __openProdModalCam = openProdModal;
+  openProdModal = function(prod=null){
+    openModal(prod?'Editar producto':'Nuevo producto',`<div class="form-grid">
+      <div class="form-group">
+        <label>Código de barra</label>
+        <div class="scan-row">
+          <input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}">
+          <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button>
+        </div>
+      </div>
+      <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
+      <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Proveedor</label><select id="p-prov"><option value="">Sin proveedor</option>${provCache.map(pr=>`<option value="${pr.id}" ${prod?.proveedor_id===pr.id?'selected':''}>${escapeHtml(pr.nombre)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Unidad</label><select id="p-uni">${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
+      <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
+      <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}"></div>
+      <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}"></div>
+      <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
+    </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
+  };
+
+  const __openAjusteModalCam = openAjusteModal;
+  openAjusteModal = function(){
+    openModal('Ajuste de stock',`
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Buscar producto (nombre o código)</label>
+        <div class="autocomplete-wrap">
+          <div class="scan-row">
+            <input id="aj-search" placeholder="Nombre, código o escanear..." oninput="onAjSearch(this.value)" onkeydown="onAjKeydown(event)" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('aj-search','ajuste')">📷 Cámara</button>
+          </div>
+          <div class="autocomplete-list" id="aj-ac-list" style="display:none"></div>
+        </div>
+        <div id="aj-selected-prod" style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);font-size:13px;display:none"></div>
+        <input type="hidden" id="aj-prod-id">
+      </div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="aj-tipo">
+          <option value="ajuste_positivo">Ajuste positivo (+)</option>
+          <option value="ajuste_negativo">Ajuste negativo (-)</option>
+          <option value="entrada">Entrada</option>
+          <option value="salida">Salida</option>
+          <option value="inventario">Inventario (fija stock exacto)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Cantidad</label><input id="aj-cant" type="number" value="1" min="1"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Motivo</label><input id="aj-motivo" placeholder="Merma, inventario físico, corrección..."></div>
+    </div>`,()=>{ stopInlineBarcodeScanner(); saveAjuste(); });
+  };
+
+  onAjSearch = function(q){
+    ajAcResults=[];
+    if(!q||q.length<1){const l=gs('aj-ac-list'); if(l)l.style.display='none'; return;}
+    ajAcResults=bgFilterProductos ? bgFilterProductos(q,15) : prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase())||(p.codigo_barra||'').includes(q)).slice(0,15);
+    const list=gs('aj-ac-list');
+    if(!list)return;
+    list.innerHTML=ajAcResults.map((p,i)=>`<div class="ac-item" onclick="selectAjProd(${i})">
+      <div class="ac-name">${escapeHtml(p.nombre)}</div>
+      <div class="ac-sub">Código: ${escapeHtml(p.codigo_barra||'-')} · Stock actual: ${p.stock}</div>
+    </div>`).join('') || `<div class="ac-item"><div class="ac-name">Sin resultados</div><div class="ac-sub">Probá con menos palabras o escaneá el código</div></div>`;
+    list.style.display='block';
+  };
+
+  onAjKeydown = function(e){
+    if(e.key==='Enter'){
+      const q=gs('aj-search')?.value?.trim()||'';
+      if(!q)return;
+      const exact=prodCache.find(p=>String(p.codigo_barra||'')===q);
+      if(exact){ ajAcResults=[exact]; selectAjProd(0); e.preventDefault(); return; }
+      if(ajAcResults.length===1){ selectAjProd(0); e.preventDefault(); }
+    }
+  };
+})();
+
+
+
+
+/* ─── PARCHE: editar packs / embalajes con código de barras ─── */
+(function(){
+  function embEsc(s){return String(s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+  function embQ(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');}
+
+  window.clearEmbForm = function(){
+    const id=gs('emb-id'); if(id) id.value='';
+    const title=gs('emb-form-title'); if(title) title.textContent='NUEVA PRESENTACIÓN / PACK';
+    const btn=gs('emb-save-btn'); if(btn) btn.textContent='+ Agregar pack';
+    ['emb-cant','emb-cod','emb-costo','emb-venta','emb-mayor'].forEach(k=>{const el=gs(k); if(el) el.value=(k==='emb-cant'?'3':'0');});
+    const cod=gs('emb-cod'); if(cod) cod.value='';
+  };
+
+  window.editEmb = function(embId){
+    const e=(window.__embRows||[]).find(x=>String(x.id)===String(embId));
+    if(!e){toast('No encontré el pack para editar','err');return;}
+    gs('emb-id').value=e.id;
+    gs('emb-cant').value=e.cantidad||1;
+    gs('emb-cod').value=e.codigo_barra||'';
+    gs('emb-costo').value=e.precio_costo||0;
+    gs('emb-venta').value=e.precio_venta||0;
+    gs('emb-mayor').value=e.precio_mayorista||0;
+    const title=gs('emb-form-title'); if(title) title.textContent='EDITANDO PACK';
+    const btn=gs('emb-save-btn'); if(btn) btn.textContent='Guardar cambios';
+    const input=gs('emb-cant'); if(input) input.scrollIntoView({behavior:'smooth',block:'center'});
+  };
+
+  window.openEmbModal = async function(prodId, prodNombre){
+    let res=await sb.from('bodega_embalajes').select('*').eq('producto_id',prodId).eq('activo',true).order('cantidad');
+    let embs=res.data||[];
+    window.__embRows=embs;
+    const safeProd=embEsc(prodNombre);
+    const prodArg=embQ(prodNombre);
+    const body=`
+    <p style="color:var(--text2);font-size:13px;margin-bottom:14px">Producto base: <strong>${safeProd}</strong></p>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px">
+      <div id="emb-form-title" style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">NUEVA PRESENTACIÓN / PACK</div>
+      <input type="hidden" id="emb-id" value="">
+      <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
+        <div class="form-group"><label>Cant. uds</label><input id="emb-cant" type="number" value="3" min="1"></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>P. Costo</label><input id="emb-costo" type="number" value="0"></div>
+        <div class="form-group"><label>P. Venta</label><input id="emb-venta" type="number" value="0"></div>
+        <div class="form-group"><label>P. Mayorista</label><input id="emb-mayor" type="number" value="0"></div>
+        <div class="form-group"><label>&nbsp;</label><button id="emb-save-btn" class="btn btn-primary" onclick="saveEmb('${prodId}','${prodArg}')">+ Agregar pack</button></div>
+        <div class="form-group"><label>&nbsp;</label><button class="btn btn-secondary" onclick="clearEmbForm()">Limpiar</button></div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px">Podés editar la cantidad de unidades del pack, su código de barra y sus precios.</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--bg3)">
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">CANT UDS</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">CÓD. BARRA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. COSTO</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. VENTA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. MAYORISTA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">ACCIONES</th>
+      </tr></thead>
+      <tbody>
+        ${embs.map(e=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px;font-weight:700;color:var(--teal)">x${e.cantidad}</td>
+          <td style="padding:10px;font-size:11px;color:var(--text2)">${embEsc(e.codigo_barra||'-')}</td>
+          <td style="padding:10px">${fmtGs(e.precio_costo)}</td>
+          <td style="padding:10px;font-weight:600;color:var(--accent2)">${fmtGs(e.precio_venta)}</td>
+          <td style="padding:10px;color:var(--teal)">${fmtGs(e.precio_mayorista)}</td>
+          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')">🗑</button></td>
+        </tr>`).join('')}
+        ${!embs.length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
+      </tbody>
+    </table>`;
+    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+  };
+
+  window.saveEmb = async function(prodId, prodNombre){
+    const embId=(gs('emb-id')?.value||'').trim();
+    const obj={
+      producto_id:prodId,
+      cantidad:parseInt(gs('emb-cant')?.value)||1,
+      codigo_barra:(gs('emb-cod')?.value||'').trim()||null,
+      precio_costo:parseFloat(gs('emb-costo')?.value)||0,
+      precio_venta:parseFloat(gs('emb-venta')?.value)||0,
+      precio_mayorista:parseFloat(gs('emb-mayor')?.value)||0,
+      activo:true
+    };
+    let error;
+    if(embId){
+      ({error}=await sb.from('bodega_embalajes').update(obj).eq('id',embId));
+    }else{
+      ({error}=await sb.from('bodega_embalajes').insert(obj));
+    }
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast(embId?'Pack actualizado':'Pack agregado');
+    await loadCaches();
+    openEmbModal(prodId,prodNombre);
+  };
+
+  window.deleteEmb = async function(embId, prodId, prodNombre){
+    if(!confirm('¿Eliminar este pack?'))return;
+    const {error}=await sb.from('bodega_embalajes').update({activo:false}).eq('id',embId);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Pack eliminado');
+    await loadCaches();
+    openEmbModal(prodId,prodNombre);
+  };
+})();
+
+
 // ─── ARRANQUE ─────────────────────────────────────────────────
 (async function(){
   const url=localStorage.getItem('bg_url'),key=localStorage.getItem('bg_key');
