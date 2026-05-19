@@ -268,6 +268,43 @@ td[style*="color:var(--amber)"]{font-weight:800!important;}
   .pay-btn{font-size:15px;min-height:52px;}
 }
 
+
+
+/* ===== UX: menú de módulos plegable + compras más amplio ===== */
+.sidebar-toggle-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px;cursor:pointer;white-space:nowrap;}
+.sidebar-toggle-btn:hover{border-color:var(--accent);color:var(--accent2);}
+body.sidebar-collapsed{--sidebar:68px;}
+body.sidebar-collapsed #sidebar{width:68px;}
+body.sidebar-collapsed #sidebar .logo{padding:14px 8px;text-align:center;}
+body.sidebar-collapsed #sidebar .logo h1{font-size:0;}
+body.sidebar-collapsed #sidebar .logo h1::before{content:'🏪';font-size:24px;}
+body.sidebar-collapsed #sidebar .logo p{display:none;}
+body.sidebar-collapsed #sidebar nav a{justify-content:center;padding:13px 0;font-size:0;border-left-width:0;border-right:3px solid transparent;}
+body.sidebar-collapsed #sidebar nav a.active{border-left-color:transparent;border-right-color:var(--accent);}
+body.sidebar-collapsed #sidebar nav a .ico{font-size:22px;width:auto;}
+body.sidebar-collapsed #sidebar .cfg-btn{font-size:0;text-align:center;padding:14px 0;}
+body.sidebar-collapsed #sidebar .cfg-btn::before{content:'⚙️';font-size:20px;}
+.compra-layout-wide{display:grid!important;grid-template-columns:minmax(360px,.85fr) minmax(520px,1.25fr)!important;gap:16px!important;height:calc(100vh - 132px)!important;}
+.compra-order-panel{min-width:520px!important;}
+.compra-order-panel #ccomp-items{min-height:390px!important;}
+.compra-order-panel #ccomp-items > div{font-size:14px;}
+@media (max-width:1100px){.compra-layout-wide{grid-template-columns:minmax(320px,.8fr) minmax(460px,1.2fr)!important}.compra-order-panel{min-width:460px!important;}}
+@media (max-width:900px){
+  .sidebar-toggle-btn{display:none!important;}
+  body.sidebar-collapsed{--sidebar:260px;}
+  body.sidebar-collapsed #sidebar{width:260px;}
+  body.sidebar-collapsed #sidebar .logo h1{font-size:16px;}
+  body.sidebar-collapsed #sidebar .logo h1::before{content:'';}
+  body.sidebar-collapsed #sidebar .logo p{display:block;}
+  body.sidebar-collapsed #sidebar nav a{justify-content:flex-start;padding:11px 16px;font-size:14px;border-left:3px solid transparent;border-right:0;}
+  body.sidebar-collapsed #sidebar nav a .ico{font-size:16px;width:18px;}
+  body.sidebar-collapsed #sidebar .cfg-btn{font-size:12px;text-align:left;padding:12px 16px;}
+  body.sidebar-collapsed #sidebar .cfg-btn::before{content:'';}
+  .compra-layout-wide{display:flex!important;flex-direction:column!important;height:auto!important;}
+  .compra-order-panel{min-width:0!important;width:100%!important;}
+  .compra-order-panel #ccomp-items{min-height:52dvh!important;max-height:62dvh!important;overflow:auto!important;}
+}
+
 </style>
 </head>
 <body>
@@ -659,8 +696,9 @@ function selectPay(p){
   selectedPay=p;
   document.querySelectorAll('.pay-btn').forEach(b=>b.classList.remove('active'));
   const el=gs('pay-'+p);if(el)el.classList.add('active');
-  gs('mixto-fields').style.display=p==='mixto'?'block':'none';
-  updateVTotals();
+  const mixFields=gs('mixto-fields');
+  if(mixFields) mixFields.style.display=p==='mixto'?'block':'none';
+  if(typeof updateVTotals==='function') updateVTotals();
 }
 function setVTipo(tipo){ventaTipo=tipo;renderVentas();}
 
@@ -4550,6 +4588,679 @@ try{
   }
 }catch(e){}
 // ===== FIN FIX EDICIÓN REAL DE COMPRAS =====
+
+
+// ===== UX: menú de módulos plegable y compras con lista seleccionada más grande =====
+(function(){
+  function aplicarLayoutComprasAmplio(){
+    const root = document.querySelector('#content > div[style*="grid-template-columns:1fr 360px"]');
+    if(root) root.classList.add('compra-layout-wide');
+    const items = document.getElementById('ccomp-items');
+    if(items && items.parentElement) items.parentElement.classList.add('compra-order-panel');
+  }
+
+  const prevRenderComprasUX = typeof renderCompras === 'function' ? renderCompras : null;
+  if(prevRenderComprasUX){
+    renderCompras = window.renderCompras = function(){
+      const r = prevRenderComprasUX.apply(this, arguments);
+      setTimeout(aplicarLayoutComprasAmplio, 0);
+      return r;
+    };
+    try{ if(typeof pages !== 'undefined') pages.compras = renderCompras; }catch(e){}
+  }
+
+  function initSidebarPlegable(){
+    const topbar = document.getElementById('topbar');
+    const sidebar = document.getElementById('sidebar');
+    if(!topbar || !sidebar || document.getElementById('sidebar-toggle-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'sidebar-toggle-btn';
+    btn.type = 'button';
+    btn.className = 'sidebar-toggle-btn';
+
+    function pintar(){
+      const collapsed = document.body.classList.contains('sidebar-collapsed');
+      btn.innerHTML = collapsed ? '☰ Módulos' : '⇤ Ocultar módulos';
+      btn.title = collapsed ? 'Mostrar menú de módulos' : 'Ocultar menú de módulos';
+    }
+
+    btn.onclick = function(){
+      document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('bg_sidebar_collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+      pintar();
+    };
+
+    const h2 = topbar.querySelector('h2');
+    if(h2) topbar.insertBefore(btn, h2);
+    else topbar.insertBefore(btn, topbar.firstChild);
+
+    if(localStorage.getItem('bg_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
+    pintar();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSidebarPlegable);
+  else initSidebarPlegable();
+
+  // Por si compras ya está abierta cuando carga el parche.
+  setTimeout(aplicarLayoutComprasAmplio, 50);
+})();
+
+
+
+
+// ===== FIX: SUBTOTAL EDITABLE EN COMPRAS SIN RESETEARSE =====
+// Permite escribir el total de una línea libremente. Se guarda al salir del campo
+// y calcula el costo unitario sin redondear para respetar el total ingresado.
+(function(){
+  function nnum(v){
+    const x = parseFloat(String(v ?? '').replace(',', '.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function compraLineSubtotal(item){
+    if(item && item.subtotalManual !== undefined && item.subtotalManual !== null && item.subtotalManual !== '') return nnum(item.subtotalManual);
+    return nnum(item?.costo) * Math.max(1, parseInt(item?.cantidad) || 1);
+  }
+  window.compraLineSubtotal = compraLineSubtotal;
+
+  window.cSubtotalLive = function(i, valor){
+    if(!compraItems || !compraItems[i]) return;
+    compraItems[i].subtotalManual = valor;
+    const total = (compraItems || []).reduce((s,c)=>s+compraLineSubtotal(c),0);
+    if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
+  };
+
+  window.cSubtotal = function(i, valor){
+    if(!compraItems || !compraItems[i]) return;
+    const subtotal = nnum(valor);
+    const cant = Math.max(1, parseInt(compraItems[i].cantidad) || 1);
+    compraItems[i].subtotalManual = subtotal;
+    compraItems[i].costo = subtotal / cant;
+    renderCompraItems();
+  };
+
+  window.cCosto = function(i, valor){
+    if(!compraItems || !compraItems[i]) return;
+    compraItems[i].costo = nnum(valor);
+    compraItems[i].subtotalManual = null;
+    renderCompraItems();
+  };
+
+  window.cQty = function(i,d){
+    if(!compraItems || !compraItems[i]) return;
+    compraItems[i].cantidad = Math.max(1, (parseInt(compraItems[i].cantidad)||1) + d);
+    compraItems[i].subtotalManual = null;
+    renderCompraItems();
+  };
+
+  window.cQtySet = function(i,v){
+    if(!compraItems || !compraItems[i]) return;
+    compraItems[i].cantidad = Math.max(1, parseInt(v)||1);
+    compraItems[i].subtotalManual = null;
+    renderCompraItems();
+  };
+
+  window.renderCompraItems = function(){
+    const el = gs('ccomp-items');
+    if(!el) return;
+    el.innerHTML = (compraItems || []).map((item, i) => {
+      const cant = Math.max(1, parseInt(item.cantidad) || 1);
+      const costo = nnum(item.costo);
+      const subtotal = compraLineSubtotal(item);
+      const costoMostrar = Number.isInteger(costo) ? costo : costo.toFixed(2);
+      const subtotalMostrar = Number.isInteger(subtotal) ? subtotal : subtotal.toFixed(2);
+      return `<div style="display:grid;grid-template-columns:1fr 110px 126px 138px 32px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);gap:10px">
+        <div style="font-size:14px;font-weight:700;line-height:1.25">${compraSafeHtml(item.nombre || 'Producto')}<br><span style="color:var(--text2);font-size:12px;font-weight:500">+${(parseInt(item.uds)||1)*cant} uds al stock</span></div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <button onclick="cQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:32px;border-radius:4px;cursor:pointer">-</button>
+          <input type="number" value="${cant}" min="1" onchange="cQtySet(${i},this.value)" style="width:54px;text-align:center;padding:6px;font-weight:700">
+          <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:32px;border-radius:4px;cursor:pointer">+</button>
+        </div>
+        <div class="form-group" style="gap:3px"><label style="font-size:11px">Costo unit.</label><input type="number" inputmode="decimal" value="${costoMostrar}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:7px;font-weight:700"></div>
+        <div class="form-group" style="gap:3px"><label style="font-size:11px">Total línea</label><input type="number" inputmode="decimal" value="${subtotalMostrar}" oninput="cSubtotalLive(${i},this.value)" onblur="cSubtotal(${i},this.value)" style="text-align:right;padding:7px;color:var(--accent2);font-weight:800"></div>
+        <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:20px">✕</button>
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
+
+    const total = (compraItems || []).reduce((s,c)=>s+compraLineSubtotal(c),0);
+    if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
+  };
+
+  const prevFinalizarCompraSubtotalFix = window.finalizarCompra;
+  if(typeof prevFinalizarCompraSubtotalFix === 'function'){
+    window.finalizarCompra = async function(){
+      // Antes de guardar, normaliza cada línea para que el total ingresado quede respetado.
+      (compraItems || []).forEach(item => {
+        if(item && item.subtotalManual !== undefined && item.subtotalManual !== null && item.subtotalManual !== ''){
+          const cant = Math.max(1, parseInt(item.cantidad) || 1);
+          item.costo = nnum(item.subtotalManual) / cant;
+        }
+      });
+      return prevFinalizarCompraSubtotalFix.apply(this, arguments);
+    };
+  }
+})();
+// ===== FIN FIX SUBTOTAL EDITABLE EN COMPRAS =====
+
+
+// ===== FIX VISUAL: TOTAL FACTURA Y BOTÓN GUARDAR SIEMPRE VISIBLES EN COMPRAS =====
+(function(){
+  function compraTotalActualVisible(){
+    try{
+      if(typeof compraLineSubtotal === 'function'){
+        return (compraItems || []).reduce((s,c)=>s+compraLineSubtotal(c),0);
+      }
+      return (compraItems || []).reduce((s,c)=>s+((parseFloat(c?.costo)||0) * (parseInt(c?.cantidad)||0)),0);
+    }catch(e){ return 0; }
+  }
+
+  function actualizarTotalFacturaVisible(){
+    const total = compraTotalActualVisible();
+    const txt = (typeof fmtGs === 'function') ? fmtGs(total) : String(total);
+    ['comp-total','comp-total-top','comp-total-floating'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.textContent = txt;
+    });
+    return total;
+  }
+  window.actualizarTotalFacturaVisible = actualizarTotalFacturaVisible;
+
+  function ajustarAltoLayoutCompras(){
+    const root = document.querySelector('#content > div[style*="display:grid"], #content > div.compra-layout-wide');
+    if(!root) return;
+    const rect = root.getBoundingClientRect();
+    const alto = Math.max(430, window.innerHeight - rect.top - 16);
+    root.style.height = alto + 'px';
+    root.style.maxHeight = alto + 'px';
+    root.style.minHeight = '430px';
+  }
+
+  function asegurarCompraTotalYGuardar(){
+    const items = document.getElementById('ccomp-items');
+    const btn = document.querySelector('button[onclick="finalizarCompra()"]');
+    if(!items) return;
+
+    const panel = items.parentElement;
+    if(panel){
+      panel.style.display = 'flex';
+      panel.style.flexDirection = 'column';
+      panel.style.overflow = 'hidden';
+    }
+    items.style.flex = '1 1 auto';
+    items.style.overflowY = 'auto';
+    items.style.minHeight = '160px';
+
+    let top = document.getElementById('comp-total-top-wrap');
+    if(!top){
+      top = document.createElement('div');
+      top.id = 'comp-total-top-wrap';
+      top.style.cssText = 'position:sticky;top:0;z-index:10;background:linear-gradient(180deg,var(--bg2),var(--bg3));border-bottom:1px solid var(--border);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 4px 12px rgba(0,0,0,.18)';
+      top.innerHTML = '<div><div style="font-size:12px;color:var(--text2);font-weight:800;text-transform:uppercase;letter-spacing:.5px">Total factura</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Se actualiza con cantidad, costo o total línea</div></div><div id="comp-total-top" style="font-size:28px;font-weight:950;color:var(--green);white-space:nowrap">Gs. 0</div>';
+      items.parentNode.insertBefore(top, items);
+    }
+
+    if(btn){
+      const footer = btn.parentElement;
+      if(footer){
+        footer.id = 'compra-footer-guardar';
+        footer.style.position = 'sticky';
+        footer.style.bottom = '0';
+        footer.style.zIndex = '12';
+        footer.style.background = 'linear-gradient(0deg,var(--bg2),var(--bg3))';
+        footer.style.boxShadow = '0 -6px 16px rgba(0,0,0,.25)';
+        footer.style.borderTop = '1px solid var(--border)';
+        footer.style.padding = '12px 16px';
+
+        let floatTotal = document.getElementById('comp-total-floating');
+        if(!floatTotal){
+          const line = document.createElement('div');
+          line.id = 'comp-total-floating-row';
+          line.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;font-weight:900;color:var(--accent2);font-size:17px';
+          line.innerHTML = '<span>Total factura</span><span id="comp-total-floating">Gs. 0</span>';
+          footer.insertBefore(line, footer.firstChild);
+        }
+        btn.style.fontSize = '16px';
+        btn.style.fontWeight = '900';
+        btn.style.padding = '12px 14px';
+      }
+    }
+
+    ajustarAltoLayoutCompras();
+    actualizarTotalFacturaVisible();
+  }
+  window.asegurarCompraTotalYGuardar = asegurarCompraTotalYGuardar;
+
+  const prevRenderComprasVisualFactura = window.renderCompras || (typeof renderCompras === 'function' ? renderCompras : null);
+  if(prevRenderComprasVisualFactura){
+    window.renderCompras = renderCompras = function(){
+      const r = prevRenderComprasVisualFactura.apply(this, arguments);
+      setTimeout(asegurarCompraTotalYGuardar, 0);
+      setTimeout(asegurarCompraTotalYGuardar, 80);
+      return r;
+    };
+    try{ if(typeof pages !== 'undefined') pages.compras = renderCompras; }catch(e){}
+  }
+
+  const prevRenderCompraItemsVisualFactura = window.renderCompraItems || (typeof renderCompraItems === 'function' ? renderCompraItems : null);
+  if(prevRenderCompraItemsVisualFactura){
+    window.renderCompraItems = renderCompraItems = function(){
+      const r = prevRenderCompraItemsVisualFactura.apply(this, arguments);
+      asegurarCompraTotalYGuardar();
+      actualizarTotalFacturaVisible();
+      return r;
+    };
+  }
+
+  ['cSubtotalLive','cSubtotal','cCosto','cQty','cQtySet','cRemove','addToCompra'].forEach(fnName=>{
+    const oldFn = window[fnName];
+    if(typeof oldFn === 'function'){
+      window[fnName] = function(){
+        const r = oldFn.apply(this, arguments);
+        setTimeout(function(){ asegurarCompraTotalYGuardar(); actualizarTotalFacturaVisible(); }, 0);
+        return r;
+      };
+      try{ eval(fnName + ' = window[fnName]'); }catch(e){}
+    }
+  });
+
+  window.addEventListener('resize', function(){ setTimeout(asegurarCompraTotalYGuardar, 50); });
+  setTimeout(asegurarCompraTotalYGuardar, 100);
+})();
+// ===== FIN FIX VISUAL TOTAL FACTURA =====
+
+
+// ===== UX COMPRAS: USAR MÁS PANTALLA PARA LA ORDEN Y EVITAR SCROLL INNECESARIO =====
+(function(){
+  function compraFindRoot(){
+    const picker = document.getElementById('prod-picker');
+    const items = document.getElementById('ccomp-items');
+    if(!picker || !items) return null;
+    let root = picker.parentElement;
+    while(root && root.parentElement && root.parentElement.id !== 'content') root = root.parentElement;
+    return root || picker.parentElement;
+  }
+
+  function compactarFormularioCompra(panel){
+    if(!panel) return;
+    const hijos = Array.from(panel.children || []);
+    const titulo = hijos.find(x => (x.textContent || '').includes('Orden de compra'));
+    if(titulo){
+      titulo.style.padding = '8px 12px';
+      titulo.style.fontSize = '14px';
+      titulo.style.minHeight = '34px';
+    }
+    const formWrap = hijos.find(x => x.querySelector && x.querySelector('#comp-prov'));
+    if(formWrap){
+      formWrap.style.padding = '8px 10px';
+      formWrap.style.flex = '0 0 auto';
+      const grid = formWrap.querySelector('.form-grid');
+      if(grid){
+        grid.style.gridTemplateColumns = '1.2fr 0.8fr 1fr 0.85fr';
+        grid.style.gap = '8px';
+      }
+      formWrap.querySelectorAll('.form-group').forEach(g=>{ g.style.gap = '3px'; });
+      formWrap.querySelectorAll('label').forEach(l=>{ l.style.fontSize = '11px'; });
+      formWrap.querySelectorAll('input,select,textarea').forEach(i=>{ i.style.padding = '7px 9px'; i.style.minHeight = '34px'; });
+      const estado = formWrap.querySelector('#comp-estado');
+      if(estado && estado.closest('.form-group')){
+        const grupo = estado.closest('.form-group');
+        grupo.style.gridColumn = '1 / -1';
+      }
+    }
+  }
+
+  function optimizarCompraPantalla(){
+    const root = compraFindRoot();
+    const picker = document.getElementById('prod-picker');
+    const items = document.getElementById('ccomp-items');
+    if(!root || !picker || !items) return;
+
+    root.classList.add('compra-pantalla-optimizada');
+    root.style.display = 'grid';
+    root.style.gridTemplateColumns = 'minmax(250px, 30%) minmax(0, 1fr)';
+    root.style.gap = '10px';
+    const rect = root.getBoundingClientRect();
+    const alto = Math.max(520, window.innerHeight - rect.top - 10);
+    root.style.height = alto + 'px';
+    root.style.maxHeight = alto + 'px';
+    root.style.overflow = 'hidden';
+
+    picker.style.minWidth = '0';
+    picker.style.maxWidth = 'none';
+    picker.style.overflow = 'hidden';
+    const pickerHeader = picker.firstElementChild;
+    if(pickerHeader){
+      pickerHeader.style.padding = '8px 10px';
+      const titulo = pickerHeader.querySelector('div');
+      if(titulo){ titulo.style.fontSize = '13px'; titulo.style.marginBottom = '7px'; }
+      const searchGrid = pickerHeader.querySelector('div[style*="grid-template-columns"]');
+      if(searchGrid){ searchGrid.style.gridTemplateColumns = '1fr 72px'; searchGrid.style.gap = '6px'; }
+      pickerHeader.querySelectorAll('input,button').forEach(el=>{ el.style.padding = '7px 8px'; el.style.minHeight = '34px'; });
+    }
+    const prodList = document.getElementById('compra-prod-list');
+    if(prodList){
+      prodList.style.overflowY = 'auto';
+      prodList.style.fontSize = '12px';
+    }
+
+    const panel = items.parentElement;
+    if(panel){
+      panel.style.minWidth = '0';
+      panel.style.display = 'flex';
+      panel.style.flexDirection = 'column';
+      panel.style.overflow = 'hidden';
+      compactarFormularioCompra(panel);
+    }
+    items.style.flex = '1 1 auto';
+    items.style.minHeight = '260px';
+    items.style.overflowY = 'auto';
+
+    const top = document.getElementById('comp-total-top-wrap');
+    if(top){
+      top.style.padding = '8px 12px';
+      const n = document.getElementById('comp-total-top');
+      if(n) n.style.fontSize = '24px';
+    }
+    const footer = document.getElementById('compra-footer-guardar');
+    if(footer){
+      footer.style.padding = '8px 12px';
+      footer.style.flex = '0 0 auto';
+      const row = document.getElementById('comp-total-floating-row');
+      if(row){ row.style.marginBottom = '6px'; row.style.fontSize = '15px'; }
+      const btn = footer.querySelector('button');
+      if(btn){ btn.style.padding = '9px 12px'; btn.style.fontSize = '15px'; }
+      const notas = footer.querySelector('#comp-notas');
+      if(notas){ notas.rows = 1; notas.style.minHeight = '36px'; }
+      const notaGroup = notas ? notas.closest('.form-group') : null;
+      if(notaGroup) notaGroup.style.marginBottom = '6px';
+    }
+  }
+  window.optimizarCompraPantalla = optimizarCompraPantalla;
+
+  const prevRenderComprasPantalla = window.renderCompras || (typeof renderCompras === 'function' ? renderCompras : null);
+  if(typeof prevRenderComprasPantalla === 'function'){
+    window.renderCompras = renderCompras = function(){
+      const r = prevRenderComprasPantalla.apply(this, arguments);
+      setTimeout(optimizarCompraPantalla, 0);
+      setTimeout(optimizarCompraPantalla, 120);
+      return r;
+    };
+    try{ if(typeof pages !== 'undefined') pages.compras = renderCompras; }catch(e){}
+  }
+
+  const prevRenderCompraItemsPantalla = window.renderCompraItems || (typeof renderCompraItems === 'function' ? renderCompraItems : null);
+  if(typeof prevRenderCompraItemsPantalla === 'function'){
+    window.renderCompraItems = renderCompraItems = function(){
+      const r = prevRenderCompraItemsPantalla.apply(this, arguments);
+      setTimeout(optimizarCompraPantalla, 0);
+      return r;
+    };
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .compra-pantalla-optimizada #ccomp-items > div { padding-top: 7px !important; padding-bottom: 7px !important; }
+    .compra-pantalla-optimizada #ccomp-items input { min-height: 32px !important; }
+    .compra-pantalla-optimizada #ccomp-items button { min-height: 30px !important; }
+    .compra-pantalla-optimizada #compra-prod-list > div > div { padding-top: 7px !important; padding-bottom: 7px !important; }
+    @media (max-width: 900px){
+      .compra-pantalla-optimizada{ grid-template-columns:1fr !important; height:auto !important; max-height:none !important; overflow:visible !important; }
+      .compra-pantalla-optimizada #prod-picker{ min-height:260px; max-height:36vh; }
+      .compra-pantalla-optimizada #ccomp-items{ min-height:300px; }
+    }
+    @media (min-width: 901px){
+      body.sidebar-collapsed .compra-pantalla-optimizada{ grid-template-columns:minmax(240px, 28%) minmax(0, 1fr) !important; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  window.addEventListener('resize', function(){ setTimeout(optimizarCompraPantalla, 60); });
+  setTimeout(optimizarCompraPantalla, 150);
+})();
+// ===== FIN UX COMPRAS PANTALLA OPTIMIZADA =====
+
+
+/* =========================================================
+   FIX: editar venta sin borrar al entrar
+   - Al tocar Editar, solo carga la venta en pantalla.
+   - Recién al guardar corrige stock, detalle y fiado.
+   ========================================================= */
+(function(){
+  window.__ventaEditandoId = null;
+  window.__ventaEditandoOriginal = null;
+
+  function totalLineaVenta(item){
+    return Number(item?.subtotalCalculado ?? ((Number(item?.precio)||0)*(Number(item?.cantidad)||0)));
+  }
+
+  async function revertirStockVenta(detalles, ventaId){
+    for(const d of detalles||[]){
+      const p=prodCache.find(x=>x.id===d.producto_id);
+      if(!p) continue;
+      const cant=Number(d.cantidad)||0;
+      const ns=(Number(p.stock)||0)+cant;
+      await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
+      await sb.from('bodega_ajustes_stock').insert({
+        producto_id:d.producto_id,
+        tipo:'entrada',
+        cantidad:cant,
+        motivo:'Edición de venta: reversa anterior',
+        stock_anterior:p.stock,
+        stock_nuevo:ns,
+        referencia_id:ventaId,
+        referencia_tipo:'venta_editada_reversa'
+      });
+      p.stock=ns;
+    }
+  }
+
+  async function aplicarStockVenta(items, ventaId, esFiado){
+    for(const c of items||[]){
+      const p=prodCache.find(x=>x.id===c.producto_id);
+      if(!p) continue;
+      const cant=(Number(c.cantidad)||0)*(Number(c.uds)||1);
+      const ns=(Number(p.stock)||0)-cant;
+      await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
+      await sb.from('bodega_ajustes_stock').insert({
+        producto_id:c.producto_id,
+        tipo:'salida',
+        cantidad:cant,
+        motivo:esFiado?'Venta fiada editada':'Venta editada',
+        stock_anterior:p.stock,
+        stock_nuevo:ns,
+        referencia_id:ventaId,
+        referencia_tipo:'venta_editada'
+      });
+      p.stock=ns;
+    }
+  }
+
+  async function guardarVentaEditada(){
+    const ventaId=window.__ventaEditandoId;
+    const original=window.__ventaEditandoOriginal;
+    if(!ventaId || !original){
+      toast('No hay venta en edición', 'err');
+      return;
+    }
+    if(!cart.length){toast('No hay productos','err');return;}
+
+    const desc=parseFloat(gs('v-desc')?.value)||0;
+    const total=cart.reduce((s,c)=>s+totalLineaVenta(c),0);
+    const totalFinal=Math.max(0,total-desc);
+    const importe=parseFloat(gs('v-importe')?.value)||0;
+    const cli=getClienteVenta ? getClienteVenta() : {id:null,nombre:gs('v-cliente')?.value?.trim()||null};
+
+    if(selectedPay==='fiado' && !cli.id && !cli.nombre){
+      toast('Para dejar fiado elegí o creá un cliente','err');
+      return;
+    }
+
+    if(!confirm('¿Guardar los cambios de esta venta? Se corregirá stock, fiado y total.')) return;
+
+    try{
+      await loadCaches();
+      await revertirStockVenta(original.detalles||[], ventaId);
+
+      const ventaUpdate={
+        fecha:original.venta.fecha || new Date().toISOString().split('T')[0],
+        tipo:ventaTipo,
+        cliente_nombre:cli.nombre,
+        total,
+        descuento:desc,
+        total_final:totalFinal,
+        metodo_pago:selectedPay,
+        monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+        monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+        monto_otro:selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
+      };
+
+      const {error:vErr}=await sb.from('bodega_ventas').update(ventaUpdate).eq('id',ventaId);
+      if(vErr) throw vErr;
+
+      await sb.from('bodega_fiados').delete().eq('venta_id',ventaId);
+      await sb.from('bodega_ventas_detalle').delete().eq('venta_id',ventaId);
+
+      const detallesNuevos=cart.map(c=>{
+        const cant=(Number(c.cantidad)||0)*(Number(c.uds)||1);
+        const sub=totalLineaVenta(c);
+        return {
+          venta_id:ventaId,
+          producto_id:c.producto_id,
+          cantidad:cant,
+          precio_unitario:cant>0 ? sub/cant : 0
+        };
+      });
+      const {error:dErr}=await sb.from('bodega_ventas_detalle').insert(detallesNuevos);
+      if(dErr) throw dErr;
+
+      if(selectedPay==='fiado'){
+        const {error:fErr}=await sb.from('bodega_fiados').insert({
+          venta_id:ventaId,
+          cliente_id:cli.id||null,
+          cliente_nombre:cli.nombre,
+          monto_total:totalFinal,
+          monto_pagado:0,
+          saldo:totalFinal,
+          estado:'pendiente',
+          fecha:ventaUpdate.fecha
+        });
+        if(fErr) throw fErr;
+      }
+
+      await aplicarStockVenta(cart, ventaId, selectedPay==='fiado');
+      await loadCaches();
+      window.__ventaEditandoId=null;
+      window.__ventaEditandoOriginal=null;
+      cart=[];
+      toast('Venta actualizada correctamente');
+      goTo('historial-ventas');
+    }catch(e){
+      console.error(e);
+      toast('Error guardando venta editada: '+(e.message||e), 'err');
+      await loadCaches();
+    }
+  }
+
+  const finalizarActual=window.finalizarVenta || finalizarVenta;
+  finalizarVenta = window.finalizarVenta = async function(){
+    if(window.__ventaEditandoId) return await guardarVentaEditada();
+    return await finalizarActual.apply(this, arguments);
+  };
+
+  editarVenta = window.editarVenta = async function(id){
+    try{
+      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
+      if(vErr) throw vErr;
+      const {data:det,error:dErr}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
+      if(dErr) throw dErr;
+      if(!v){toast('No se pudo abrir la venta','err');return;}
+
+      window.__ventaEditandoId=id;
+      window.__ventaEditandoOriginal={venta:v, detalles:det||[]};
+
+      await loadCaches();
+      await renderVentas();
+
+      ventaTipo=v.tipo||'minorista';
+      selectedPay=v.metodo_pago||'efectivo';
+
+      cart=(det||[]).map(d=>{
+        const cant=Number(d.cantidad)||1;
+        const sub=Number(d.subtotal ?? (cant*(Number(d.precio_unitario)||0)));
+        return {
+          key:String(d.producto_id),
+          producto_id:d.producto_id,
+          embalaje_id:null,
+          nombre:d.bodega_productos?.nombre||'Producto',
+          precio:cant>0 ? sub/cant : (Number(d.precio_unitario)||0),
+          cantidad:cant,
+          uds:1,
+          precioManual:true,
+          packInfo:'Precio guardado',
+          subtotalCalculado:sub
+        };
+      });
+
+      if(gs('v-desc')) gs('v-desc').value=v.descuento||0;
+      if(gs('v-importe')) gs('v-importe').value=v.metodo_pago==='efectivo' ? (v.monto_efectivo||v.total_final||0) : 0;
+
+      const cliente=(clienteCache||[]).find(c=>c.nombre===v.cliente_nombre || c.id===v.cliente_id);
+      if(gs('v-cliente-id') && cliente) gs('v-cliente-id').value=cliente.id;
+      else if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
+
+      selectPay(selectedPay);
+      renderVentaTable();
+
+      const cobrar=document.querySelector('.cobrar-btn');
+      if(cobrar){
+        cobrar.textContent='GUARDAR CAMBIOS DE VENTA';
+        cobrar.style.background='var(--amber)';
+      }
+      const header=gs('venta-header');
+      if(header && !gs('venta-edit-alert')){
+        const aviso=document.createElement('div');
+        aviso.id='venta-edit-alert';
+        aviso.className='alert alert-warning';
+        aviso.style.margin='10px 0 0';
+        aviso.innerHTML='✏️ <b>Editando venta</b>. La venta original NO se borra. Los cambios se aplican recién al tocar <b>Guardar cambios de venta</b>.';
+        header.appendChild(aviso);
+      }
+      toast('Venta cargada para editar. No se borró nada todavía.');
+    }catch(e){
+      console.error(e);
+      toast('No se pudo abrir la venta: '+(e.message||e),'err');
+    }
+  };
+
+  const cancelarActual=window.cancelarVenta || cancelarVenta;
+  cancelarVenta = window.cancelarVenta = function(){
+    if(window.__ventaEditandoId){
+      if(!confirm('¿Cancelar la edición? La venta original quedará sin cambios.')) return;
+      window.__ventaEditandoId=null;
+      window.__ventaEditandoOriginal=null;
+      cart=[];
+      goTo('historial-ventas');
+      return;
+    }
+    return cancelarActual.apply(this, arguments);
+  };
+})();
+
+
+/* ─── FIX SELECTPAY SEGURO PARA EDICIÓN DE VENTAS ─── */
+(function(){
+  window.selectPay = selectPay = function(p){
+    selectedPay = p || 'efectivo';
+    document.querySelectorAll('.pay-btn').forEach(b=>b.classList.remove('active'));
+    const el = gs('pay-'+selectedPay);
+    if(el) el.classList.add('active');
+    const mix = gs('mixto-fields');
+    if(mix) mix.style.display = selectedPay === 'mixto' ? 'block' : 'none';
+    const imp = gs('v-importe');
+    if(imp && selectedPay === 'fiado') imp.value = 0;
+    if(typeof updateVTotals === 'function') updateVTotals();
+  };
+})();
 </script>
 </body>
 </html>
