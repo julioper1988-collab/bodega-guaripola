@@ -574,20 +574,107 @@ body.mobile-menu-open .mobile-backdrop{display:block;}
   .form-grid{grid-template-columns:1fr!important;gap:10px;}
   .emb-row-inputs{grid-template-columns:1fr!important;}
 
-  #venta-layout{display:flex;flex-direction:column;height:auto;min-height:calc(100dvh - 54px);overflow:visible;}
-  #venta-left{border-right:none;border-bottom:1px solid var(--border);min-height:50dvh;overflow:visible;}
-  #venta-header{padding:10px;}
-  #venta-header .vtitle{font-size:16px;margin-bottom:6px;}
-  #venta-header .vinfo{font-size:12px;line-height:1.8;}
-  #venta-search-row{grid-template-columns:1fr;gap:8px;}
-  #venta-table-wrap{max-height:42dvh;overflow:auto;-webkit-overflow-scrolling:touch;}
-  #venta-table{min-width:620px;}
-  #venta-right{overflow:visible;border-top:1px solid var(--border);}
-  #venta-right .section{padding:11px 12px;}
-  .pay-grid{grid-template-columns:1fr 1fr;gap:8px;}
-  .pay-btn{min-height:42px;font-size:12px;}
-  .total-display{font-size:24px;padding:6px 0;}
-  .cobrar-btn{position:sticky;bottom:8px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  /* ── VENTAS MÓVIL: búsqueda arriba fija, pago drawer abajo ── */
+  #content.no-pad { overflow: hidden !important; }
+
+  #venta-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100dvh - 58px) !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  #venta-left {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-right: none !important;
+    padding-bottom: 72px !important;
+  }
+
+  #venta-header { padding: 10px 12px !important; flex-shrink: 0 !important; }
+  #venta-header .vtitle { font-size: 15px !important; margin-bottom: 6px !important; }
+  #venta-header .vinfo  { font-size: 12px !important; line-height: 1.7 !important; }
+  #venta-search-row { grid-template-columns: 1fr !important; gap: 8px !important; }
+
+  #venta-table-wrap {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    max-height: none !important;
+  }
+  #venta-table { min-width: 560px; }
+
+  /* ── PANEL DERECHO: drawer fijo al fondo ── */
+  #venta-right {
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; bottom: 0 !important;
+    z-index: 120 !important;
+    background: #161d2e !important;
+    border-top: 2px solid var(--accent) !important;
+    box-shadow: 0 -8px 32px rgba(0,0,0,.6) !important;
+    max-height: 85dvh !important;
+    overflow-y: auto !important;
+    transition: transform .28s cubic-bezier(.4,0,.2,1) !important;
+    transform: translateY(calc(100% - 70px)) !important;
+    border-radius: 18px 18px 0 0 !important;
+    overflow: hidden !important;
+  }
+  #venta-right.vr-open {
+    transform: translateY(0) !important;
+    overflow-y: auto !important;
+  }
+  #venta-right::before {
+    content: '';
+    display: block;
+    width: 44px; height: 4px;
+    background: #4a5a80;
+    border-radius: 4px;
+    margin: 10px auto 0;
+  }
+
+  #vr-cobro-bar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 8px 14px 12px !important;
+    cursor: pointer !important;
+    user-select: none !important;
+  }
+  #vr-cobro-bar .vr-total-mini {
+    flex: 1;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--accent2);
+  }
+  #vr-cobro-bar .vr-items-mini {
+    font-size: 12px;
+    color: var(--text2);
+  }
+  #vr-cobro-bar .vr-toggle-ico {
+    font-size: 20px;
+    color: var(--text2);
+    transition: transform .25s;
+  }
+  #venta-right.vr-open #vr-cobro-bar .vr-toggle-ico {
+    transform: rotate(180deg);
+  }
+
+  #vr-detail { display: none !important; }
+  #venta-right.vr-open #vr-detail { display: block !important; }
+
+  #venta-right .section { padding: 10px 14px !important; }
+  .pay-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .pay-btn  { min-height: 50px !important; font-size: 13px !important; border-radius: 10px !important; }
+  .total-display { font-size: 26px !important; padding: 4px 0 !important; }
+  .cobrar-btn {
+    font-size: 18px !important;
+    min-height: 56px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 6px 20px rgba(99,102,241,.4) !important;
+  }
 
   #content > div[style*="grid-template-columns:1fr 360px"]{display:flex!important;flex-direction:column!important;height:auto!important;gap:12px!important;}
   #content > div[style*="grid-template-columns:1fr 360px"] > div{min-height:auto!important;max-height:none!important;}
@@ -1038,6 +1125,23 @@ input::placeholder, textarea::placeholder { color: #7a8faa !important; }
 ::-webkit-scrollbar-thumb { background: #3a4a68; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #505f88; }
 
+/* ── EN DESKTOP: ocultar elementos exclusivos del drawer móvil ── */
+@media (min-width: 901px) {
+  #vr-cobro-bar { display: none !important; }
+  #vr-detail    { display: block !important; }
+  #venta-right  {
+    position: static !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    border-top: none !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    box-shadow: none !important;
+  }
+  /* Restaurar el v-total original en desktop */
+  #v-total { display: block !important; }
+}
+
 </style>
 </head>
 <body>
@@ -1373,56 +1477,91 @@ function renderVentas(){
         </table>
       </div>
     </div>
-    <!-- DERECHA -->
+    <!-- DERECHA / DRAWER MÓVIL -->
     <div id="venta-right">
-      <div class="section">
-        <div class="section-title">Cliente</div>
-        <input id="v-cliente" placeholder="Nombre del cliente (opcional)">
+      <!-- Barra mini siempre visible en móvil: toca para abrir/cerrar -->
+      <div id="vr-cobro-bar" onclick="vrToggle()">
+        <div>
+          <div class="vr-total-mini" id="v-total">Gs. 0</div>
+          <div class="vr-items-mini" id="v-count-bar">0 productos · tocá para cobrar</div>
+        </div>
+        <button class="cobrar-btn" style="width:auto;padding:10px 20px;font-size:15px;min-height:44px;margin:0" onclick="event.stopPropagation();finalizarVenta()">COBRAR</button>
+        <span class="vr-toggle-ico">⌃</span>
       </div>
-      <div class="section">
-        <div class="section-title">Método de pago</div>
-        <div class="pay-grid">
-          <div class="pay-btn active" id="pay-efectivo" onclick="selectPay('efectivo')">💵 Efectivo</div>
-          <div class="pay-btn" id="pay-transferencia" onclick="selectPay('transferencia')">📱 Transf.</div>
-          <div class="pay-btn" id="pay-credito" onclick="selectPay('credito')">💳 Crédito</div>
-          <div class="pay-btn" id="pay-qr" onclick="selectPay('qr')">📷 QR</div>
-          <div class="pay-btn" id="pay-debito" onclick="selectPay('debito')">💳 Débito</div>
-          <div class="pay-btn" id="pay-mixto" onclick="selectPay('mixto')">🔀 Mixto</div>
+      <!-- Detalle colapsable -->
+      <div id="vr-detail">
+        <div class="section">
+          <div class="section-title">Cliente</div>
+          <input id="v-cliente" placeholder="Nombre del cliente (opcional)">
         </div>
-        <div class="form-group" style="margin-top:6px">
-          <label>Importe recibido (Gs.)</label>
-          <input id="v-importe" type="number" value="0" oninput="updateVTotals()" style="font-size:16px;font-weight:600">
-        </div>
-        <div id="mixto-fields" style="display:none;margin-top:8px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-            <div class="form-group"><label>Efectivo</label><input id="v-efec" type="number" value="0"></div>
-            <div class="form-group"><label>Transferencia</label><input id="v-transf" type="number" value="0"></div>
-            <div class="form-group"><label>QR</label><input id="v-qr" type="number" value="0"></div>
-            <div class="form-group"><label>Débito</label><input id="v-debito" type="number" value="0"></div>
-            <div class="form-group"><label>Crédito</label><input id="v-credito-mix" type="number" value="0"></div>
+        <div class="section">
+          <div class="section-title">Método de pago</div>
+          <div class="pay-grid">
+            <div class="pay-btn active" id="pay-efectivo" onclick="selectPay('efectivo')">💵 Efectivo</div>
+            <div class="pay-btn" id="pay-transferencia" onclick="selectPay('transferencia')">📱 Transf.</div>
+            <div class="pay-btn" id="pay-credito" onclick="selectPay('credito')">💳 Crédito</div>
+            <div class="pay-btn" id="pay-qr" onclick="selectPay('qr')">📷 QR</div>
+            <div class="pay-btn" id="pay-debito" onclick="selectPay('debito')">💳 Débito</div>
+            <div class="pay-btn" id="pay-mixto" onclick="selectPay('mixto')">🔀 Mixto</div>
           </div>
-          <div style="font-size:11px;color:var(--text2);margin-top:6px">En mixto, QR/Débito/Crédito se guardan como otros medios para el arqueo.</div>
+          <div class="form-group" style="margin-top:8px">
+            <label>Importe recibido (Gs.)</label>
+            <input id="v-importe" type="number" value="0" oninput="updateVTotals()" style="font-size:16px;font-weight:600">
+          </div>
+          <div id="mixto-fields" style="display:none;margin-top:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div class="form-group"><label>Efectivo</label><input id="v-efec" type="number" value="0"></div>
+              <div class="form-group"><label>Transferencia</label><input id="v-transf" type="number" value="0"></div>
+              <div class="form-group"><label>QR</label><input id="v-qr" type="number" value="0"></div>
+              <div class="form-group"><label>Débito</label><input id="v-debito" type="number" value="0"></div>
+              <div class="form-group"><label>Crédito</label><input id="v-credito-mix" type="number" value="0"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text2);margin-top:6px">En mixto, QR/Débito/Crédito se guardan como otros medios para el arqueo.</div>
+          </div>
         </div>
-      </div>
-      <div class="section">
-        <div class="form-group">
-          <label>Descuento (Gs.)</label>
-          <input id="v-desc" type="number" value="0" oninput="updateVTotals()">
+        <div class="section">
+          <div class="form-group">
+            <label>Descuento (Gs.)</label>
+            <input id="v-desc" type="number" value="0" oninput="updateVTotals()">
+          </div>
         </div>
-      </div>
-      <div class="section" style="text-align:center">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:4px">TOTAL A PAGAR</div>
-        <div class="total-display" id="v-total">Gs. 0</div>
-        <div class="vuelto-display" id="v-vuelto" style="display:none">Vuelto: Gs. 0</div>
-      </div>
-      <div style="padding:14px 16px;margin-top:auto">
-        <button class="cobrar-btn" onclick="finalizarVenta()">COBRAR</button>
-        <button class="btn btn-secondary" style="width:100%;justify-content:center;margin-top:8px" onclick="cancelarVenta()">🗑 Cancelar</button>
+        <div class="section" style="text-align:center">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:4px">TOTAL A PAGAR</div>
+          <div class="total-display" id="v-total-detail">Gs. 0</div>
+          <div class="vuelto-display" id="v-vuelto" style="display:none">Vuelto: Gs. 0</div>
+        </div>
+        <div style="padding:14px 16px;padding-bottom:24px">
+          <button class="cobrar-btn" onclick="finalizarVenta()">COBRAR</button>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center;margin-top:10px" onclick="cancelarVenta()">🗑 Cancelar</button>
+        </div>
       </div>
     </div>
   </div>`;
   setTimeout(()=>gs('v-cod')?.focus(),100);
+  // Iniciar drawer en móvil
+  if(window.innerWidth <= 900) vrInit();
 }
+
+/* ── DRAWER DE COBRO (móvil) ─────────────────────────────── */
+function vrIsMobile(){ return window.innerWidth <= 900; }
+function vrInit(){
+  const vr = gs('venta-right');
+  if(!vr) return;
+  // En desktop: asegurarse de que no tenga clases de drawer
+  if(!vrIsMobile()){ vr.classList.remove('vr-open'); return; }
+}
+function vrToggle(){
+  if(!vrIsMobile()) return;
+  const vr = gs('venta-right');
+  if(vr) vr.classList.toggle('vr-open');
+}
+function vrClose(){
+  if(!vrIsMobile()) return;
+  const vr = gs('venta-right');
+  if(vr) vr.classList.remove('vr-open');
+}
+// Sincronizar total en barra mini + detalle
+const __origUpdateVTotals = typeof updateVTotals === 'function' ? updateVTotals : null;
 
 let selectedPay='efectivo';
 function selectPay(p){
@@ -1555,7 +1694,14 @@ function updateVTotals(){
   const desc=parseFloat(gs('v-desc')?.value)||0,total=Math.max(0,sub-desc);
   const importe=parseFloat(gs('v-importe')?.value)||0;
   const vuelto=importe-total;
+  // Actualizar total en el panel desktop y en el detalle del drawer
   if(gs('v-total'))gs('v-total').textContent=fmtGs(total);
+  if(gs('v-total-detail'))gs('v-total-detail').textContent=fmtGs(total);
+  // Actualizar barra mini del drawer
+  if(gs('v-count-bar')){
+    const n=cart.length;
+    gs('v-count-bar').textContent=n===0?'Sin productos · tocá para cobrar':`${n} producto${n!==1?'s':''} · tocá para cobrar`;
+  }
   if(gs('v-vuelto')){
     if(importe>0&&selectedPay==='efectivo'){
       gs('v-vuelto').textContent=`Vuelto: ${fmtGs(Math.max(0,vuelto))}`;
