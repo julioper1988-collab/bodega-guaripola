@@ -125,6 +125,74 @@ select option{background:var(--bg2);}
 .ac-item .ac-pack{color:var(--teal);font-size:11px;}
 /* EMBALAJES */
 .emb-row-inputs{display:grid;grid-template-columns:80px 1fr 110px 110px 110px auto;gap:8px;align-items:end;padding:12px;background:var(--bg3);border-radius:var(--radius);margin-bottom:12px;}
+
+
+/* ─── AJUSTES RESPONSIVE / MÓVIL ───────────────────────────── */
+.mobile-menu-btn{display:none;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:18px;cursor:pointer;}
+.mobile-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:390;}
+body.mobile-menu-open .mobile-backdrop{display:block;}
+
+@media (max-width: 900px){
+  body{display:block;height:100dvh;overflow:hidden;}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:400;transform:translateX(-105%);transition:transform .22s ease;width:260px;box-shadow:0 0 40px rgba(0,0,0,.35);}
+  body.mobile-menu-open #sidebar{transform:translateX(0);}
+  #main{height:100dvh;width:100%;}
+  #topbar{height:54px;padding:0 10px;gap:8px;position:sticky;top:0;z-index:250;}
+  #topbar h2{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mobile-menu-btn{display:inline-flex;flex-shrink:0;}
+  #db-badge{font-size:10px;padding:3px 8px;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #content{padding:12px;height:calc(100dvh - 54px);overflow:auto;-webkit-overflow-scrolling:touch;}
+  #content.no-pad{padding:0;overflow:auto;}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+  .stat-card{padding:12px;}
+  .stat-card .value{font-size:19px;}
+  .search-bar{flex-direction:column;gap:8px;}
+  .search-bar select{width:100%!important;}
+  .card{overflow-x:auto;}
+  table{min-width:720px;}
+  thead th,tbody td{padding:9px 10px;font-size:12px;}
+  .btn{min-height:36px;padding:8px 11px;}
+  .btn-sm{min-height:32px;padding:6px 9px;}
+  .modal{max-width:96vw;max-height:86dvh;}
+  .modal-body{padding:14px;}
+  .modal-footer{position:sticky;bottom:0;background:var(--bg2);}
+  .form-grid{grid-template-columns:1fr!important;gap:10px;}
+  .emb-row-inputs{grid-template-columns:1fr!important;}
+
+  #venta-layout{display:flex;flex-direction:column;height:auto;min-height:calc(100dvh - 54px);overflow:visible;}
+  #venta-left{border-right:none;border-bottom:1px solid var(--border);min-height:50dvh;overflow:visible;}
+  #venta-header{padding:10px;}
+  #venta-header .vtitle{font-size:16px;margin-bottom:6px;}
+  #venta-header .vinfo{font-size:12px;line-height:1.8;}
+  #venta-search-row{grid-template-columns:1fr;gap:8px;}
+  #venta-table-wrap{max-height:42dvh;overflow:auto;-webkit-overflow-scrolling:touch;}
+  #venta-table{min-width:620px;}
+  #venta-right{overflow:visible;border-top:1px solid var(--border);}
+  #venta-right .section{padding:11px 12px;}
+  .pay-grid{grid-template-columns:1fr 1fr;gap:8px;}
+  .pay-btn{min-height:42px;font-size:12px;}
+  .total-display{font-size:24px;padding:6px 0;}
+  .cobrar-btn{position:sticky;bottom:8px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.35);}
+
+  #content > div[style*="grid-template-columns:1fr 360px"]{display:flex!important;flex-direction:column!important;height:auto!important;gap:12px!important;}
+  #content > div[style*="grid-template-columns:1fr 360px"] > div{min-height:auto!important;max-height:none!important;}
+  #prod-picker{min-height:45dvh!important;}
+  #compra-prod-list{max-height:45dvh;overflow:auto;}
+  #ccomp-items{max-height:42dvh;overflow:auto;}
+}
+
+@media (max-width: 520px){
+  .stats-grid{grid-template-columns:1fr;}
+  #topbar{padding:0 8px;}
+  #content{padding:10px;}
+  #content.no-pad{padding:0;}
+  .pay-grid{grid-template-columns:1fr 1fr;}
+  .btn{width:auto;}
+  tbody td[style*="display:flex"]{min-width:190px;}
+  .modal{max-width:100vw;max-height:92dvh;border-radius:10px 10px 0 0;}
+  .modal-header{padding:13px 14px;}
+}
+
 </style>
 </head>
 <body>
@@ -593,7 +661,9 @@ function renderVentaTable(){
         <button onclick="vQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:22px;height:22px;border-radius:4px;cursor:pointer">+</button>
       </div>
     </td>
-    <td style="text-align:right">${fmtGs(item.precio)}</td>
+    <td style="text-align:right">
+      <input type="number" value="${item.precio}" min="0" step="100" onchange="vPriceSet(${i},this.value)" oninput="vPriceSet(${i},this.value,false)" style="width:105px;text-align:right;padding:4px;font-weight:600;color:var(--accent2)">
+    </td>
     <td style="text-align:right;font-weight:600;color:var(--accent2)">${fmtGs(item.precio*item.cantidad)}</td>
     <td><button onclick="vRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button></td>
   </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
@@ -602,6 +672,18 @@ function renderVentaTable(){
 }
 function vQty(i,d){cart[i].cantidad=Math.max(1,cart[i].cantidad+d);renderVentaTable();}
 function vQtySet(i,v){cart[i].cantidad=Math.max(1,parseInt(v)||1);renderVentaTable();}
+function vPriceSet(i,v,rerender=true){
+  if(!cart[i])return;
+  const n=Math.max(0,parseFloat(v)||0);
+  cart[i].precio=n;
+  updateVTotals();
+  if(rerender)renderVentaTable();
+  else{
+    const sub=cart[i].precio*cart[i].cantidad;
+    const row=gs('venta-tbody')?.children?.[i];
+    if(row&&row.children&&row.children[3])row.children[3].textContent=fmtGs(sub);
+  }
+}
 function vRemove(i){cart.splice(i,1);renderVentaTable();}
 
 function updateVTotals(){
@@ -1597,6 +1679,165 @@ try{
   pages['historial-compras'] = renderHistorialCompras;
 }catch(e){ console.warn('No se pudo actualizar parche extra:', e.message); }
 
+
+
+
+
+// ─── CAJA / ARQUEO DIARIO ─────────────────────────────────────
+const CAJA_DENOMS=[100000,50000,20000,10000,5000,2000,1000,500,100];
+const cajaFmtDenom=n=>n>=1000?(n/1000)+' mil':String(n);
+function cajaInputRows(prefix,vals={}){
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px">
+    ${CAJA_DENOMS.map(d=>`<div class="form-group"><label>${cajaFmtDenom(d)}</label><input id="${prefix}-${d}" type="number" min="0" value="${vals[d]||0}" oninput="actualizarTotalConteo('${prefix}')" style="text-align:center"></div>`).join('')}
+  </div><div style="margin-top:10px;font-weight:700;color:var(--accent2)">Total contado: <span id="${prefix}-total">Gs. 0</span></div>`;
+}
+function leerConteo(prefix){
+  const denoms={};let total=0;
+  CAJA_DENOMS.forEach(d=>{const cant=parseInt(gs(`${prefix}-${d}`)?.value)||0;denoms[d]=cant;total+=cant*d;});
+  return {denoms,total};
+}
+function actualizarTotalConteo(prefix){const r=leerConteo(prefix);const el=gs(`${prefix}-total`);if(el)el.textContent=fmtGs(r.total);}
+async function obtenerCajaFecha(fecha){const {data}=await sb.from('bodega_caja').select('*').eq('fecha',fecha).maybeSingle();return data||null;}
+async function resumenVentasDia(fecha){
+  const {data}=await sb.from('bodega_ventas').select('*').eq('fecha',fecha);
+  const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:(data||[]).length};
+  (data||[]).forEach(v=>{
+    const m=(v.metodo_pago||'').toLowerCase();const t=Number(v.total_final)||0;r.total+=t;
+    if(m==='efectivo')r.efectivo+=t;
+    else if(m==='transferencia')r.transferencia+=t;
+    else if(m==='qr')r.qr+=t;
+    else if(m==='debito')r.debito+=t;
+    else if(m==='credito')r.credito+=t;
+    else if(m==='fiado')r.fiado+=t;
+    else if(m==='mixto'){
+      r.mixto+=t;
+      r.efectivo+=Number(v.monto_efectivo)||0;
+      r.transferencia+=Number(v.monto_transferencia)||0;
+    }
+  });
+  return r;
+}
+async function renderCaja(){
+  const hoy=new Date().toISOString().split('T')[0];
+  const fecha=gs('caja-fecha')?.value||hoy;
+  const caja=await obtenerCajaFecha(fecha);
+  const ventas=await resumenVentasDia(fecha);
+  const apertura=Number(caja?.apertura_efectivo)||0;
+  const esperado=apertura+ventas.efectivo-(Number(caja?.gastos_caja)||0);
+  const dif=caja?.estado==='cerrada'?Number(caja.diferencia||0):null;
+  gs('content').innerHTML=`
+  <div class="search-bar" style="align-items:end;flex-wrap:wrap">
+    <div class="form-group" style="max-width:180px"><label>Fecha de caja</label><input id="caja-fecha" type="date" value="${fecha}" onchange="renderCaja()"></div>
+    <button class="btn btn-secondary" onclick="renderCaja()">Actualizar</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja?.estado==='abierta'?'var(--green)':caja?.estado==='cerrada'?'var(--amber)':'var(--red)'}">${caja?caja.estado:'Sin abrir'}</div><div class="sub">${fmtDate(fecha)}</div></div>
+    <div class="stat-card"><div class="label">Apertura efectivo</div><div class="value">${fmtGs(apertura)}</div></div>
+    <div class="stat-card"><div class="label">Ventas efectivo</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">según ventas del día</div></div>
+    <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
+    ${dif!==null?`<div class="stat-card"><div class="label">Diferencia cierre</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div><div class="sub">contado - esperado</div></div>`:''}
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>Resumen de ventas del día</h3><span class="badge">${ventas.cantidad} ventas</span></div>
+    <table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total ventas</th></tr></thead><tbody>
+      <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
+    </tbody></table>
+  </div>
+  ${!caja?cajaAperturaHTML(fecha):cajaCierreHTML(caja,ventas,esperado)}
+  `;
+  setTimeout(()=>{actualizarTotalConteo('ap');actualizarTotalConteo('ci');},50);
+}
+function cajaAperturaHTML(fecha){return `<div class="card"><div class="card-header"><h3>Abrir caja</h3></div><div style="padding:16px">
+  <div class="alert alert-warning">Primero cargá el efectivo inicial. Ese monto será la base para controlar el cierre del día.</div>
+  ${cajaInputRows('ap')}
+  <div class="form-group" style="margin-top:12px"><label>Notas de apertura</label><textarea id="ap-notas" rows="2" placeholder="Ej: cambio inicial, caja chica, observaciones"></textarea></div>
+  <button class="btn btn-primary" style="margin-top:12px" onclick="abrirCaja('${fecha}')">Abrir caja</button>
+</div></div>`;}
+function cajaCierreHTML(caja,ventas,esperado){
+  const cerrado=caja.estado==='cerrada';
+  const vals=cerrado?(caja.denominaciones_cierre||{}):{};
+  return `<div class="card"><div class="card-header"><h3>${cerrado?'Caja cerrada':'Cerrar caja / arqueo'}</h3></div><div style="padding:16px">
+    ${cerrado?`<div class="alert alert-warning">Esta caja ya fue cerrada. Podés reabrirla si necesitás corregir el conteo.</div>`:''}
+    ${cajaInputRows('ci',vals)}
+    <div class="form-grid" style="margin-top:12px">
+      <div class="form-group"><label>Transferencia contada</label><input id="ci-transferencia" type="number" value="${caja.transferencia_contado||ventas.transferencia}"></div>
+      <div class="form-group"><label>QR contado</label><input id="ci-qr" type="number" value="${caja.qr_contado||ventas.qr}"></div>
+      <div class="form-group"><label>Débito contado</label><input id="ci-debito" type="number" value="${caja.debito_contado||ventas.debito}"></div>
+      <div class="form-group"><label>Crédito contado</label><input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}"></div>
+      <div class="form-group"><label>Gastos de caja</label><input id="ci-gastos" type="number" value="${caja.gastos_caja||0}"></div>
+    </div>
+    <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${caja.notas_cierre||''}</textarea></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-primary" onclick="cerrarCaja('${caja.id}',${esperado})">${cerrado?'Guardar corrección':'Cerrar caja'}</button>
+      ${cerrado?`<button class="btn btn-secondary" onclick="reabrirCaja('${caja.id}')">Reabrir</button>`:''}
+      <button class="btn btn-secondary" onclick="imprimirArqueo('${caja.id}')">Imprimir/PDF</button>
+    </div>
+  </div></div>`;
+}
+async function abrirCaja(fecha){
+  const c=leerConteo('ap');
+  const {error}=await sb.from('bodega_caja').insert({fecha,estado:'abierta',apertura_efectivo:c.total,denominaciones_apertura:c.denoms,notas_apertura:gs('ap-notas')?.value||null,opened_at:new Date().toISOString()});
+  if(error){toast('Error al abrir caja: '+error.message,'err');return;}
+  toast('Caja abierta');renderCaja();
+}
+async function cerrarCaja(id,esperadoBase){
+  const c=leerConteo('ci');
+  const gastos=Number(gs('ci-gastos')?.value)||0;
+  const esperado=esperadoBase-gastos;
+  const diferencia=c.total-esperado;
+  const obj={estado:'cerrada',denominaciones_cierre:c.denoms,efectivo_contado:c.total,transferencia_contado:Number(gs('ci-transferencia')?.value)||0,qr_contado:Number(gs('ci-qr')?.value)||0,debito_contado:Number(gs('ci-debito')?.value)||0,credito_contado:Number(gs('ci-credito')?.value)||0,gastos_caja:gastos,diferencia,notas_cierre:gs('ci-notas')?.value||null,closed_at:new Date().toISOString()};
+  const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
+  if(error){toast('Error al cerrar caja: '+error.message,'err');return;}
+  toast('Caja cerrada. Diferencia: '+fmtGs(diferencia));renderCaja();
+}
+async function reabrirCaja(id){if(!confirm('¿Reabrir esta caja para corregir el arqueo?'))return;const {error}=await sb.from('bodega_caja').update({estado:'abierta'}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Caja reabierta');renderCaja();}
+async function imprimirArqueo(id){
+  const {data:caja}=await sb.from('bodega_caja').select('*').eq('id',id).single();
+  if(!caja){toast('No encontré la caja','err');return;}
+  const ventas=await resumenVentasDia(caja.fecha);
+  const den=caja.denominaciones_cierre||{};
+  const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong></p><p>Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${caja.notas_cierre||''}</p></body></html>`;
+  const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
+}
+function initCajaNav(){
+  if(document.getElementById('nav-caja')) return;
+  const nav=document.querySelector('#sidebar nav');if(!nav) return;
+  const a=document.createElement('a');a.onclick=()=>goTo('caja');a.id='nav-caja';a.innerHTML='<span class="ico">💰</span> Caja / Arqueo';
+  const ref=document.getElementById('nav-historial-ventas');
+  if(ref&&ref.nextSibling)nav.insertBefore(a,ref.nextSibling);else nav.appendChild(a);
+  try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){}
+}
+initCajaNav();
+try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){}
+
+
+// ─── SHELL MÓVIL / MENÚ RESPONSIVE ───────────────────────────
+function initMobileShell(){
+  if(document.getElementById('mobile-menu-btn')) return;
+  const topbar=document.getElementById('topbar');
+  const sidebar=document.getElementById('sidebar');
+  if(!topbar||!sidebar) return;
+  const btn=document.createElement('button');
+  btn.id='mobile-menu-btn';
+  btn.className='mobile-menu-btn';
+  btn.type='button';
+  btn.innerHTML='☰';
+  btn.setAttribute('aria-label','Abrir menú');
+  btn.onclick=()=>document.body.classList.toggle('mobile-menu-open');
+  topbar.insertBefore(btn, topbar.firstChild);
+
+  const backdrop=document.createElement('div');
+  backdrop.className='mobile-backdrop';
+  backdrop.onclick=()=>document.body.classList.remove('mobile-menu-open');
+  document.body.appendChild(backdrop);
+
+  sidebar.querySelectorAll('nav a').forEach(a=>{
+    a.addEventListener('click',()=>document.body.classList.remove('mobile-menu-open'));
+  });
+}
+
+initMobileShell();
 
 // ─── ARRANQUE ─────────────────────────────────────────────────
 (async function(){
