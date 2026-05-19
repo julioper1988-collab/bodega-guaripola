@@ -719,6 +719,104 @@ body.sidebar-collapsed #sidebar .cfg-btn::before{content:'⚙️';font-size:20px
   .compra-order-panel #ccomp-items{min-height:52dvh!important;max-height:62dvh!important;overflow:auto!important;}
 }
 
+
+
+/* ─── MEJORA MÓVIL: PRIORIDAD A CARGA DE PRODUCTOS ─────────── */
+.product-new-btn{font-weight:800;letter-spacing:.2px;}
+.productos-card .card-header h3{font-size:16px;}
+.productos-table tbody td:nth-child(4){font-size:18px!important;font-weight:900!important;text-align:center;}
+.productos-table tbody td:nth-child(2){font-size:15px!important;font-weight:800!important;}
+.productos-table tbody td:nth-child(5),
+.productos-table tbody td:nth-child(6){font-size:14px!important;font-weight:700!important;}
+
+@media (max-width: 900px){
+  /* El módulo productos debe priorizar cargar y buscar productos */
+  #prod-search-input{
+    min-height:58px!important;
+    font-size:18px!important;
+    font-weight:700!important;
+    padding:14px 14px!important;
+    border-radius:14px!important;
+  }
+  #btn-scan-productos{
+    min-height:58px!important;
+    font-size:16px!important;
+    font-weight:800!important;
+    padding:12px 14px!important;
+    border-radius:14px!important;
+    white-space:nowrap;
+  }
+  .product-new-btn{
+    width:100%!important;
+    min-height:68px!important;
+    justify-content:center!important;
+    font-size:19px!important;
+    font-weight:900!important;
+    border-radius:16px!important;
+    margin-top:4px!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.28);
+  }
+  .productos-card .card-header{
+    align-items:flex-start!important;
+    flex-direction:column!important;
+    gap:6px!important;
+    padding:12px!important;
+  }
+  .productos-card .card-header h3{
+    font-size:20px!important;
+    line-height:1.15!important;
+  }
+  .productos-card .badge{
+    font-size:12px!important;
+    white-space:normal!important;
+    line-height:1.3!important;
+  }
+  .productos-table-wrap{
+    max-height:calc(100dvh - 245px)!important;
+    overflow:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  .productos-table{
+    min-width:760px!important;
+  }
+  .productos-table thead th{
+    font-size:13px!important;
+    padding:12px 10px!important;
+    position:sticky!important;
+    top:0!important;
+    z-index:5!important;
+  }
+  .productos-table tbody td{
+    font-size:14px!important;
+    padding:13px 10px!important;
+  }
+  .productos-table tbody td:nth-child(4){
+    font-size:22px!important;
+    border-radius:10px;
+  }
+  .productos-table .btn-sm{
+    min-height:42px!important;
+    min-width:44px!important;
+    font-size:16px!important;
+  }
+  /* Modal de crear/editar producto: más grande y cómodo en celular */
+  #p-cod,#p-nom,#p-stock,#p-stmin,#p-costo,#p-venta,#p-mayor,
+  #p-cat,#p-prov,#p-uni,#p-notas{
+    min-height:52px!important;
+    font-size:17px!important;
+    padding:13px 12px!important;
+  }
+  #modal-title{
+    font-size:18px!important;
+    font-weight:900!important;
+  }
+  .modal-footer .btn{
+    min-height:50px!important;
+    font-size:16px!important;
+    font-weight:800!important;
+  }
+}
+
 </style>
 
 <style id="bg-visual-uppercase-fix">
@@ -916,7 +1014,7 @@ async function renderProductos(){
       <option value="">Todas las categorías</option>
       ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${c.nombre}</option>`).join('')}
     </select>
-    <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+    <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
   </div>
   <div class="card">
     <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -2597,9 +2695,9 @@ initMobileShell();
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${c.nombre}</option>`).join('')}
       </select>
-      <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
     </div>
-    <div class="card">
+    <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
       <table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Packs</th><th></th></tr></thead><tbody>
         ${(data||[]).map(p=>`<tr>
@@ -3012,9 +3110,9 @@ initMobileShell();
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
     </div>
-    <div class="card">
+    <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
       <table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Margen</th><th>Packs</th><th></th></tr></thead><tbody>
         ${(data||[]).map(p=>`<tr>
@@ -4505,11 +4603,11 @@ initMobileShell();
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${h(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
     </div>
-    <div class="card">
+    <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3><span class="badge">La búsqueda espera un instante antes de refrescar</span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Margen</th><th>Packs</th><th></th></tr></thead><tbody>
+      <div class="productos-table-wrap" style="overflow-x:auto"><table class="productos-table"><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Margen</th><th>Packs</th><th></th></tr></thead><tbody>
         ${(data||[]).map(productoRowHtml).join('')}
         ${!data.length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px">Sin resultados</td></tr>':''}
       </tbody></table></div>
