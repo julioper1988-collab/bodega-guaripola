@@ -4,7 +4,183 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+
+/* ─── FIX FINAL: EDITAR VENTA REAL + VER VENTA DETALLADO + MAYÚSCULAS ─── */
+(function(){
+  function bgEsc(v){
+    return String(v ?? '').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]));
+  }
+  window.escapeHtml = window.escapeHtml || bgEsc;
+  function bgFmtHora(row){
+    const raw = row?.created_at || row?.updated_at || row?.fecha;
+    if(!raw) return '-';
+    try{return new Date(raw).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});}catch(e){return '-';}
+  }
+  function bgPayName(m){
+    const map={efectivo:'EFECTIVO',transferencia:'TRANSFERENCIA',credito:'CRÉDITO',debito:'DÉBITO',qr:'QR',mixto:'MIXTO',fiado:'FIADO'};
+    return map[m] || String(m||'-').toUpperCase();
+  }
+  function bgPaymentRows(v){
+    const total=Number(v?.total_final)||0;
+    const ef=Number(v?.monto_efectivo)||0;
+    const tr=Number(v?.monto_transferencia)||0;
+    const ot=Number(v?.monto_otro)||0;
+    const metodo=v?.metodo_pago||'-';
+    let rows=[];
+    rows.push(['MÉTODO', bgPayName(metodo)]);
+    if(metodo==='efectivo'){
+      rows.push(['TOTAL A PAGAR', fmtGs(total)]);
+      if(ef>0){
+        rows.push(['IMPORTE RECIBIDO', fmtGs(ef)]);
+        rows.push(['VUELTO', fmtGs(Math.max(0, ef-total))]);
+      }else{
+        rows.push(['IMPORTE RECIBIDO', 'NO REGISTRADO']);
+      }
+    }else if(metodo==='mixto'){
+      rows.push(['EFECTIVO', fmtGs(ef)]);
+      rows.push(['TRANSFERENCIA', fmtGs(tr)]);
+      rows.push(['QR / DÉBITO / CRÉDITO', fmtGs(ot)]);
+      rows.push(['TOTAL PAGOS REGISTRADOS', fmtGs(ef+tr+ot)]);
+      rows.push(['TOTAL VENTA', fmtGs(total)]);
+      const dif=(ef+tr+ot)-total;
+      rows.push(['DIFERENCIA / VUELTO', fmtGs(dif)]);
+    }else if(metodo==='transferencia'){
+      rows.push(['TRANSFERENCIA', fmtGs(tr || total)]);
+    }else if(['qr','debito','credito'].includes(metodo)){
+      rows.push([bgPayName(metodo), fmtGs(ot || total)]);
+    }else if(metodo==='fiado'){
+      rows.push(['TOTAL FIADO', fmtGs(total)]);
+      rows.push(['ESTADO', 'PENDIENTE / VER CLIENTES-DEUDAS']);
+    }else{
+      rows.push(['TOTAL', fmtGs(total)]);
+    }
+    return rows.map(r=>`<tr><td style="color:var(--text2);font-weight:700">${bgEsc(r[0])}</td><td style="font-weight:800">${bgEsc(r[1])}</td></tr>`).join('');
+  }
+
+  window.verVenta = verVenta = async function(id){
+    try{
+      const [{data:v,error:vErr},{data:det,error:dErr}] = await Promise.all([
+        sb.from('bodega_ventas').select('*').eq('id',id).single(),
+        sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('venta_id',id)
+      ]);
+      if(vErr) throw vErr;
+      if(dErr) throw dErr;
+      const detalles=(det||[]).map(d=>{
+        const cant=Number(d.cantidad)||0;
+        const precio=Number(d.precio_unitario)||0;
+        const sub=Number(d.subtotal ?? (cant*precio));
+        return `<tr>
+          <td>${bgEsc(d.bodega_productos?.nombre||'PRODUCTO')}</td>
+          <td style="text-align:center;font-weight:800">${cant.toLocaleString('es-PY')}</td>
+          <td style="text-align:right">${fmtGs(precio)}</td>
+          <td style="text-align:right;font-weight:800;color:var(--accent2)">${fmtGs(sub)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:16px">SIN DETALLE</td></tr>';
+      const body=`
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
+          <div class="stat-card"><div class="label">FECHA</div><div class="value" style="font-size:18px">${fmtDate(v.fecha)}</div></div>
+          <div class="stat-card"><div class="label">HORA</div><div class="value" style="font-size:18px">${bgFmtHora(v)}</div></div>
+          <div class="stat-card"><div class="label">CLIENTE</div><div class="value" style="font-size:18px">${bgEsc(v.cliente_nombre||'OCASIONAL')}</div></div>
+          <div class="stat-card"><div class="label">TOTAL</div><div class="value" style="font-size:20px;color:var(--green)">${fmtGs(v.total_final)}</div></div>
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header"><h3>DETALLE DE PAGO</h3></div>
+          <table><tbody>${bgPaymentRows(v)}</tbody></table>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>PRODUCTOS VENDIDOS</h3></div>
+          <table><thead><tr><th>PRODUCTO</th><th style="text-align:center">CANT.</th><th style="text-align:right">PRECIO UNIT.</th><th style="text-align:right">SUBTOTAL</th></tr></thead><tbody>${detalles}</tbody></table>
+        </div>`;
+      openModal('DETALLE DE VENTA', body, null, '');
+    }catch(e){
+      console.error(e);
+      toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
+    }
+  };
+
+  async function bgEsperarVentaDOM(){
+    for(let i=0;i<80;i++){
+      if(gs('venta-tbody') && gs('v-total')) return true;
+      await new Promise(r=>setTimeout(r,25));
+    }
+    return false;
+  }
+  function bgSetClienteVenta(v){
+    try{
+      const lista=(typeof clienteCache!=='undefined' && clienteCache) ? clienteCache : [];
+      const cliente=lista.find(c=>String(c.id||'')===String(v.cliente_id||'') || String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
+      if(gs('v-cliente-id') && cliente){gs('v-cliente-id').value=cliente.id;return;}
+      if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
+    }catch(e){
+      if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
+    }
+  }
+  window.editarVenta = editarVenta = async function(id){
+    try{
+      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
+      if(vErr) throw vErr;
+      const {data:det,error:dErr}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
+      if(dErr) throw dErr;
+      if(!v){toast('NO SE PUDO ABRIR LA VENTA','err');return;}
+
+      window.__ventaEditandoId=id;
+      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
+      ventaTipo=v.tipo||'minorista';
+
+      await loadCaches();
+      try{ await cargarClientes(); }catch(e){}
+      const r = window.renderVentas ? window.renderVentas() : renderVentas();
+      if(r && typeof r.then==='function') await r;
+      await bgEsperarVentaDOM();
+      await new Promise(r=>setTimeout(r,80));
+
+      cart=(det||[]).map((d,idx)=>{
+        const cant=Number(d.cantidad)||1;
+        const precio=Number(d.precio_unitario)||0;
+        const sub=Number(d.subtotal ?? (cant*precio));
+        return {
+          key:String(d.producto_id)+'_edit_'+idx,
+          producto_id:d.producto_id,
+          embalaje_id:null,
+          nombre:(d.bodega_productos?.nombre||'PRODUCTO').toUpperCase(),
+          precio:precio,
+          cantidad:cant,
+          uds:1,
+          precioManual:true,
+          packInfo:'PRECIO GUARDADO',
+          subtotalCalculado:sub
+        };
+      });
+
+      if(gs('v-desc')) gs('v-desc').value=Number(v.descuento)||0;
+      if(gs('v-importe')) gs('v-importe').value=v.metodo_pago==='efectivo' ? (Number(v.monto_efectivo)||Number(v.total_final)||0) : 0;
+      bgSetClienteVenta(v);
+
+      selectPay(v.metodo_pago || 'efectivo');
+      renderVentaTable();
+      updateVTotals();
+
+      const cobrar=document.querySelector('.cobrar-btn');
+      if(cobrar){cobrar.textContent='GUARDAR CAMBIOS DE VENTA';cobrar.style.background='var(--amber)';}
+      const header=gs('venta-header');
+      if(header && !gs('venta-edit-alert')){
+        const aviso=document.createElement('div');
+        aviso.id='venta-edit-alert';
+        aviso.className='alert alert-warning';
+        aviso.style.margin='10px 0 0';
+        aviso.innerHTML='✏️ <b>EDITANDO VENTA</b>. LA VENTA ORIGINAL NO SE BORRA. LOS CAMBIOS SE APLICAN AL TOCAR <b>GUARDAR CAMBIOS DE VENTA</b>.';
+        header.appendChild(aviso);
+      }
+      toast('VENTA CARGADA PARA EDITAR. NO SE BORRÓ NADA.');
+    }catch(e){
+      console.error(e);
+      toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
+    }
+  };
+})();
+
+</script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <style>
 :root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#21253a;--border:#2e3350;--text:#e2e8f0;--text2:#8892a4;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--radius:8px;--sidebar:220px;}
@@ -305,6 +481,17 @@ body.sidebar-collapsed #sidebar .cfg-btn::before{content:'⚙️';font-size:20px
   .compra-order-panel #ccomp-items{min-height:52dvh!important;max-height:62dvh!important;overflow:auto!important;}
 }
 
+</style>
+
+<style id="bg-visual-uppercase-fix">
+  body{font-size:15px;}
+  #sidebar nav a,#topbar h2,.card-header h3,table th,table td,.btn,.badge,.badge-cat,.estado-badge,.section-title,.stat-card .label,.form-group label,.modal-header h3,.total-display,.vtitle,.vinfo{text-transform:uppercase;}
+  #venta-table tbody td:first-child, tbody td{letter-spacing:.01em;}
+  input,textarea,select{font-size:15px;}
+  .stock-ok,.stock-low,.stock-zero{font-size:16px;font-weight:900;}
+  #venta-table tbody td{font-size:15px;}
+  #venta-table thead th, thead th{font-size:12px;}
+  .btn-sm{font-size:13px;padding:6px 11px;}
 </style>
 </head>
 <body>
