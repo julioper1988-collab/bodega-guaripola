@@ -180,6 +180,214 @@
   };
 })();
 
+
+
+// ─── INVENTARIO Y BLOQUEO DE STOCK PARA USUARIO NO ADMIN ───
+(function(){
+  const htmlInv = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  let invItems = [];
+  let invSearch = '';
+  let invEditing = false;
+
+  function normalInv(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/,/g,'.').replace(/[^a-z0-9.]+/g,' ').trim();
+  }
+  function matchInvProducto(p,q){
+    q=normalInv(q); if(!q) return true;
+    const tokens=q.split(/\s+/).filter(Boolean);
+    const base=normalInv([p.nombre,p.codigo_barra,getCatName(p.categoria_id)].join(' '));
+    return tokens.every(t=>base.includes(t) || base.replace(/\s+/g,'').includes(t.replace(/\s+/g,'')));
+  }
+  function isAdminLocalCached(){
+    try{
+      const raw=localStorage.getItem('bg_usuario_full');
+      if(raw){const u=JSON.parse(raw); return !u || u.rol==='admin';}
+    }catch(e){}
+    return true;
+  }
+  async function usuarioAdminActual(){
+    try{
+      const saved=localStorage.getItem('bg_usuario_actual');
+      if(!saved) return true;
+      const obj=JSON.parse(saved);
+      if(!obj?.id) return true;
+      const {data,error}=await sb.from('bodega_usuarios').select('id,nombre,rol').eq('id',obj.id).maybeSingle();
+      if(error || !data) return true;
+      localStorage.setItem('bg_usuario_full',JSON.stringify(data));
+      return data.rol==='admin';
+    }catch(e){return true;}
+  }
+  window.bgUsuarioEsAdmin = usuarioAdminActual;
+
+  function initInventarioNav(){
+    if(gs('nav-inventario')) return;
+    const nav=document.querySelector('#sidebar nav');
+    const after=gs('nav-ajustes');
+    if(!nav) return;
+    const a=document.createElement('a');
+    a.onclick=()=>goTo('inventario');
+    a.id='nav-inventario';
+    a.innerHTML='<span class="ico">🧾</span> Inventario';
+    if(after && after.parentNode) after.parentNode.insertBefore(a, after.nextSibling); else nav.appendChild(a);
+    try{ titles.inventario='Inventario'; pages.inventario=renderInventario; }catch(e){}
+  }
+
+  window.renderInventario = async function(){
+    invItems=[]; invSearch=''; invEditing=false;
+    const today=new Date().toISOString().split('T')[0];
+    gs('content').className='';
+    gs('content').innerHTML=`
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-header"><h3>Inventario / Conteo de stock</h3><button class="btn btn-secondary btn-sm" onclick="renderHistorialInventarios()">Historial</button></div>
+        <div class="alert alert-warning" style="margin:14px">Usá este módulo para contar productos y ajustar el stock real. No registra compra; solo corrige el stock según el conteo.</div>
+      </div>
+      <div id="inventario-layout" style="display:grid;grid-template-columns:minmax(260px,.75fr) minmax(520px,1.45fr);gap:14px;height:calc(100vh - 180px);min-height:520px">
+        <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+          <div class="card-header"><h3>Buscar productos</h3><button class="btn btn-secondary btn-sm" onclick="openBarcodeScanner('inv-search',()=>invSearchByCode())">📷 Cámara</button></div>
+          <div style="padding:12px;border-bottom:1px solid var(--border)">
+            <input id="inv-search" placeholder="Buscar: coca 1,5 / código" oninput="invSearch=this.value;renderInvProductList()" onkeydown="if(event.key==='Enter')invSearchByCode()">
+          </div>
+          <div id="inv-product-list" style="flex:1;overflow:auto"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+          <div class="card-header"><h3>Productos contados</h3><span class="badge" id="inv-count-badge">0 productos</span></div>
+          <div style="padding:10px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div class="form-group"><label>Fecha</label><input id="inv-fecha" type="date" value="${today}"></div>
+            <div class="form-group"><label>Responsable</label><input id="inv-responsable" placeholder="Julio / empleado"></div>
+            <div class="form-group"><label>Estado</label><select id="inv-estado"><option value="finalizado">Finalizado y ajustar stock</option><option value="borrador">Borrador sin ajustar</option></select></div>
+          </div>
+          <div id="inv-items" style="flex:1;overflow:auto"></div>
+          <div style="padding:12px;border-top:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="font-weight:800;font-size:16px" id="inv-resumen">Sin productos</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary" onclick="limpiarInventarioActual()">Limpiar</button>
+              <button class="btn btn-primary" onclick="guardarInventarioActual()">Guardar inventario</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    renderInvProductList(); renderInvItems();
+  };
+
+  window.renderInvProductList = function(){
+    const el=gs('inv-product-list'); if(!el) return;
+    const q=gs('inv-search')?.value ?? invSearch;
+    const results=prodCache.filter(p=>matchInvProducto(p,q)).slice(0,120);
+    el.innerHTML=results.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="addInvItem('${p.id}')">
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">${htmlInv(p.nombre)}</div><div style="font-size:12px;color:var(--text2)">${htmlInv(p.codigo_barra||'-')} · Stock sistema: <b style="color:var(--accent2)">${p.stock||0}</b> · Costo: ${fmtGs(p.precio_costo)}</div></div>
+      <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();addInvItem('${p.id}')">+ Contar</button>
+    </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--text2)">Sin resultados</div>';
+  };
+
+  window.invSearchByCode = function(){
+    const q=(gs('inv-search')?.value||'').trim(); if(!q) return;
+    let prod=prodCache.find(p=>(p.codigo_barra||'')===q);
+    if(!prod){
+      for(const pid in embCache){ const emb=(embCache[pid]||[]).find(e=>(e.codigo_barra||'')===q); if(emb){prod=prodCache.find(p=>p.id===pid);break;} }
+    }
+    if(prod){ addInvItem(prod.id); gs('inv-search').value=''; invSearch=''; renderInvProductList(); }
+    else renderInvProductList();
+  };
+
+  window.addInvItem = function(prodId){
+    const p=prodCache.find(x=>x.id===prodId); if(!p) return;
+    let it=invItems.find(x=>x.producto_id===prodId);
+    if(!it) invItems.push({producto_id:p.id,nombre:p.nombre,codigo_barra:p.codigo_barra||'',stock_sistema:Number(p.stock)||0,stock_contado:Number(p.stock)||0,notas:''});
+    renderInvItems();
+    setTimeout(()=>{ const input=gs('inv-contado-'+prodId); if(input){input.focus(); input.select();}},50);
+  };
+
+  window.renderInvItems = function(){
+    const el=gs('inv-items'); if(!el) return;
+    let difTotal=0;
+    el.innerHTML=invItems.map((it,i)=>{ const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0); difTotal+=dif; return `<div style="display:grid;grid-template-columns:1fr 90px 120px 90px 36px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div><div style="font-weight:800;font-size:15px">${htmlInv(it.nombre)}</div><div style="font-size:12px;color:var(--text2)">${htmlInv(it.codigo_barra||'-')}</div></div>
+      <div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Sistema</div><b>${it.stock_sistema}</b></div>
+      <div class="form-group"><label>Contado</label><input id="inv-contado-${it.producto_id}" type="number" value="${it.stock_contado}" oninput="setInvContado(${i},this.value)"></div>
+      <div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Dif.</div><b style="color:${dif===0?'var(--text2)':dif>0?'var(--green)':'var(--red)'}">${dif>0?'+':''}${dif}</b></div>
+      <button class="btn btn-danger btn-sm" onclick="removeInvItem(${i})">×</button>
+    </div>`; }).join('') || '<div style="padding:28px;text-align:center;color:var(--text2)">Agregá productos para contar inventario.</div>';
+    if(gs('inv-count-badge')) gs('inv-count-badge').textContent=`${invItems.length} productos`;
+    if(gs('inv-resumen')) gs('inv-resumen').textContent=invItems.length?`Diferencia neta: ${difTotal>0?'+':''}${difTotal} unidades`:'Sin productos';
+  };
+  window.setInvContado=function(i,v){ if(!invItems[i]) return; invItems[i].stock_contado=Number(v)||0; renderInvItems(); const next=gs('inv-contado-'+invItems[i].producto_id); if(next){setTimeout(()=>{try{next.focus(); next.setSelectionRange(String(next.value).length,String(next.value).length);}catch(e){}},0);} };
+  window.removeInvItem=function(i){invItems.splice(i,1);renderInvItems();};
+  window.limpiarInventarioActual=function(){ if(invItems.length&&!confirm('¿Limpiar inventario actual?'))return; invItems=[]; renderInvItems(); };
+
+  window.guardarInventarioActual = async function(){
+    if(!invItems.length){toast('No hay productos para guardar','err');return;}
+    const estado=gs('inv-estado')?.value||'finalizado';
+    const fecha=gs('inv-fecha')?.value||new Date().toISOString().split('T')[0];
+    const responsable=gs('inv-responsable')?.value||null;
+    const difTotal=invItems.reduce((s,it)=>s+((Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0)),0);
+    if(estado==='finalizado'&&!confirm('Esto ajustará el stock real de los productos contados. ¿Guardar inventario?')) return;
+    const cab={fecha,estado,responsable,total_productos:invItems.length,diferencia_total:difTotal,created_at:new Date().toISOString()};
+    const {data:inv,error:e1}=await sb.from('bodega_inventarios').insert(cab).select().single();
+    if(e1){toast('Error inventario: '+e1.message,'err');return;}
+    const detalles=invItems.map(it=>({inventario_id:inv.id,producto_id:it.producto_id,stock_sistema:Number(it.stock_sistema)||0,stock_contado:Number(it.stock_contado)||0,diferencia:(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0),notas:it.notas||null}));
+    const {error:e2}=await sb.from('bodega_inventario_detalle').insert(detalles);
+    if(e2){toast('Error detalle: '+e2.message,'err');return;}
+    if(estado==='finalizado'){
+      for(const it of invItems){
+        const ns=Number(it.stock_contado)||0, old=Number(it.stock_sistema)||0, dif=ns-old;
+        if(dif===0) continue;
+        await sb.from('bodega_productos').update({stock:ns}).eq('id',it.producto_id);
+        await sb.from('bodega_ajustes_stock').insert({producto_id:it.producto_id,tipo:dif>0?'ajuste_positivo':'ajuste_negativo',cantidad:Math.abs(dif),motivo:'Inventario',stock_anterior:old,stock_nuevo:ns,referencia_id:inv.id,referencia_tipo:'inventario'});
+      }
+    }
+    toast('Inventario guardado'); await loadCaches(); invItems=[]; renderInventario();
+  };
+
+  window.renderHistorialInventarios = async function(){
+    const {data,error}=await sb.from('bodega_inventarios').select('*').order('created_at',{ascending:false}).limit(80);
+    if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe bodega_inventarios. Ejecutá el SQL de inventario.</div>`;return;}
+    const rows=(data||[]).map(i=>`<tr><td>${fmtDate(i.fecha)}</td><td>${htmlInv(i.estado)}</td><td>${htmlInv(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${Number(i.diferencia_total||0)===0?'var(--text2)':Number(i.diferencia_total||0)>0?'var(--green)':'var(--red)'}">${Number(i.diferencia_total||0)>0?'+':''}${i.diferencia_total||0}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
+    gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Historial de inventarios</h3><button class="btn btn-primary" onclick="renderInventario()">+ Nuevo inventario</button></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Responsable</th><th>Productos</th><th>Diferencia</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  };
+  window.verInventario = async function(id){
+    const {data}=await sb.from('bodega_inventario_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('inventario_id',id).order('created_at',{ascending:true});
+    const rows=(data||[]).map(d=>`<tr><td>${htmlInv(d.bodega_productos?.nombre||'-')}</td><td>${htmlInv(d.bodega_productos?.codigo_barra||'-')}</td><td>${d.stock_sistema}</td><td>${d.stock_contado}</td><td style="font-weight:800;color:${Number(d.diferencia||0)===0?'var(--text2)':Number(d.diferencia||0)>0?'var(--green)':'var(--red)'}">${Number(d.diferencia||0)>0?'+':''}${d.diferencia}</td></tr>`).join('');
+    openModal('Detalle de inventario',`<div style="overflow-x:auto"><table><thead><tr><th>Producto</th><th>Código</th><th>Stock sistema</th><th>Contado</th><th>Diferencia</th></tr></thead><tbody>${rows}</tbody></table></div>`,null,'');
+  };
+
+  // Restringe cambio manual de stock desde Productos a administradores.
+  const oldOpenProdModalInv = window.openProdModal;
+  if(typeof oldOpenProdModalInv==='function'){
+    window.openProdModal = function(prod=null){
+      oldOpenProdModalInv(prod);
+      setTimeout(async()=>{
+        const admin=await usuarioAdminActual();
+        const st=gs('p-stock'), sm=gs('p-stmin');
+        if(!admin && prod){
+          if(st){st.disabled=true; st.title='Solo administrador puede cambiar stock desde Productos';}
+          if(sm){sm.disabled=true; sm.title='Solo administrador puede cambiar stock mínimo';}
+          const body=gs('modal-body');
+          if(body && !gs('stock-admin-warning')) body.insertAdjacentHTML('afterbegin','<div id="stock-admin-warning" class="alert alert-warning">Stock bloqueado: solo el administrador puede modificar stock desde Productos. Usá Inventario o Ajuste de stock según tu permiso.</div>');
+        }
+      },80);
+    };
+  }
+  const oldSaveProdInv = window.saveProd;
+  if(typeof oldSaveProdInv==='function'){
+    window.saveProd = async function(id=null){
+      if(id){
+        const admin=await usuarioAdminActual();
+        if(!admin){
+          const {data:old}=await sb.from('bodega_productos').select('stock,stock_minimo').eq('id',id).maybeSingle();
+          if(old){ if(gs('p-stock')) gs('p-stock').value=old.stock||0; if(gs('p-stmin')) gs('p-stmin').value=old.stock_minimo||0; }
+        }
+      }
+      return oldSaveProdInv(id);
+    };
+  }
+
+  const invCss=document.createElement('style');
+  invCss.textContent=`@media(max-width:820px){#inventario-layout{display:flex!important;flex-direction:column!important;height:auto!important}.card-header h3{font-size:16px!important}#inv-items>div{grid-template-columns:1fr 80px 100px 70px 36px!important;font-size:13px}}`;
+  document.head.appendChild(invCss);
+  setTimeout(initInventarioNav,500);
+})();
+
 </script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <style>
