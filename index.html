@@ -194,6 +194,80 @@ body.mobile-menu-open .mobile-backdrop{display:block;}
   .modal-header{padding:13px 14px;}
 }
 
+
+
+/* ===== MEJORA VISUAL 2026-05-19: contraste, letras y stock más visible ===== */
+:root{
+  --bg:#111827;
+  --bg2:#1f2937;
+  --bg3:#283449;
+  --border:#4b5563;
+  --text:#f8fafc;
+  --text2:#cbd5e1;
+  --accent:#6366f1;
+  --accent2:#a5b4fc;
+  --green:#4ade80;
+  --red:#f87171;
+  --amber:#fbbf24;
+  --teal:#2dd4bf;
+}
+body{font-size:15px;line-height:1.35;}
+#topbar h2{font-size:17px;letter-spacing:.2px;}
+#sidebar nav a{font-size:14px;padding:11px 16px;color:#d6dce8;}
+#sidebar .logo h1{font-size:16px;}
+.badge{font-size:12px;color:#d8e0ee;background:#2f3b52;border-color:#55627a;}
+.card{border-color:#526079;box-shadow:0 8px 28px rgba(0,0,0,.18);}
+.card-header h3{font-size:16px;}
+thead th{font-size:12px;color:#dbe4f0;background:#303b53;padding:12px 14px;}
+tbody td{font-size:14px;padding:13px 14px;}
+tbody tr{border-bottom-color:#3d4860;}
+tbody tr:hover{background:#313d55;}
+input,select,textarea{font-size:15px;padding:11px 12px;background:#26324a;color:#f8fafc;border-color:#536079;}
+input::placeholder,textarea::placeholder{color:#aeb9cc;}
+.form-group label{font-size:13px;color:#d1d8e6;}
+.btn{font-size:14px;padding:9px 15px;}
+.btn-sm{font-size:13px;padding:7px 11px;}
+.badge-cat{font-size:12px;padding:4px 9px;font-weight:700;}
+.stock-ok,.stock-low,.stock-zero{font-size:18px!important;font-weight:900!important;letter-spacing:.3px;}
+.stock-ok{color:#4ade80!important;text-shadow:0 0 8px rgba(74,222,128,.25);}
+.stock-low{color:#fbbf24!important;text-shadow:0 0 8px rgba(251,191,36,.25);}
+.stock-zero{color:#fb7185!important;text-shadow:0 0 8px rgba(251,113,133,.25);}
+/* En tablas de productos, resaltar Costo / Venta / Margen para leer más rápido */
+td[style*="color:var(--accent2)"]{font-size:15px;font-weight:800!important;}
+td[style*="color:var(--green)"]{font-size:15px;font-weight:800!important;}
+td[style*="color:var(--amber)"]{font-weight:800!important;}
+/* Venta: más claro y fácil para usar en mostrador */
+#venta-header .vtitle{font-size:22px;color:#c7d2fe;}
+#venta-header .vinfo{font-size:15px;color:#cbd5e1;}
+#venta-table thead th{font-size:13px;background:#303b53;color:#dbeafe;}
+#venta-table tbody td{font-size:15px;padding:14px;}
+.pay-btn{font-size:14px;min-height:44px;background:#2a354d;border-color:#56617a;color:#eef2ff;}
+.total-display{font-size:34px;color:#c7d2fe;}
+.cobrar-btn{font-size:18px;padding:17px;}
+/* Productos: que la fila respire y el stock sea protagonista */
+#content .card table tbody tr td:nth-child(4){font-size:19px!important;font-weight:900!important;text-align:center;}
+#content .card table thead th:nth-child(4){text-align:center;}
+/* Autocomplete más legible */
+.autocomplete-list{background:#1f2937;border-color:#818cf8;box-shadow:0 12px 26px rgba(0,0,0,.35);}
+.ac-item{font-size:15px;padding:12px 14px;}
+.ac-item .ac-sub{font-size:13px;color:#cbd5e1;}
+/* Móvil */
+@media(max-width:760px){
+  body{font-size:16px;}
+  #topbar h2{font-size:18px;}
+  #content{padding:14px;}
+  .card-header h3{font-size:17px;}
+  thead th{font-size:12px;padding:11px 12px;}
+  tbody td{font-size:15px;padding:13px 12px;}
+  input,select,textarea{font-size:16px;min-height:46px;}
+  .btn{font-size:15px;min-height:44px;}
+  .stock-ok,.stock-low,.stock-zero{font-size:20px!important;}
+  #venta-table tbody td{font-size:16px;}
+  .total-display{font-size:36px;}
+  .pay-grid{gap:8px;}
+  .pay-btn{font-size:15px;min-height:52px;}
+}
+
 </style>
 </head>
 <body>
