@@ -2396,6 +2396,221 @@ initMobileShell();
   if(url&&key){document.getElementById('setup').style.display='none';await initSB(url,key);}
   else document.getElementById('loading').style.display='none';
 })();
+
+
+/* =========================================================
+   MEJORA: margen de ganancia y costo automático de packs
+   ========================================================= */
+(function(){
+  function n(v){ return parseFloat(v)||0; }
+  window.bgMargenPorcentaje = function(costo, venta){
+    costo=n(costo); venta=n(venta);
+    if(!venta) return null;
+    return ((venta-costo)/venta)*100;
+  };
+  window.bgGananciaGs = function(costo, venta){ return n(venta)-n(costo); };
+  window.bgMarginText = function(costo, venta){
+    const m=bgMargenPorcentaje(costo,venta);
+    if(m===null) return 'Margen: -';
+    return `Margen: ${m.toFixed(1)}% · Gan.: ${fmtGs(bgGananciaGs(costo,venta))}`;
+  };
+  window.bgMarginHtml = function(costo, venta, small=true){
+    const m=bgMargenPorcentaje(costo,venta);
+    if(m===null) return '<span style="color:var(--text2)">-</span>';
+    const color=m<0?'var(--red)':m<20?'var(--amber)':'var(--green)';
+    return `<div style="font-weight:700;color:${color};font-size:${small?'12px':'13px'}">${m.toFixed(1)}%</div><div style="font-size:11px;color:var(--text2)">${fmtGs(bgGananciaGs(costo,venta))}</div>`;
+  };
+  window.bgRefreshProdMargin = function(){
+    const c=n(gs('p-costo')?.value), v=n(gs('p-venta')?.value), may=n(gs('p-mayor')?.value);
+    const el=gs('p-margin-live');
+    if(el){
+      el.innerHTML=`<div><b>Venta:</b> ${bgMarginText(c,v)}</div><div><b>Mayorista:</b> ${may?bgMarginText(c,may):'sin precio mayorista'}</div>`;
+    }
+  };
+  window.bgRefreshEmbMargin = function(){
+    const c=n(gs('emb-costo')?.value), v=n(gs('emb-venta')?.value), may=n(gs('emb-mayor')?.value);
+    const el=gs('emb-margin-live');
+    if(el){
+      el.innerHTML=`<b>Venta:</b> ${bgMarginText(c,v)}${may?`<br><b>Mayorista:</b> ${bgMarginText(c,may)}`:''}`;
+    }
+  };
+  window.embAutoCosto = function(){
+    const base=n(window.__embBaseCosto||0);
+    const cant=Math.max(1, parseInt(gs('emb-cant')?.value)||1);
+    const el=gs('emb-costo');
+    if(el && base>0){ el.value=Math.round(base*cant); }
+    bgRefreshEmbMargin();
+  };
+
+  // Productos: agregar margen a la tabla principal.
+  renderProductos = async function(){
+    const lim=80;
+    const filtered=prodSearch?bgFilterProductos(prodSearch,400):[...prodCache].sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+    const byCat=prodCatFilter?filtered.filter(p=>p.categoria_id===prodCatFilter):filtered;
+    const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
+    gs('content').innerHTML=`
+    <div class="search-bar">
+      <div class="scan-row" style="flex:1"><input placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button></div>
+      <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
+        <option value="">Todas las categorías</option>
+        ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Productos (${count||0})</h3></div>
+      <table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Margen</th><th>Packs</th><th></th></tr></thead><tbody>
+        ${(data||[]).map(p=>`<tr>
+          <td style="font-size:11px;color:var(--text2)">${escapeHtml(p.codigo_barra||'-')}</td>
+          <td style="font-weight:500">${escapeHtml(p.nombre||'')}</td>
+          <td><span class="badge-cat" style="background:${getCatColor(p.categoria_id)}22;color:${getCatColor(p.categoria_id)}">${escapeHtml(getCatName(p.categoria_id))}</span></td>
+          <td class="${p.stock<=0?'stock-zero':p.stock<5?'stock-low':'stock-ok'}" style="font-weight:600">${p.stock}</td>
+          <td>${fmtGs(p.precio_costo)}</td>
+          <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
+          <td>${bgMarginHtml(p.precio_costo,p.precio_venta)}</td>
+          <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
+          <td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}' )">📦</button><button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')">🗑</button></td>
+        </tr>`).join('')}
+        ${!data.length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px">Sin resultados</td></tr>':''}
+      </tbody></table>
+      <div class="paginator"><span>Pág. ${prodPage} · ${count||0} registros</span>${prodPage>1?`<button class="btn btn-secondary btn-sm" onclick="prodPage--;renderProductos()">← Ant.</button>`:''}${count>prodPage*lim?`<button class="btn btn-secondary btn-sm" onclick="prodPage++;renderProductos()">Sig. →</button>`:''}</div>
+    </div>`;
+  };
+  try{pages.productos=renderProductos;}catch(e){}
+
+  // Crear / editar producto: mostrar margen en vivo.
+  openProdModal = function(prod=null){
+    openModal(prod?'Editar producto':'Nuevo producto',`<div class="form-grid">
+      <div class="form-group">
+        <label>Código de barra</label>
+        <div class="scan-row"><input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button></div>
+      </div>
+      <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
+      <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Proveedor</label><select id="p-prov"><option value="">Sin proveedor</option>${provCache.map(pr=>`<option value="${pr.id}" ${prod?.proveedor_id===pr.id?'selected':''}>${escapeHtml(pr.nombre)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Unidad</label><select id="p-uni">${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
+      <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
+      <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}" oninput="bgRefreshProdMargin()"></div>
+      <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}" oninput="bgRefreshProdMargin()"></div>
+      <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}" oninput="bgRefreshProdMargin()"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Margen de ganancia</label><div id="p-margin-live" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;font-size:13px;color:var(--text)"></div></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
+    </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
+    setTimeout(bgRefreshProdMargin,0);
+  };
+
+  // Ventas: mostrar margen en resultados para saber si el precio conviene.
+  onVSearch = function(q){
+    acSelected=-1;
+    if(!q||q.length<1){gs('v-ac-list').style.display='none';return;}
+    acResults=[];
+    bgFilterProductos(q,18).forEach(p=>{
+      const pv=ventaTipo==='mayorista'&&p.precio_mayorista>0?p.precio_mayorista:p.precio_venta;
+      acResults.push({prodId:p.id,embId:null,label:p.nombre,sub:`Stock: ${p.stock} · Precio: ${fmtGs(pv)} · ${bgMarginText(p.precio_costo,pv)}`,ispack:false});
+      (embCache[p.id]||[]).forEach(e=>{
+        const packTxt=`${p.nombre} ${e.cantidad} ${e.codigo_barra||''} ${e.precio_venta||''} ${e.precio_mayorista||''}`;
+        if(!q || bgNorm(packTxt).includes(bgNorm(q)) || bgMatchScore({nombre:packTxt,codigo_barra:e.codigo_barra,categoria_id:p.categoria_id,precio_venta:e.precio_venta,precio_mayorista:e.precio_mayorista,precio_costo:e.precio_costo},q)>0){
+          const ep=ventaTipo==='mayorista'&&e.precio_mayorista>0?e.precio_mayorista:e.precio_venta;
+          acResults.push({prodId:p.id,embId:e.id,label:`${p.nombre} — Pack x${e.cantidad}`,sub:`${e.codigo_barra||''} · Precio: ${fmtGs(ep)} · ${bgMarginText(e.precio_costo,ep)} · mueve ${e.cantidad} uds`,ispack:true});
+        }
+      });
+    });
+    const list=gs('v-ac-list');
+    list.innerHTML=acResults.map((r,i)=>`<div class="ac-item" onclick="selectAcItem(${i})"><div class="ac-name" style="${r.ispack?'color:var(--teal)':''}">${r.ispack?'↳ ':''}${escapeHtml(r.label)}</div><div class="ac-sub">${escapeHtml(r.sub)}</div></div>`).join('') || `<div class="ac-item"><div class="ac-name">Sin resultados</div><div class="ac-sub">Probá con menos palabras o escaneá el código</div></div>`;
+    list.style.display='block';
+  };
+
+  // Compras: mostrar precio de venta y margen además del costo.
+  renderCPList = function(q){
+    const list=gs('compra-prod-list');if(!list)return;
+    const results=q?bgFilterProductos(q,80):prodCache.slice(0,80).sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+    list.innerHTML=results.map(p=>{
+      const embs=embCache[p.id]||[];
+      return `<div><div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;gap:8px;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" onclick="addToCompra('${p.id}',null,parseInt(gs('cp-qty').value)||1)"><div style="flex:1"><div style="font-size:13px;font-weight:500">${escapeHtml(p.nombre||'')}</div><div style="font-size:11px;color:var(--text2)">Código: ${escapeHtml(p.codigo_barra||'-')} · Stock: ${p.stock} · Costo: ${fmtGs(p.precio_costo)} · Venta: ${fmtGs(p.precio_venta)}</div></div><div style="font-size:12px;text-align:right">${bgMarginHtml(p.precio_costo,p.precio_venta)}</div></div>${embs.map(e=>`<div style="display:flex;align-items:center;padding:8px 14px 8px 28px;border-bottom:1px solid var(--border);cursor:pointer;background:rgba(20,184,166,.03);transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='rgba(20,184,166,.03)'" onclick="addToCompra('${p.id}','${e.id}',parseInt(gs('cp-qty').value)||1)"><div style="flex:1"><div style="font-size:12px;color:var(--teal)">↳ Pack x${e.cantidad}${e.codigo_barra?' · '+escapeHtml(e.codigo_barra):''}</div><div style="font-size:11px;color:var(--text2)">Costo: ${fmtGs(e.precio_costo)} · Venta: ${fmtGs(e.precio_venta)} · Suma ${e.cantidad} uds al stock</div></div><div style="font-size:12px;text-align:right">${bgMarginHtml(e.precio_costo,e.precio_venta)}</div></div>`).join('')}</div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Sin resultados</div>';
+  };
+
+  // Packs: costo automático según costo unitario del producto y margen en tabla/formulario.
+  window.clearEmbForm = function(){
+    const id=gs('emb-id'); if(id) id.value='';
+    const title=gs('emb-form-title'); if(title) title.textContent='NUEVA PRESENTACIÓN / PACK';
+    const btn=gs('emb-save-btn'); if(btn) btn.textContent='+ Agregar pack';
+    const cant=gs('emb-cant'); if(cant) cant.value='3';
+    const cod=gs('emb-cod'); if(cod) cod.value='';
+    const venta=gs('emb-venta'); if(venta) venta.value='0';
+    const mayor=gs('emb-mayor'); if(mayor) mayor.value='0';
+    embAutoCosto();
+  };
+
+  window.editEmb = function(embId){
+    const e=(window.__embRows||[]).find(x=>String(x.id)===String(embId));
+    if(!e){toast('No encontré el pack para editar','err');return;}
+    gs('emb-id').value=e.id;
+    gs('emb-cant').value=e.cantidad||1;
+    gs('emb-cod').value=e.codigo_barra||'';
+    gs('emb-costo').value=e.precio_costo||0;
+    gs('emb-venta').value=e.precio_venta||0;
+    gs('emb-mayor').value=e.precio_mayorista||0;
+    const title=gs('emb-form-title'); if(title) title.textContent='EDITANDO PACK';
+    const btn=gs('emb-save-btn'); if(btn) btn.textContent='Guardar cambios';
+    bgRefreshEmbMargin();
+    const input=gs('emb-cant'); if(input) input.scrollIntoView({behavior:'smooth',block:'center'});
+  };
+
+  window.openEmbModal = async function(prodId, prodNombre){
+    const baseProd=prodCache.find(p=>String(p.id)===String(prodId))||{};
+    window.__embBaseCosto=n(baseProd.precio_costo);
+    let res=await sb.from('bodega_embalajes').select('*').eq('producto_id',prodId).eq('activo',true).order('cantidad');
+    let embs=res.data||[];
+    window.__embRows=embs;
+    const safeProd=embEsc(prodNombre);
+    const prodArg=embQ(prodNombre);
+    const initialCost=Math.round((window.__embBaseCosto||0)*3);
+    const body=`
+    <p style="color:var(--text2);font-size:13px;margin-bottom:14px">Producto base: <strong>${safeProd}</strong> · Costo unitario: <strong>${fmtGs(window.__embBaseCosto||0)}</strong></p>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px">
+      <div id="emb-form-title" style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">NUEVA PRESENTACIÓN / PACK</div>
+      <input type="hidden" id="emb-id" value="">
+      <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
+        <div class="form-group"><label>Cant. uds</label><input id="emb-cant" type="number" value="3" min="1" oninput="embAutoCosto()"></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>P. Costo automático</label><input id="emb-costo" type="number" value="${initialCost}" oninput="bgRefreshEmbMargin()"></div>
+        <div class="form-group"><label>P. Venta</label><input id="emb-venta" type="number" value="0" oninput="bgRefreshEmbMargin()"></div>
+        <div class="form-group"><label>P. Mayorista</label><input id="emb-mayor" type="number" value="0" oninput="bgRefreshEmbMargin()"></div>
+        <div class="form-group"><label>&nbsp;</label><button id="emb-save-btn" class="btn btn-primary" onclick="saveEmb('${prodId}','${prodArg}')">+ Agregar pack</button></div>
+        <div class="form-group"><label>&nbsp;</label><button class="btn btn-secondary" onclick="clearEmbForm()">Limpiar</button></div>
+      </div>
+      <div id="emb-margin-live" style="font-size:12px;color:var(--text);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius);padding:8px;margin-top:8px"></div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px">El costo del pack se calcula solo: costo unitario × cantidad de unidades. Después cargás el precio de venta y ves el margen.</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--bg3)">
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">CANT UDS</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">CÓD. BARRA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. COSTO</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. VENTA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">MARGEN</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">P. MAYORISTA</th>
+        <th style="padding:8px 10px;font-size:11px;color:var(--text2);text-align:left">ACCIONES</th>
+      </tr></thead>
+      <tbody>
+        ${embs.map(e=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:10px;font-weight:700;color:var(--teal)">x${e.cantidad}</td>
+          <td style="padding:10px;font-size:11px;color:var(--text2)">${embEsc(e.codigo_barra||'-')}</td>
+          <td style="padding:10px">${fmtGs(e.precio_costo)}</td>
+          <td style="padding:10px;font-weight:600;color:var(--accent2)">${fmtGs(e.precio_venta)}</td>
+          <td style="padding:10px">${bgMarginHtml(e.precio_costo,e.precio_venta)}</td>
+          <td style="padding:10px;color:var(--teal)">${fmtGs(e.precio_mayorista)}</td>
+          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')">🗑</button></td>
+        </tr>`).join('')}
+        ${!embs.length?'<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
+      </tbody>
+    </table>`;
+    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+    setTimeout(bgRefreshEmbMargin,0);
+  };
+})();
 </script>
 </body>
 </html>
