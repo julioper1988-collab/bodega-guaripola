@@ -293,25 +293,55 @@
   window.addInvItem = function(prodId){
     const p=prodCache.find(x=>x.id===prodId); if(!p) return;
     let it=invItems.find(x=>x.producto_id===prodId);
-    if(!it) invItems.push({producto_id:p.id,nombre:p.nombre,codigo_barra:p.codigo_barra||'',stock_sistema:Number(p.stock)||0,stock_contado:Number(p.stock)||0,notas:''});
+    if(!it) invItems.push({producto_id:p.id,nombre:p.nombre,codigo_barra:p.codigo_barra||'',stock_sistema:Number(p.stock)||0,stock_contado:Number(p.stock)||0,precio_costo:Number(p.precio_costo)||0,notas:''});
     renderInvItems();
     setTimeout(()=>{ const input=gs('inv-contado-'+prodId); if(input){input.focus(); input.select();}},50);
   };
 
   window.renderInvItems = function(){
     const el=gs('inv-items'); if(!el) return;
-    let difTotal=0;
-    el.innerHTML=invItems.map((it,i)=>{ const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0); difTotal+=dif; return `<div style="display:grid;grid-template-columns:1fr 90px 120px 90px 36px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)">
-      <div><div style="font-weight:800;font-size:15px">${htmlInv(it.nombre)}</div><div style="font-size:12px;color:var(--text2)">${htmlInv(it.codigo_barra||'-')}</div></div>
+    let difTotal=0, montoTotal=0;
+    el.innerHTML=invItems.map((it,i)=>{
+      const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0);
+      const costo=Number(it.precio_costo)||0;
+      const difMonto=dif*costo;
+      difTotal+=dif; montoTotal+=difMonto;
+      const color=dif===0?'var(--text2)':dif>0?'var(--green)':'var(--red)';
+      const colorMonto=difMonto===0?'var(--text2)':difMonto>0?'var(--green)':'var(--red)';
+      return `<div style="display:grid;grid-template-columns:1fr 90px 120px 110px 120px 36px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div><div style="font-weight:800;font-size:15px">${htmlInv(it.nombre)}</div><div style="font-size:12px;color:var(--text2)">${htmlInv(it.codigo_barra||'-')} · Costo: ${fmtGs(costo)}</div></div>
       <div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Sistema</div><b>${it.stock_sistema}</b></div>
-      <div class="form-group"><label>Contado</label><input id="inv-contado-${it.producto_id}" type="number" value="${it.stock_contado}" oninput="setInvContado(${i},this.value)"></div>
-      <div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Dif.</div><b style="color:${dif===0?'var(--text2)':dif>0?'var(--green)':'var(--red)'}">${dif>0?'+':''}${dif}</b></div>
+      <div class="form-group"><label>Contado</label><input id="inv-contado-${it.producto_id}" type="number" inputmode="numeric" value="${it.stock_contado}" oninput="setInvContado(${i},this.value)"></div>
+      <div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Dif. unidades</div><b id="inv-dif-${it.producto_id}" style="color:${color}">${dif>0?'+':''}${dif}</b></div>
+      <div style="text-align:right"><div style="font-size:11px;color:var(--text2)">Dif. Gs.</div><b id="inv-dif-monto-${it.producto_id}" style="color:${colorMonto}">${fmtGs(difMonto)}</b></div>
       <button class="btn btn-danger btn-sm" onclick="removeInvItem(${i})">×</button>
     </div>`; }).join('') || '<div style="padding:28px;text-align:center;color:var(--text2)">Agregá productos para contar inventario.</div>';
     if(gs('inv-count-badge')) gs('inv-count-badge').textContent=`${invItems.length} productos`;
-    if(gs('inv-resumen')) gs('inv-resumen').textContent=invItems.length?`Diferencia neta: ${difTotal>0?'+':''}${difTotal} unidades`:'Sin productos';
+    actualizarResumenInventario();
   };
-  window.setInvContado=function(i,v){ if(!invItems[i]) return; invItems[i].stock_contado=Number(v)||0; renderInvItems(); const next=gs('inv-contado-'+invItems[i].producto_id); if(next){setTimeout(()=>{try{next.focus(); next.setSelectionRange(String(next.value).length,String(next.value).length);}catch(e){}},0);} };
+
+  window.actualizarResumenInventario = function(){
+    let difTotal=0, montoTotal=0;
+    invItems.forEach(it=>{
+      const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0);
+      difTotal+=dif;
+      montoTotal+=dif*(Number(it.precio_costo)||0);
+    });
+    if(gs('inv-resumen')) gs('inv-resumen').innerHTML=invItems.length?`Diferencia: ${difTotal>0?'+':''}${difTotal} unidades · ${fmtGs(montoTotal)}`:'Sin productos';
+  };
+
+  window.setInvContado=function(i,v){
+    if(!invItems[i]) return;
+    invItems[i].stock_contado=Number(v)||0;
+    const it=invItems[i];
+    const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0);
+    const difMonto=dif*(Number(it.precio_costo)||0);
+    const difEl=gs('inv-dif-'+it.producto_id);
+    if(difEl){ difEl.textContent=(dif>0?'+':'')+dif; difEl.style.color=dif===0?'var(--text2)':dif>0?'var(--green)':'var(--red)'; }
+    const montoEl=gs('inv-dif-monto-'+it.producto_id);
+    if(montoEl){ montoEl.textContent=fmtGs(difMonto); montoEl.style.color=difMonto===0?'var(--text2)':difMonto>0?'var(--green)':'var(--red)'; }
+    actualizarResumenInventario();
+  };
   window.removeInvItem=function(i){invItems.splice(i,1);renderInvItems();};
   window.limpiarInventarioActual=function(){ if(invItems.length&&!confirm('¿Limpiar inventario actual?'))return; invItems=[]; renderInvItems(); };
 
@@ -321,11 +351,12 @@
     const fecha=gs('inv-fecha')?.value||new Date().toISOString().split('T')[0];
     const responsable=gs('inv-responsable')?.value||null;
     const difTotal=invItems.reduce((s,it)=>s+((Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0)),0);
+    const difMontoTotal=invItems.reduce((s,it)=>s+(((Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0))*(Number(it.precio_costo)||0)),0);
     if(estado==='finalizado'&&!confirm('Esto ajustará el stock real de los productos contados. ¿Guardar inventario?')) return;
-    const cab={fecha,estado,responsable,total_productos:invItems.length,diferencia_total:difTotal,created_at:new Date().toISOString()};
+    const cab={fecha,estado,responsable,total_productos:invItems.length,diferencia_total:difTotal,diferencia_monto:difMontoTotal,created_at:new Date().toISOString()};
     const {data:inv,error:e1}=await sb.from('bodega_inventarios').insert(cab).select().single();
     if(e1){toast('Error inventario: '+e1.message,'err');return;}
-    const detalles=invItems.map(it=>({inventario_id:inv.id,producto_id:it.producto_id,stock_sistema:Number(it.stock_sistema)||0,stock_contado:Number(it.stock_contado)||0,diferencia:(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0),notas:it.notas||null}));
+    const detalles=invItems.map(it=>{ const dif=(Number(it.stock_contado)||0)-(Number(it.stock_sistema)||0); const costo=Number(it.precio_costo)||0; return {inventario_id:inv.id,producto_id:it.producto_id,stock_sistema:Number(it.stock_sistema)||0,stock_contado:Number(it.stock_contado)||0,diferencia:dif,costo_unitario:costo,diferencia_monto:dif*costo,notas:it.notas||null}; });
     const {error:e2}=await sb.from('bodega_inventario_detalle').insert(detalles);
     if(e2){toast('Error detalle: '+e2.message,'err');return;}
     if(estado==='finalizado'){
@@ -342,13 +373,13 @@
   window.renderHistorialInventarios = async function(){
     const {data,error}=await sb.from('bodega_inventarios').select('*').order('created_at',{ascending:false}).limit(80);
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe bodega_inventarios. Ejecutá el SQL de inventario.</div>`;return;}
-    const rows=(data||[]).map(i=>`<tr><td>${fmtDate(i.fecha)}</td><td>${htmlInv(i.estado)}</td><td>${htmlInv(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${Number(i.diferencia_total||0)===0?'var(--text2)':Number(i.diferencia_total||0)>0?'var(--green)':'var(--red)'}">${Number(i.diferencia_total||0)>0?'+':''}${i.diferencia_total||0}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
-    gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Historial de inventarios</h3><button class="btn btn-primary" onclick="renderInventario()">+ Nuevo inventario</button></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Responsable</th><th>Productos</th><th>Diferencia</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    const rows=(data||[]).map(i=>{ const du=Number(i.diferencia_total||0); const dm=Number(i.diferencia_monto||0); return `<tr><td>${fmtDate(i.fecha)}</td><td>${htmlInv(i.estado)}</td><td>${htmlInv(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
+    gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Historial de inventarios</h3><button class="btn btn-primary" onclick="renderInventario()">+ Nuevo inventario</button></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Responsable</th><th>Productos</th><th>Dif. unidades</th><th>Dif. Gs.</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   };
   window.verInventario = async function(id){
     const {data}=await sb.from('bodega_inventario_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('inventario_id',id).order('created_at',{ascending:true});
-    const rows=(data||[]).map(d=>`<tr><td>${htmlInv(d.bodega_productos?.nombre||'-')}</td><td>${htmlInv(d.bodega_productos?.codigo_barra||'-')}</td><td>${d.stock_sistema}</td><td>${d.stock_contado}</td><td style="font-weight:800;color:${Number(d.diferencia||0)===0?'var(--text2)':Number(d.diferencia||0)>0?'var(--green)':'var(--red)'}">${Number(d.diferencia||0)>0?'+':''}${d.diferencia}</td></tr>`).join('');
-    openModal('Detalle de inventario',`<div style="overflow-x:auto"><table><thead><tr><th>Producto</th><th>Código</th><th>Stock sistema</th><th>Contado</th><th>Diferencia</th></tr></thead><tbody>${rows}</tbody></table></div>`,null,'');
+    const rows=(data||[]).map(d=>{ const du=Number(d.diferencia||0); const dm=Number(d.diferencia_monto||0); return `<tr><td>${htmlInv(d.bodega_productos?.nombre||'-')}</td><td>${htmlInv(d.bodega_productos?.codigo_barra||'-')}</td><td>${d.stock_sistema}</td><td>${d.stock_contado}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td>${fmtGs(Number(d.costo_unitario||0))}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td></tr>`; }).join('');
+    openModal('Detalle de inventario',`<div style="overflow-x:auto"><table><thead><tr><th>Producto</th><th>Código</th><th>Stock sistema</th><th>Contado</th><th>Dif. unidades</th><th>Costo</th><th>Dif. Gs.</th></tr></thead><tbody>${rows}</tbody></table></div>`,null,'');
   };
 
   // Restringe cambio manual de stock desde Productos a administradores.
@@ -383,7 +414,7 @@
   }
 
   const invCss=document.createElement('style');
-  invCss.textContent=`@media(max-width:820px){#inventario-layout{display:flex!important;flex-direction:column!important;height:auto!important}.card-header h3{font-size:16px!important}#inv-items>div{grid-template-columns:1fr 80px 100px 70px 36px!important;font-size:13px}}`;
+  invCss.textContent=`@media(max-width:820px){#inventario-layout{display:flex!important;flex-direction:column!important;height:auto!important}.card-header h3{font-size:16px!important}#inv-items>div{grid-template-columns:1fr 70px 90px 80px 100px 36px!important;font-size:13px}}`;
   document.head.appendChild(invCss);
   setTimeout(initInventarioNav,500);
 })();
