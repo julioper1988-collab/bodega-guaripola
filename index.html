@@ -5448,6 +5448,140 @@ try{
     if(typeof updateVTotals === 'function') updateVTotals();
   };
 })();
+
+
+/* ─── FIX FINAL: EDITAR VENTA CARGA PRODUCTOS + MEJORAS MÓVIL ─── */
+(function(){
+  function bgSleep(ms){return new Promise(r=>setTimeout(r,ms));}
+  async function bgWaitVentaReady(){
+    for(let i=0;i<100;i++){
+      if(gs('venta-tbody') && gs('v-total') && gs('v-desc')) return true;
+      await bgSleep(30);
+    }
+    return false;
+  }
+  function bgSafeClientes(){
+    try{return (typeof clienteCache !== 'undefined' && Array.isArray(clienteCache)) ? clienteCache : [];}catch(e){return [];}
+  }
+  function bgSetCampo(id,val){const el=gs(id); if(el) el.value = val ?? '';}
+  function bgSetTextoBotonVenta(){
+    const cobrar=document.querySelector('.cobrar-btn');
+    if(cobrar){
+      cobrar.textContent='GUARDAR CAMBIOS DE VENTA';
+      cobrar.style.background='var(--amber)';
+      cobrar.style.color='#111827';
+    }
+    const header=gs('venta-header');
+    if(header && !gs('venta-edit-alert')){
+      const aviso=document.createElement('div');
+      aviso.id='venta-edit-alert';
+      aviso.className='alert alert-warning';
+      aviso.style.margin='10px 0 0';
+      aviso.innerHTML='✏️ <b>EDITANDO VENTA</b>. LOS CAMBIOS SE GUARDAN RECIÉN AL TOCAR <b>GUARDAR CAMBIOS DE VENTA</b>.';
+      header.appendChild(aviso);
+    }
+  }
+  function bgArmarCartDesdeDetalles(det){
+    return (det||[]).map((d,idx)=>{
+      const cant=Number(d.cantidad)||1;
+      const precio=Number(d.precio_unitario)||0;
+      const sub=Number(d.subtotal ?? (cant*precio));
+      const prod=prodCache.find(p=>String(p.id)===String(d.producto_id));
+      return {
+        key:String(d.producto_id||'prod')+'_edit_'+idx+'_'+Date.now(),
+        producto_id:d.producto_id,
+        embalaje_id:null,
+        nombre:(d.bodega_productos?.nombre || prod?.nombre || 'PRODUCTO'),
+        precio:cant>0 ? (sub/cant) : precio,
+        cantidad:cant,
+        uds:1,
+        precioManual:true,
+        packInfo:'PRECIO GUARDADO',
+        subtotalCalculado:sub
+      };
+    });
+  }
+
+  window.editarVenta = editarVenta = async function(id){
+    try{
+      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
+      if(vErr) throw vErr;
+      if(!v){toast('NO SE ENCONTRÓ LA VENTA','err');return;}
+
+      const {data:det,error:dErr}=await sb
+        .from('bodega_ventas_detalle')
+        .select('*,bodega_productos(nombre,precio_venta,precio_mayorista,precio_costo)')
+        .eq('venta_id',id);
+      if(dErr) throw dErr;
+
+      window.__ventaEditandoId=id;
+      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
+      ventaTipo=v.tipo || 'minorista';
+
+      await loadCaches();
+      try{ if(typeof cargarClientes==='function') await cargarClientes(); }catch(e){}
+
+      await goTo('ventas');
+      await bgWaitVentaReady();
+      await bgSleep(80);
+
+      cart = bgArmarCartDesdeDetalles(det||[]);
+
+      bgSetCampo('v-desc', Number(v.descuento)||0);
+      bgSetCampo('v-importe', v.metodo_pago==='efectivo' ? (Number(v.monto_efectivo)||Number(v.total_final)||0) : 0);
+      bgSetCampo('v-efec', Number(v.monto_efectivo)||0);
+      bgSetCampo('v-transf', Number(v.monto_transferencia)||0);
+      bgSetCampo('v-qr', 0);
+      bgSetCampo('v-debito', 0);
+      bgSetCampo('v-credito-mix', 0);
+
+      const clientes=bgSafeClientes();
+      const cli=clientes.find(c=>String(c.id||'')===String(v.cliente_id||'') || String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
+      if(gs('v-cliente-id') && cli) gs('v-cliente-id').value=cli.id;
+      if(gs('v-cliente') && (v.cliente_nombre || cli?.nombre)) gs('v-cliente').value=v.cliente_nombre || cli.nombre;
+
+      selectPay(v.metodo_pago || 'efectivo');
+      renderVentaTable();
+      bgSetTextoBotonVenta();
+
+      if(!cart.length){
+        toast('VENTA ABIERTA PARA EDITAR, PERO NO SE ENCONTRARON PRODUCTOS EN EL DETALLE','err');
+      }else{
+        toast('VENTA CARGADA PARA EDITAR');
+      }
+    }catch(e){
+      console.error('Editar venta:', e);
+      toast('NO SE PUDO CARGAR LA VENTA PARA EDITAR: '+(e.message||e),'err');
+      try{goTo('historial-ventas');}catch(_e){}
+    }
+  };
+
+  const css=document.createElement('style');
+  css.textContent=`
+    @media (max-width: 820px){
+      body{font-size:15px;}
+      #topbar{height:auto;min-height:54px;padding:8px 12px;}
+      #content{padding:10px;}
+      #venta-layout{display:flex!important;flex-direction:column!important;height:auto!important;min-height:calc(100vh - 54px)!important;overflow:visible!important;}
+      #venta-left,#venta-right{width:100%!important;border-right:none!important;overflow:visible!important;}
+      #venta-search-row{grid-template-columns:1fr!important;gap:10px!important;}
+      #venta-right{position:sticky;bottom:0;z-index:30;border-top:2px solid var(--accent);box-shadow:0 -8px 25px rgba(0,0,0,.35);}
+      #venta-right .section{padding:10px 12px;}
+      .total-display{font-size:32px!important;}
+      .cobrar-btn{font-size:18px!important;padding:16px!important;}
+      #venta-table-wrap{max-height:45vh;overflow:auto!important;}
+      #venta-table td,#venta-table th{font-size:14px!important;padding:10px 8px!important;}
+      input,select,textarea,.btn{font-size:16px!important;min-height:42px;}
+      .pay-grid{grid-template-columns:1fr 1fr!important;}
+      .pay-btn{min-height:44px;font-size:14px!important;}
+      .modal{max-height:92vh!important;width:96vw!important;}
+      .modal-body{padding:14px!important;}
+      .card{overflow-x:auto;}
+      table{min-width:680px;}
+    }
+  `;
+  document.head.appendChild(css);
+})();
 </script>
 </body>
 </html>
