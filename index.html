@@ -4,7 +4,224 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+
+// ─── PATCH: multi-borrar ventas, borrar arqueos y búsqueda productos sin cortar escritura ───
+(function(){
+  function h(v){
+    if(typeof escapeHtml==='function') return escapeHtml(v);
+    return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  let prodSearchTimer=null;
+
+  window.bgProductosSearchInput=function(value){
+    prodSearch=value;
+    prodPage=1;
+    clearTimeout(prodSearchTimer);
+    prodSearchTimer=setTimeout(()=>{ renderProductos(); }, 320);
+  };
+
+  const productoRowHtml = function(p){
+    const nom=String(p.nombre||'');
+    const safeNom=nom.replace(/'/g,"\\'");
+    return `<tr>
+      <td style="font-size:11px;color:var(--text2)">${h(p.codigo_barra||'-')}</td>
+      <td style="font-weight:500">${h(nom)}</td>
+      <td><span class="badge-cat" style="background:${getCatColor(p.categoria_id)}22;color:${getCatColor(p.categoria_id)}">${h(getCatName(p.categoria_id))}</span></td>
+      <td class="${p.stock<=0?'stock-zero':p.stock<5?'stock-low':'stock-ok'}" style="font-weight:600">${p.stock}</td>
+      <td>${fmtGs(p.precio_costo)}</td>
+      <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
+      <td>${typeof bgMarginHtml==='function'?bgMarginHtml(p.precio_costo,p.precio_venta):''}</td>
+      <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button>
+        <button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${safeNom}')">📦</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${safeNom}')">🗑</button>
+      </td>
+    </tr>`;
+  };
+
+  window.renderProductos = renderProductos = async function(){
+    const lim=80;
+    let base=[];
+    if(typeof bgFilterProductos==='function') base=prodSearch?bgFilterProductos(prodSearch,600):[...prodCache].sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||'')));
+    else base=[...prodCache].filter(p=>!prodSearch || String([p.nombre,p.codigo_barra].join(' ')).toLowerCase().includes(String(prodSearch).toLowerCase()));
+    const byCat=prodCatFilter?base.filter(p=>p.categoria_id===prodCatFilter):base;
+    const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
+    gs('content').innerHTML=`
+    <div class="search-bar">
+      <div class="scan-row" style="flex:1">
+        <input id="prod-search-input" placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${h(prodSearch||'')}" oninput="bgProductosSearchInput(this.value)" autocomplete="off">
+        <button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button>
+      </div>
+      <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
+        <option value="">Todas las categorías</option>
+        ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" onclick="openProdModal()">+ Nuevo</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Productos (${count||0})</h3><span class="badge">La búsqueda espera un instante antes de refrescar</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Costo</th><th>P.Venta</th><th>Margen</th><th>Packs</th><th></th></tr></thead><tbody>
+        ${(data||[]).map(productoRowHtml).join('')}
+        ${!data.length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px">Sin resultados</td></tr>':''}
+      </tbody></table></div>
+      <div class="paginator"><span>Pág. ${prodPage} · ${count||0} registros</span>${prodPage>1?`<button class="btn btn-secondary btn-sm" onclick="prodPage--;renderProductos()">← Ant.</button>`:''}${count>prodPage*lim?`<button class="btn btn-secondary btn-sm" onclick="prodPage++;renderProductos()">Sig. →</button>`:''}</div>
+    </div>`;
+    const input=gs('prod-search-input');
+    if(input){
+      input.focus({preventScroll:true});
+      try{input.setSelectionRange(input.value.length,input.value.length);}catch(e){}
+    }
+  };
+  try{pages.productos=renderProductos;}catch(e){}
+
+  window.toggleVentasSeleccionadas=function(source){
+    document.querySelectorAll('.venta-check').forEach(ch=>{ch.checked=source.checked;});
+    actualizarContadorVentasSeleccionadas();
+  };
+  window.actualizarContadorVentasSeleccionadas=function(){
+    const n=document.querySelectorAll('.venta-check:checked').length;
+    const el=gs('ventas-sel-count');
+    if(el) el.textContent=n?`${n} seleccionada${n>1?'s':''}`:'Ninguna seleccionada';
+  };
+  window.ventasSeleccionadas=function(){
+    return Array.from(document.querySelectorAll('.venta-check:checked')).map(ch=>ch.value);
+  };
+  window.borrarVentasSeleccionadas=async function(){
+    const ids=ventasSeleccionadas();
+    if(!ids.length){toast('Seleccioná al menos una venta','err');return;}
+    if(!confirm(`¿Borrar ${ids.length} venta${ids.length>1?'s':''}? Se devolverá el stock y se borrarán fiados asociados.`)) return;
+    let ok=0;
+    for(const id of ids){
+      try{ if(await borrarVenta(id,true)) ok++; }catch(e){ console.warn('Error borrando venta', id, e); }
+    }
+    await loadCaches();
+    toast(`Ventas borradas: ${ok}/${ids.length}`);
+    renderHistorialVentas();
+  };
+
+  window.renderHistorialVentas = renderHistorialVentas = async function(){
+    const {data,error}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(200);
+    if(error){gs('content').innerHTML=`<div class="alert alert-error">Error: ${h(error.message)}</div>`;return;}
+    gs('content').innerHTML=`<div class="card">
+      <div class="card-header" style="gap:8px;flex-wrap:wrap">
+        <h3>Historial de ventas</h3>
+        <span class="badge" id="ventas-sel-count">Ninguna seleccionada</span>
+        <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">🗑 Borrar seleccionadas</button>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th><input type="checkbox" onchange="toggleVentasSeleccionadas(this)"></th><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
+      ${(data||[]).map(v=>`<tr>
+        <td><input class="venta-check" type="checkbox" value="${v.id}" onchange="actualizarContadorVentasSeleccionadas()"></td>
+        <td>${fmtDate(v.fecha)}</td>
+        <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${h(v.tipo)}</span></td>
+        <td>${h(v.cliente_nombre||'-')}</td>
+        <td>${fmtGs(v.total)}</td>
+        <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
+        <td style="font-weight:600;color:${v.metodo_pago==='fiado'?'var(--amber)':'var(--green)'}">${fmtGs(v.total_final)}</td>
+        <td style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':h(v.metodo_pago||'-')}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
+        </td>
+      </tr>`).join('')}
+      ${!(data||[]).length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:18px">No hay ventas.</td></tr>':''}
+      </tbody></table></div></div>`;
+  };
+  try{pages['historial-ventas']=renderHistorialVentas;}catch(e){}
+
+  window.borrarArqueoTurno=async function(id){
+    if(!confirm('¿Eliminar este arqueo? También se borrarán sus gastos varios. Esta acción no borra ventas.')) return;
+    try{
+      const {data:caja}=await sb.from('bodega_caja').select('estado').eq('id',id).single();
+      if(caja && caja.estado==='abierta' && !confirm('Este arqueo está abierto. ¿Eliminarlo igualmente?')) return;
+    }catch(e){}
+    try{await sb.from('bodega_caja_gastos').delete().eq('caja_id',id);}catch(e){}
+    const {error}=await sb.from('bodega_caja').delete().eq('id',id);
+    if(error){toast('Error eliminando arqueo: '+error.message,'err');return;}
+    toast('Arqueo eliminado');
+    renderCaja();
+  };
+
+  if(window.renderCaja){
+    const renderCajaOriginal=window.renderCaja;
+    window.renderCaja=renderCaja=async function(){
+      await renderCajaOriginal();
+      setTimeout(()=>{
+        try{
+          const html=gs('content')?.innerHTML||'';
+          if(!html.includes('Historial de arqueos') || !html.includes('imprimirArqueo')) return;
+          document.querySelectorAll('button[onclick^="imprimirArqueo("]').forEach(btn=>{
+            const cell=btn.parentElement;
+            if(!cell || cell.querySelector('.btn-borrar-arqueo')) return;
+            const m=(btn.getAttribute('onclick')||'').match(/imprimirArqueo\('([^']+)'\)/);
+            if(!m) return;
+            const b=document.createElement('button');
+            b.className='btn btn-danger btn-sm btn-borrar-arqueo';
+            b.textContent='Borrar';
+            b.setAttribute('onclick',`borrarArqueoTurno('${m[1]}')`);
+            cell.appendChild(b);
+          });
+        }catch(e){console.warn('No se pudo agregar botón borrar arqueo', e);}
+      },80);
+    };
+    try{pages.caja=renderCaja;}catch(e){}
+  }
+})();
+
+
+
+/* ─── BLOQUEO DE VENTAS SI NO HAY CAJA ABIERTA ─── */
+(function(){
+  const __finalizarVentaSinBloqueoCaja = window.finalizarVenta || finalizarVenta;
+
+  async function hayCajaAbiertaParaVender(){
+    try{
+      if(!sb){ return false; }
+      const {data,error} = await sb
+        .from('bodega_caja')
+        .select('id,fecha,numero_caja,nombre_turno,opened_at,estado')
+        .eq('estado','abierta')
+        .order('opened_at',{ascending:false})
+        .limit(1);
+      if(error){
+        console.error('Error verificando caja abierta:', error);
+        toast('No pude verificar si la caja está abierta. Revisá Supabase.', 'err');
+        return false;
+      }
+      return Array.isArray(data) && data.length > 0 ? data[0] : false;
+    }catch(e){
+      console.error(e);
+      toast('Error verificando caja abierta: '+(e.message||e), 'err');
+      return false;
+    }
+  }
+
+  window.hayCajaAbiertaParaVender = hayCajaAbiertaParaVender;
+
+  finalizarVenta = window.finalizarVenta = async function(){
+    const caja = await hayCajaAbiertaParaVender();
+    if(!caja){
+      toast('No podés vender: primero abrí caja.', 'err');
+      openModal('Caja cerrada', `
+        <div class="alert alert-warning">
+          Para registrar ventas necesitás tener una caja abierta.
+          <br><br>
+          Esto evita que queden ventas fuera del arqueo.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="closeModal();goTo('caja')">Abrir caja ahora</button>
+          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        </div>
+      `, null, '');
+      return;
+    }
+    return await __finalizarVentaSinBloqueoCaja.apply(this, arguments);
+  };
+})();
+
+</script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <style>
 :root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#21253a;--border:#2e3350;--text:#e2e8f0;--text2:#8892a4;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--radius:8px;--sidebar:220px;}
