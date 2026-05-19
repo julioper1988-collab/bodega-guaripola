@@ -3376,6 +3376,317 @@ initMobileShell();
   try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){}
 })();
 
+
+// ─── REPORTE AVANZADO POR CLIENTE / PRODUCTO / ARQUEOS TURNO ───
+(function(){
+  function repEsc(v){return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+  function repNorm(v){
+    return String(v || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[,._-]+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+  function repTokens(v){return repNorm(v).split(' ').filter(Boolean);}
+  function repMatch(text, query){
+    const toks=repTokens(query);
+    if(!toks.length) return true;
+    const hay=repNorm(text);
+    return toks.every(t => hay.includes(t));
+  }
+  function repMoney(n){return (typeof fmtGs==='function') ? fmtGs(Number(n)||0) : 'Gs. '+(Number(n)||0).toLocaleString('es-PY');}
+  function repDate(d){return (typeof fmtDate==='function') ? fmtDate(d) : (d || '-');}
+  function repNum(n){return (Number(n)||0).toLocaleString('es-PY');}
+  function repLineTotal(d){
+    if(d.subtotal !== null && d.subtotal !== undefined) return Number(d.subtotal)||0;
+    return (Number(d.precio_unitario)||0) * (Number(d.cantidad)||0);
+  }
+  function repProductName(d){
+    return d?.bodega_productos?.nombre || d?.producto_nombre || 'Producto sin nombre';
+  }
+  function repProductCost(d){
+    return Number(d?.bodega_productos?.precio_costo)||0;
+  }
+  function repMargin(total,costo){
+    const gan=total-costo;
+    const pct=total>0 ? (gan/total*100) : 0;
+    return {gan,pct};
+  }
+  function repDateTime(v){
+    try{
+      if(!v) return '-';
+      return new Date(v).toLocaleString('es-PY');
+    }catch(e){return v || '-';}
+  }
+  function repDateInputValue(id,fallback){
+    const el=document.getElementById(id);
+    return el && el.value ? el.value : fallback;
+  }
+  function repAddStyles(){
+    if(document.getElementById('reportes-turnos-style')) return;
+    const st=document.createElement('style');
+    st.id='reportes-turnos-style';
+    st.textContent=`
+      .rep-filters{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;align-items:end}
+      .rep-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+      .rep-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+      .rep-tab{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 12px;font-size:12px;cursor:pointer}
+      .rep-tab.active{border-color:var(--accent);color:var(--accent2);background:rgba(99,102,241,.12)}
+      .rep-table-wrap{overflow:auto;max-height:62vh;border-top:1px solid var(--border)}
+      .rep-table-wrap table{min-width:860px}
+      .rep-muted{color:var(--text2);font-size:12px;line-height:1.45}
+      .rep-mini{font-size:11px;color:var(--text2)}
+      .rep-empty{text-align:center;color:var(--text2);padding:22px!important}
+      .rep-kpi{font-weight:700}
+      @media(max-width:800px){
+        .rep-filters{grid-template-columns:1fr}
+        .rep-actions .btn{width:100%;justify-content:center}
+        .rep-tab{width:100%;text-align:center}
+        .rep-table-wrap{max-height:none}
+      }
+    `;
+    document.head.appendChild(st);
+  }
+  function repSetTab(tab){
+    document.querySelectorAll('.rep-tab').forEach(b=>b.classList.remove('active'));
+    const b=document.getElementById('rep-tab-'+tab); if(b) b.classList.add('active');
+    document.querySelectorAll('[data-rep-panel]').forEach(p=>p.style.display='none');
+    const p=document.getElementById('rep-panel-'+tab); if(p) p.style.display='block';
+  }
+  function repCard(title, header, rows, empty='Sin resultados'){
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="card-header"><h3>${title}</h3></div>
+      <div class="rep-table-wrap"><table><thead>${header}</thead><tbody>${rows || `<tr><td colspan="12" class="rep-empty">${empty}</td></tr>`}</tbody></table></div>
+    </div>`;
+  }
+  function repMarginHTML(total,costo){
+    const {gan,pct}=repMargin(total,costo);
+    return `<span style="color:${gan>=0?'var(--green)':'var(--red)'};font-weight:700">${pct.toFixed(1)}%</span><br><span class="rep-mini">${repMoney(gan)}</span>`;
+  }
+  async function repFetchVentas(desde,hasta,clienteQ,productoQ){
+    const ventasRes=await sb.from('bodega_ventas')
+      .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
+      .gte('fecha',desde).lte('fecha',hasta)
+      .order('fecha',{ascending:false}).limit(5000);
+    if(ventasRes.error) throw ventasRes.error;
+    const ventasTodas=ventasRes.data||[];
+    const ventasCliente=ventasTodas.filter(v=>repMatch(v.cliente_nombre || 'Ocasional', clienteQ));
+    const ids=ventasCliente.map(v=>v.id);
+    let detalles=[];
+    if(ids.length){
+      const detRes=await sb.from('bodega_ventas_detalle')
+        .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)')
+        .in('venta_id',ids).limit(15000);
+      if(detRes.error) throw detRes.error;
+      detalles=(detRes.data||[]).filter(d=>repMatch(repProductName(d), productoQ));
+    }
+    const ventaConProducto=new Set(detalles.map(d=>d.venta_id));
+    const ventasFiltradas=productoQ ? ventasCliente.filter(v=>ventaConProducto.has(v.id)) : ventasCliente;
+    const ventasMap={};
+    ventasCliente.forEach(v=>ventasMap[v.id]=v);
+    return {ventasTodas,ventasCliente,ventasFiltradas,ventasMap,detalles};
+  }
+  window.repSetTab=repSetTab;
+  window.repSetFechas=function(tipo){
+    const hoy=new Date();
+    const iso=d=>d.toISOString().split('T')[0];
+    let desde=iso(hoy), hasta=iso(hoy);
+    if(tipo==='mes') desde=hasta.slice(0,7)+'-01';
+    if(tipo==='7d'){const d=new Date(hoy); d.setDate(d.getDate()-6); desde=iso(d);}
+    if(tipo==='30d'){const d=new Date(hoy); d.setDate(d.getDate()-29); desde=iso(d);}
+    const dEl=document.getElementById('rep-desde'), hEl=document.getElementById('rep-hasta');
+    if(dEl) dEl.value=desde;
+    if(hEl) hEl.value=hasta;
+    if(typeof generarReportes==='function') generarReportes();
+  };
+  window.repLimpiar=function(){
+    const c=document.getElementById('rep-cliente'), p=document.getElementById('rep-producto');
+    if(c) c.value='';
+    if(p) p.value='';
+    repSetFechas('mes');
+  };
+  window.renderReportes=async function renderReportes(){
+    repAddStyles();
+    const today=new Date().toISOString().split('T')[0];
+    const first=today.slice(0,7)+'-01';
+    const content=document.getElementById('content');
+    content.className='';
+    content.innerHTML=`
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
+          <h3>📈 Reportes</h3>
+          <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir / PDF</button>
+        </div>
+        <div style="padding:14px 16px">
+          <div class="rep-filters">
+            <div class="form-group"><label>Desde</label><input id="rep-desde" type="date" value="${first}"></div>
+            <div class="form-group"><label>Hasta</label><input id="rep-hasta" type="date" value="${today}"></div>
+            <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
+            <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
+          </div>
+          <div class="rep-actions" style="margin-top:12px">
+            <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar reporte</button>
+            <button class="btn btn-secondary" onclick="repSetFechas('hoy')">Hoy</button>
+            <button class="btn btn-secondary" onclick="repSetFechas('7d')">7 días</button>
+            <button class="btn btn-secondary" onclick="repSetFechas('mes')">Mes</button>
+            <button class="btn btn-secondary" onclick="repLimpiar()">Limpiar</button>
+          </div>
+          <div class="rep-muted" style="margin-top:10px">
+            Ejemplo útil: poné cliente <b>Juan</b> y producto <b>coca 1,5</b>. El reporte te muestra cantidad total comprada, total pagado, fiado y margen estimado dentro de la fecha elegida.
+          </div>
+        </div>
+      </div>
+      <div id="rep-stats" class="stats-grid"></div>
+      <div class="rep-tabs">
+        <button id="rep-tab-resumen" class="rep-tab active" onclick="repSetTab('resumen')">Resumen</button>
+        <button id="rep-tab-detalle" class="rep-tab" onclick="repSetTab('detalle')">Detalle ventas</button>
+        <button id="rep-tab-cliente-producto" class="rep-tab" onclick="repSetTab('cliente-producto')">Cliente × producto</button>
+        <button id="rep-tab-productos" class="rep-tab" onclick="repSetTab('productos')">Productos</button>
+        <button id="rep-tab-clientes" class="rep-tab" onclick="repSetTab('clientes')">Clientes</button>
+        <button id="rep-tab-arqueos" class="rep-tab" onclick="repSetTab('arqueos')">Arqueos</button>
+      </div>
+      <div id="rep-loading" style="padding:24px;text-align:center;color:var(--text2)"><div class="spinner" style="margin:0 auto 12px"></div>Generando...</div>
+      <div id="rep-panel-resumen" data-rep-panel></div>
+      <div id="rep-panel-detalle" data-rep-panel style="display:none"></div>
+      <div id="rep-panel-cliente-producto" data-rep-panel style="display:none"></div>
+      <div id="rep-panel-productos" data-rep-panel style="display:none"></div>
+      <div id="rep-panel-clientes" data-rep-panel style="display:none"></div>
+      <div id="rep-panel-arqueos" data-rep-panel style="display:none"></div>
+    `;
+    await generarReportes();
+  };
+  window.generarReportes=async function generarReportes(){
+    const loading=document.getElementById('rep-loading');
+    if(loading) loading.style.display='block';
+    const today=new Date().toISOString().split('T')[0];
+    const desde=repDateInputValue('rep-desde', today.slice(0,7)+'-01');
+    const hasta=repDateInputValue('rep-hasta', today);
+    const clienteQ=document.getElementById('rep-cliente')?.value || '';
+    const productoQ=document.getElementById('rep-producto')?.value || '';
+    try{
+      const [{ventasTodas,ventasCliente,ventasFiltradas,ventasMap,detalles}, comprasRes, cajaRes, gastosRes] = await Promise.all([
+        repFetchVentas(desde,hasta,clienteQ,productoQ),
+        sb.from('bodega_compras').select('id,fecha,total,estado,proveedor_id,bodega_proveedores(nombre)').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(2000),
+        sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('opened_at',{ascending:false}).limit(1000),
+        sb.from('bodega_caja_gastos').select('*').gte('fecha',desde).lte('fecha',hasta).limit(5000)
+      ]);
+      if(comprasRes.error) console.warn(comprasRes.error);
+      if(cajaRes.error) console.warn(cajaRes.error);
+      if(gastosRes.error) console.warn(gastosRes.error);
+      const compras=comprasRes.data||[];
+      const cajas=cajaRes.data||[];
+      const gastos=gastosRes.data||[];
+      const totalDetalle=detalles.reduce((s,d)=>s+repLineTotal(d),0);
+      const totalVentas = productoQ ? totalDetalle : ventasFiltradas.reduce((s,v)=>s+(Number(v.total_final)||0),0);
+      const cantProductos=detalles.reduce((s,d)=>s+(Number(d.cantidad)||0),0);
+      const totalFiado = ventasFiltradas.filter(v=>repNorm(v.metodo_pago)==='fiado').reduce((s,v)=>s+(Number(v.total_final)||0),0);
+      const totalCobrado = totalVentas - (productoQ ? detalles.filter(d=>repNorm(ventasMap[d.venta_id]?.metodo_pago)==='fiado').reduce((s,d)=>s+repLineTotal(d),0) : totalFiado);
+      const costo=detalles.reduce((s,d)=>s+(Number(d.cantidad)||0)*repProductCost(d),0);
+      const margen=repMargin(totalVentas,costo);
+      const comprasFinalizadas=compras.filter(c=>c.estado==='finalizado').reduce((s,c)=>s+(Number(c.total)||0),0);
+      const gastosTotal=gastos.reduce((s,g)=>s+(Number(g.monto)||0),0);
+      document.getElementById('rep-stats').innerHTML=`
+        <div class="stat-card"><div class="label">Total vendido</div><div class="value" style="color:var(--green)">${repMoney(totalVentas)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
+        <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}</div></div>
+        <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos)}</div><div class="sub">unidades filtradas</div></div>
+        <div class="stat-card"><div class="label">Margen estimado</div><div class="value" style="color:${margen.gan>=0?'var(--green)':'var(--red)'}">${margen.pct.toFixed(1)}%</div><div class="sub">${repMoney(margen.gan)}</div></div>
+        <div class="stat-card"><div class="label">Compras / gastos caja</div><div class="value" style="color:var(--amber)">${repMoney(comprasFinalizadas)}</div><div class="sub">Gastos caja: ${repMoney(gastosTotal)}</div></div>
+      `;
+      const byMethod={};
+      ventasFiltradas.forEach(v=>{
+        const m=repNorm(v.metodo_pago || 'sin método') || 'sin método';
+        byMethod[m]=(byMethod[m]||0)+(Number(v.total_final)||0);
+      });
+      const methodRows=Object.entries(byMethod).sort((a,b)=>b[1]-a[1]).map(([m,t])=>`<tr><td style="text-transform:capitalize;font-weight:600">${repEsc(m)}</td><td>${repMoney(t)}</td></tr>`).join('');
+      const comprasRows=compras.slice(0,40).map(c=>`<tr><td>${repDate(c.fecha)}</td><td>${repEsc(c.bodega_proveedores?.nombre||'-')}</td><td>${repEsc(c.estado||'-')}</td><td>${repMoney(c.total)}</td></tr>`).join('');
+      document.getElementById('rep-panel-resumen').innerHTML=`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          ${repCard('Ventas por método de pago','<tr><th>Método</th><th>Total</th></tr>',methodRows,'Sin ventas')}
+          ${repCard('Compras en el rango','<tr><th>Fecha</th><th>Proveedor</th><th>Estado</th><th>Total</th></tr>',comprasRows,'Sin compras')}
+        </div>
+        <div class="rep-muted">El margen es estimado con el costo actual del producto. Si el costo cambió después de una venta vieja, puede variar.</div>
+      `;
+      const byProd={}, byCli={}, byCP={};
+      detalles.forEach(d=>{
+        const v=ventasMap[d.venta_id]||{};
+        const cliente=(v.cliente_nombre||'Ocasional').trim() || 'Ocasional';
+        const prod=repProductName(d);
+        const qty=Number(d.cantidad)||0, total=repLineTotal(d), cst=qty*repProductCost(d);
+        if(!byProd[prod]) byProd[prod]={producto:prod,cantidad:0,total:0,costo:0,ventas:new Set(),clientes:new Set()};
+        byProd[prod].cantidad+=qty; byProd[prod].total+=total; byProd[prod].costo+=cst; byProd[prod].ventas.add(d.venta_id); byProd[prod].clientes.add(cliente);
+        if(!byCli[cliente]) byCli[cliente]={cliente,cantidad:0,total:0,costo:0,ventas:new Set(),fiado:0};
+        byCli[cliente].cantidad+=qty; byCli[cliente].total+=total; byCli[cliente].costo+=cst; byCli[cliente].ventas.add(d.venta_id);
+        if(repNorm(v.metodo_pago)==='fiado') byCli[cliente].fiado+=total;
+        const key=cliente+'||'+prod;
+        if(!byCP[key]) byCP[key]={cliente,producto:prod,cantidad:0,total:0,costo:0,ventas:new Set(),primera:v.fecha,ultima:v.fecha,fiado:0};
+        byCP[key].cantidad+=qty; byCP[key].total+=total; byCP[key].costo+=cst; byCP[key].ventas.add(d.venta_id);
+        if(repNorm(v.metodo_pago)==='fiado') byCP[key].fiado+=total;
+        if(v.fecha && (!byCP[key].primera || v.fecha<byCP[key].primera)) byCP[key].primera=v.fecha;
+        if(v.fecha && (!byCP[key].ultima || v.fecha>byCP[key].ultima)) byCP[key].ultima=v.fecha;
+      });
+      const detailRows=detalles.map(d=>{
+        const v=ventasMap[d.venta_id]||{};
+        const total=repLineTotal(d), cst=(Number(d.cantidad)||0)*repProductCost(d);
+        return `<tr><td>${repDate(v.fecha)}</td><td>${repEsc(v.cliente_nombre||'Ocasional')}</td><td>${repEsc(repProductName(d))}</td><td>${repNum(d.cantidad)}</td><td>${repMoney(d.precio_unitario)}</td><td>${repMoney(total)}</td><td>${repEsc(v.metodo_pago||'-')}</td><td>${repMarginHTML(total,cst)}</td></tr>`;
+      }).join('');
+      const cpRows=Object.values(byCP).sort((a,b)=>a.cliente.localeCompare(b.cliente)||b.cantidad-a.cantidad).map(x=>`<tr><td style="font-weight:600">${repEsc(x.cliente)}</td><td>${repEsc(x.producto)}</td><td class="rep-kpi">${repNum(x.cantidad)}</td><td>${repMoney(x.total)}</td><td>${repMoney(x.fiado)}</td><td>${repMarginHTML(x.total,x.costo)}</td><td>${x.ventas.size}</td><td>${repDate(x.primera)} → ${repDate(x.ultima)}</td></tr>`).join('');
+      const prodRows=Object.values(byProd).sort((a,b)=>b.cantidad-a.cantidad).map(p=>`<tr><td style="font-weight:600">${repEsc(p.producto)}</td><td class="rep-kpi">${repNum(p.cantidad)}</td><td>${repMoney(p.total)}</td><td>${repMoney(p.costo)}</td><td>${repMarginHTML(p.total,p.costo)}</td><td>${p.ventas.size}</td><td>${p.clientes.size}</td></tr>`).join('');
+      const cliRows=Object.values(byCli).sort((a,b)=>b.total-a.total).map(c=>`<tr><td style="font-weight:600">${repEsc(c.cliente)}</td><td>${c.ventas.size}</td><td class="rep-kpi">${repNum(c.cantidad)}</td><td>${repMoney(c.total)}</td><td>${repMoney(c.fiado)}</td><td>${repMarginHTML(c.total,c.costo)}</td></tr>`).join('');
+      document.getElementById('rep-panel-detalle').innerHTML=repCard('Detalle de ventas filtradas','<tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th><th>Pago</th><th>Margen</th></tr>',detailRows,'Sin ventas con esos filtros.');
+      document.getElementById('rep-panel-cliente-producto').innerHTML=repCard('Cantidad total por cliente y producto','<tr><th>Cliente</th><th>Producto</th><th>Cantidad total</th><th>Total comprado</th><th>Fiado</th><th>Margen</th><th>Ventas</th><th>Periodo</th></tr>',cpRows,'Sin resultados para cliente/producto.');
+      document.getElementById('rep-panel-productos').innerHTML=repCard('Productos vendidos','<tr><th>Producto</th><th>Cantidad total</th><th>Total vendido</th><th>Costo estimado</th><th>Margen</th><th>Ventas</th><th>Clientes</th></tr>',prodRows,'Sin productos vendidos.');
+      document.getElementById('rep-panel-clientes').innerHTML=repCard('Clientes','<tr><th>Cliente</th><th>Ventas</th><th>Cant. productos</th><th>Total comprado</th><th>Fiado</th><th>Margen</th></tr>',cliRows,'Sin clientes.');
+      const gastosPorCaja={};
+      gastos.forEach(g=>{ if(g.caja_id) gastosPorCaja[g.caja_id]=(gastosPorCaja[g.caja_id]||0)+(Number(g.monto)||0); });
+      const arqueoRows=cajas.map(c=>{
+        const start=c.opened_at ? new Date(c.opened_at).getTime() : null;
+        const end=c.closed_at ? new Date(c.closed_at).getTime() : Date.now();
+        const ventasTurno=ventasTodas.filter(v=>{
+          if(!start || !v.created_at) return v.fecha===c.fecha;
+          const t=new Date(v.created_at).getTime();
+          return t>=start && t<=end;
+        });
+        const sum=m=>ventasTurno.filter(v=>repNorm(v.metodo_pago)===m).reduce((s,v)=>s+(Number(v.total_final)||0),0);
+        const efectivo=sum('efectivo'), transf=sum('transferencia'), qr=sum('qr'), deb=sum('debito'), cred=sum('credito'), fiado=sum('fiado');
+        const gastosCaja=gastosPorCaja[c.id] || Number(c.gastos_caja)||0;
+        const esperado=(Number(c.apertura_efectivo)||0)+efectivo-gastosCaja;
+        const dif=Number(c.diferencia);
+        return `<tr>
+          <td>${repDate(c.fecha)}<br><span class="rep-mini">Caja #${c.numero_caja||1}</span></td>
+          <td>${repEsc(c.estado||'-')}</td>
+          <td>${repDateTime(c.opened_at)}<br><span class="rep-mini">${c.closed_at?repDateTime(c.closed_at):'abierta'}</span></td>
+          <td>${repMoney(c.apertura_efectivo)}</td>
+          <td>${repMoney(efectivo)}</td>
+          <td>${repMoney(transf)}</td>
+          <td>${repMoney(qr)}</td>
+          <td>${repMoney(deb)}</td>
+          <td>${repMoney(cred)}</td>
+          <td>${repMoney(fiado)}</td>
+          <td>${repMoney(gastosCaja)}</td>
+          <td>${repMoney(esperado)}</td>
+          <td>${repMoney(c.efectivo_contado)}</td>
+          <td style="font-weight:700;color:${(isNaN(dif)?0:dif)>=0?'var(--green)':'var(--red)'}">${repMoney(isNaN(dif)?((Number(c.efectivo_contado)||0)-esperado):dif)}</td>
+        </tr>`;
+      }).join('');
+      document.getElementById('rep-panel-arqueos').innerHTML=repCard('Reporte de arqueos / turnos','<tr><th>Fecha / Caja</th><th>Estado</th><th>Horario</th><th>Apertura</th><th>V. efectivo</th><th>Transfer.</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Gastos</th><th>Efectivo esperado</th><th>Contado</th><th>Diferencia</th></tr>',arqueoRows,'No hay arqueos en ese rango.');
+      if(loading) loading.style.display='none';
+      const active=document.querySelector('.rep-tab.active')?.id?.replace('rep-tab-','') || 'resumen';
+      repSetTab(active);
+    }catch(e){
+      console.error(e);
+      if(loading) loading.style.display='none';
+      if(typeof toast==='function') toast('Error en reportes: '+(e.message||e),'err');
+      ['resumen','detalle','cliente-producto','productos','clientes','arqueos'].forEach(t=>{
+        const p=document.getElementById('rep-panel-'+t);
+        if(p) p.innerHTML=`<div class="alert alert-error">Error generando reporte: ${repEsc(e.message||e)}</div>`;
+      });
+    }
+  };
+  try{ titles.reportes='Reportes'; pages.reportes=window.renderReportes; }catch(e){}
+})();
+
 </script>
 </body>
 </html>
