@@ -4,189 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-
-// ─── FIX: EDICIÓN REAL DE COMPRAS SIN BORRAR AL ENTRAR ───────────────
-// Permite editar una compra existente, modificar cantidades, costo unitario
-// o subtotal, y recién al guardar corrige stock y reemplaza el detalle.
-let compraEditandoId = null;
-let compraEditandoOriginal = null;
-let compraEditandoDetallesOriginales = [];
-
-function compraInsertEditBanner(compra){
-  const content = gs('content');
-  if(!content) return;
-  const estado = compra?.estado === 'finalizado' ? 'Finalizado' : 'En proceso';
-  content.insertAdjacentHTML('afterbegin', `
-    <div class="alert alert-warning" style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
-      <div><strong>✏️ Editando compra</strong> · ${fmtDate(compra?.fecha)} · Estado anterior: ${estado}. Los cambios se aplican recién al tocar <strong>Guardar cambios</strong>.</div>
-      <button class="btn btn-secondary btn-sm" onclick="cancelarEdicionCompra()">Cancelar edición</button>
-    </div>
-  `);
-  const btn = document.querySelector('button[onclick="finalizarCompra()"]');
-  if(btn){ btn.textContent = '💾 Guardar cambios de compra'; }
-}
-
-function cancelarEdicionCompra(){
-  if(!confirm('¿Cancelar la edición de esta compra? No se guardará ningún cambio.')) return;
-  compraEditandoId = null;
-  compraEditandoOriginal = null;
-  compraEditandoDetallesOriginales = [];
-  compraItems = [];
-  renderCompras();
-}
-
-// Render de ítems de compra con edición por precio unitario o subtotal.
-renderCompraItems = function(){
-  const el=gs('ccomp-items'); if(!el) return;
-  el.innerHTML = compraItems.map((item,i)=>{
-    const cant = item.cantidad || 1;
-    const subtotal = (item.costo || 0) * cant;
-    return `<div style="display:grid;grid-template-columns:1fr 98px 108px 112px 28px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px">
-      <div style="font-size:13px;font-weight:600">${escapeHtml ? escapeHtml(item.nombre||'Producto') : (item.nombre||'Producto')}<br><span style="color:var(--text2);font-size:11px">+${(item.uds||1)*cant} uds al stock</span></div>
-      <div style="display:flex;align-items:center;gap:4px">
-        <button onclick="cQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">-</button>
-        <input type="number" value="${cant}" min="1" onchange="cQtySet(${i},this.value)" style="width:48px;text-align:center;padding:4px">
-        <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">+</button>
-      </div>
-      <div class="form-group" style="gap:2px"><label style="font-size:10px">Costo unit.</label><input type="number" value="${item.costo||0}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:5px"></div>
-      <div class="form-group" style="gap:2px"><label style="font-size:10px">Subtotal</label><input type="number" value="${subtotal}" onchange="cSubtotal(${i},this.value)" style="text-align:right;padding:5px;color:var(--accent2);font-weight:700"></div>
-      <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button>
-    </div>`;
-  }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
-  const total = compraItems.reduce((s,c)=>s+(c.costo||0)*(c.cantidad||0),0);
-  if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
-};
-
-function cSubtotal(i,v){
-  const subtotal = parseFloat(v)||0;
-  const cant = Math.max(1, parseInt(compraItems[i]?.cantidad)||1);
-  compraItems[i].costo = Math.round(subtotal / cant);
-  renderCompraItems();
-}
-
-async function revertirStockCompra(compraId, detalles){
-  for(const d of detalles||[]){
-    const p = prodCache.find(x=>x.id===d.producto_id);
-    if(!p) continue;
-    const cant = d.cantidad || 0;
-    const ns = Math.max(0, (p.stock||0) - cant);
-    await sb.from('bodega_productos').update({stock:ns}).eq('id', d.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({
-      producto_id:d.producto_id,
-      tipo:'salida',
-      cantidad:cant,
-      motivo:'Edición de compra - reversa anterior',
-      stock_anterior:p.stock,
-      stock_nuevo:ns,
-      referencia_id:compraId,
-      referencia_tipo:'compra_editada_reversa'
-    });
-  }
-  await loadCaches();
-}
-
-editarCompra = async function(id){
-  const {data:compra,error:cErr}=await sb.from('bodega_compras').select('*').eq('id',id).single();
-  const {data:det,error:dErr}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id',id);
-  if(cErr || dErr || !compra){ toast('No se pudo abrir la compra para editar','err'); return; }
-
-  compraEditandoId = id;
-  compraEditandoOriginal = compra;
-  compraEditandoDetallesOriginales = det || [];
-
-  renderCompras();
-  compraInsertEditBanner(compra);
-
-  if(gs('comp-fecha')) gs('comp-fecha').value = compra.fecha || new Date().toISOString().split('T')[0];
-  if(gs('comp-prov')) gs('comp-prov').value = compra.proveedor_id || '';
-  if(gs('comp-factura')) gs('comp-factura').value = compra.numero_factura || '';
-  if(gs('comp-metpago')) gs('comp-metpago').value = compra.metodo_pago || 'efectivo';
-  if(gs('comp-estado')) gs('comp-estado').value = compra.estado || 'en_proceso';
-  if(gs('comp-notas')) gs('comp-notas').value = compra.notas || '';
-
-  compraItems = (det||[]).map(d=>({
-    key:d.producto_id,
-    producto_id:d.producto_id,
-    embalaje_id:null,
-    nombre:d.bodega_productos?.nombre || 'Producto',
-    costo:d.costo_unitario || d.bodega_productos?.precio_costo || 0,
-    cantidad:d.cantidad || 1,
-    uds:1
-  }));
-  renderCompraItems();
-  toast('Compra abierta para editar. Cambiá cantidades, costo unitario o subtotal y luego guardá.');
-};
-
-finalizarCompra = async function(){
-  if(!compraItems.length){ toast('No hay productos','err'); return; }
-  const total = compraItems.reduce((s,c)=>s+(c.costo||0)*(c.cantidad||0),0);
-  const estado = gs('comp-estado')?.value || 'en_proceso';
-  const compra = {
-    fecha: gs('comp-fecha')?.value || new Date().toISOString().split('T')[0],
-    proveedor_id: gs('comp-prov')?.value || null,
-    numero_factura: gs('comp-factura')?.value || null,
-    total,
-    metodo_pago: gs('comp-metpago')?.value || 'efectivo',
-    estado,
-    notas: gs('comp-notas')?.value || null
-  };
-
-  // Modo edición: no borra al entrar; corrige al guardar.
-  if(compraEditandoId){
-    const id = compraEditandoId;
-
-    if(compraEditandoOriginal?.estado === 'finalizado'){
-      await revertirStockCompra(id, compraEditandoDetallesOriginales);
-    }
-
-    const {error:uErr}=await sb.from('bodega_compras').update(compra).eq('id',id);
-    if(uErr){ toast('Error actualizando compra: '+uErr.message,'err'); return; }
-
-    await sb.from('bodega_compras_detalle').delete().eq('compra_id',id);
-    const detalles = compraItems.map(c=>({
-      compra_id:id,
-      producto_id:c.producto_id,
-      cantidad:(c.cantidad||0)*(c.uds||1),
-      costo_unitario:c.costo||0
-    }));
-    const {error:dErr}=await sb.from('bodega_compras_detalle').insert(detalles);
-    if(dErr){ toast('Error guardando detalle: '+dErr.message,'err'); return; }
-
-    await loadCaches();
-    if(estado === 'finalizado') await impactarStock(id, compraItems);
-
-    compraEditandoId = null;
-    compraEditandoOriginal = null;
-    compraEditandoDetallesOriginales = [];
-    compraItems = [];
-    toast('✓ Compra editada correctamente');
-    await loadCaches();
-    renderHistorialCompras();
-    return;
-  }
-
-  // Modo compra nueva.
-  const {data:cD,error:cE}=await sb.from('bodega_compras').insert(compra).select().single();
-  if(cE){ toast('Error: '+cE.message,'err'); return; }
-  const {error:dE}=await sb.from('bodega_compras_detalle').insert(compraItems.map(c=>({
-    compra_id:cD.id,
-    producto_id:c.producto_id,
-    cantidad:(c.cantidad||0)*(c.uds||1),
-    costo_unitario:c.costo||0
-  })));
-  if(dE){ toast('Error detalle: '+dE.message,'err'); return; }
-  if(estado==='finalizado') await impactarStock(cD.id,compraItems);
-  toast(`✓ Compra registrada (${estado}): ${fmtGs(total)}`);
-  await loadCaches(); compraItems=[]; renderCompras();
-};
-
-try{
-  pages.compras = renderCompras;
-  pages['historial-compras'] = renderHistorialCompras;
-}catch(e){ console.warn('No se pudo activar edición real de compras:', e.message); }
-
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <style>
 :root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#21253a;--border:#2e3350;--text:#e2e8f0;--text2:#8892a4;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--radius:8px;--sidebar:220px;}
@@ -4534,6 +4352,204 @@ initMobileShell();
 })();
 
 
+
+
+// ===== FIX DEFINITIVO: EDITAR COMPRAS SIN BORRAR AL ENTRAR =====
+// Este bloque reemplaza la edición anterior. La compra se corrige solo al tocar Guardar cambios.
+window.__compraEditando = null;
+
+function compraSafeHtml(v){
+  return String(v ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+}
+
+function compraEditBanner(compra){
+  const content = gs('content');
+  if(!content) return;
+  content.insertAdjacentHTML('afterbegin', `
+    <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div><strong>✏️ Editando compra</strong> · ${fmtDate(compra?.fecha)} · Estado anterior: <strong>${compraSafeHtml(compra?.estado || '-')}</strong>. Los cambios se aplican recién al tocar <strong>Guardar cambios</strong>.</div>
+      <button class="btn btn-secondary btn-sm" onclick="cancelarEdicionCompraReal()">Cancelar edición</button>
+    </div>
+  `);
+  const btn = document.querySelector('button[onclick="finalizarCompra()"]');
+  if(btn) btn.textContent = '💾 Guardar cambios de compra';
+}
+
+window.cancelarEdicionCompraReal = function(){
+  if(!confirm('¿Cancelar la edición? No se guardará ningún cambio.')) return;
+  window.__compraEditando = null;
+  compraItems = [];
+  renderCompras();
+};
+
+window.cSubtotal = function(i, valor){
+  const subtotal = parseFloat(valor) || 0;
+  const cant = Math.max(1, parseInt(compraItems?.[i]?.cantidad) || 1);
+  if(!compraItems[i]) return;
+  compraItems[i].costo = Math.round(subtotal / cant);
+  renderCompraItems();
+};
+
+window.renderCompraItems = function(){
+  const el = gs('ccomp-items');
+  if(!el) return;
+  el.innerHTML = (compraItems || []).map((item, i) => {
+    const cant = Math.max(1, parseInt(item.cantidad) || 1);
+    const costo = parseFloat(item.costo) || 0;
+    const subtotal = costo * cant;
+    return `<div style="display:grid;grid-template-columns:1fr 102px 112px 118px 32px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px">
+      <div style="font-size:13px;font-weight:600">${compraSafeHtml(item.nombre || 'Producto')}<br><span style="color:var(--text2);font-size:11px">+${(parseInt(item.uds)||1)*cant} uds al stock</span></div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button onclick="cQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">-</button>
+        <input type="number" value="${cant}" min="1" onchange="cQtySet(${i},this.value)" style="width:50px;text-align:center;padding:4px">
+        <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">+</button>
+      </div>
+      <div class="form-group" style="gap:2px"><label style="font-size:10px">Costo unit.</label><input type="number" value="${costo}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:5px"></div>
+      <div class="form-group" style="gap:2px"><label style="font-size:10px">Subtotal</label><input type="number" value="${subtotal}" onchange="cSubtotal(${i},this.value)" style="text-align:right;padding:5px;color:var(--accent2);font-weight:700"></div>
+      <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button>
+    </div>`;
+  }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
+
+  const total = (compraItems || []).reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0),0);
+  if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
+};
+
+async function revertirStockCompraReal(compraId, detalles){
+  for(const d of detalles || []){
+    const p = prodCache.find(x => x.id === d.producto_id);
+    if(!p) continue;
+    const cant = parseInt(d.cantidad) || 0;
+    const ns = Math.max(0, (parseInt(p.stock)||0) - cant);
+    await sb.from('bodega_productos').update({stock: ns}).eq('id', d.producto_id);
+    await sb.from('bodega_ajustes_stock').insert({
+      producto_id: d.producto_id,
+      tipo: 'salida',
+      cantidad: cant,
+      motivo: 'Edición de compra - reversa anterior',
+      stock_anterior: p.stock,
+      stock_nuevo: ns,
+      referencia_id: compraId,
+      referencia_tipo: 'compra_editada_reversa'
+    });
+  }
+  await loadCaches();
+}
+
+window.editarCompra = async function(id){
+  const {data: compra, error: cErr} = await sb.from('bodega_compras').select('*').eq('id', id).single();
+  const {data: detalles, error: dErr} = await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id', id);
+  if(cErr || dErr || !compra){
+    toast('No se pudo abrir la compra para editar', 'err');
+    return;
+  }
+
+  window.__compraEditando = {
+    id,
+    compra,
+    detalles: detalles || []
+  };
+
+  renderCompras();
+  compraEditBanner(compra);
+
+  if(gs('comp-fecha')) gs('comp-fecha').value = compra.fecha || new Date().toISOString().split('T')[0];
+  if(gs('comp-prov')) gs('comp-prov').value = compra.proveedor_id || '';
+  if(gs('comp-factura')) gs('comp-factura').value = compra.numero_factura || '';
+  if(gs('comp-metpago')) gs('comp-metpago').value = compra.metodo_pago || 'efectivo';
+  if(gs('comp-estado')) gs('comp-estado').value = compra.estado || 'en_proceso';
+  if(gs('comp-notas')) gs('comp-notas').value = compra.notas || '';
+
+  compraItems = (detalles || []).map(d => ({
+    key: d.producto_id,
+    producto_id: d.producto_id,
+    embalaje_id: null,
+    nombre: d.bodega_productos?.nombre || 'Producto',
+    costo: parseFloat(d.costo_unitario) || parseFloat(d.bodega_productos?.precio_costo) || 0,
+    cantidad: parseInt(d.cantidad) || 1,
+    uds: 1
+  }));
+
+  renderCompraItems();
+  toast('Compra abierta para editar. Todavía no se borró nada. Tocá Guardar cambios para aplicar.');
+};
+
+window.finalizarCompra = async function(){
+  if(!compraItems.length){ toast('No hay productos','err'); return; }
+
+  const total = compraItems.reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0),0);
+  const estado = gs('comp-estado')?.value || 'en_proceso';
+  const compra = {
+    fecha: gs('comp-fecha')?.value || new Date().toISOString().split('T')[0],
+    proveedor_id: gs('comp-prov')?.value || null,
+    numero_factura: gs('comp-factura')?.value || null,
+    total,
+    metodo_pago: gs('comp-metpago')?.value || 'efectivo',
+    estado,
+    notas: gs('comp-notas')?.value || null
+  };
+
+  const edit = window.__compraEditando;
+
+  if(edit?.id){
+    const id = edit.id;
+    if(!confirm('¿Guardar cambios de esta compra? Recién ahora se corregirá el stock si corresponde.')) return;
+
+    if(edit.compra?.estado === 'finalizado'){
+      await revertirStockCompraReal(id, edit.detalles || []);
+    }
+
+    const {error: uErr} = await sb.from('bodega_compras').update(compra).eq('id', id);
+    if(uErr){ toast('Error actualizando compra: '+uErr.message,'err'); return; }
+
+    const {error: delErr} = await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
+    if(delErr){ toast('Error limpiando detalle anterior: '+delErr.message,'err'); return; }
+
+    const nuevosDetalles = compraItems.map(c => ({
+      compra_id: id,
+      producto_id: c.producto_id,
+      cantidad: (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),
+      costo_unitario: parseFloat(c.costo)||0
+    }));
+    const {error: insErr} = await sb.from('bodega_compras_detalle').insert(nuevosDetalles);
+    if(insErr){ toast('Error guardando detalle nuevo: '+insErr.message,'err'); return; }
+
+    await loadCaches();
+    if(estado === 'finalizado') await impactarStock(id, compraItems);
+
+    window.__compraEditando = null;
+    compraItems = [];
+    toast('✓ Compra editada correctamente');
+    await loadCaches();
+    renderHistorialCompras();
+    return;
+  }
+
+  const {data:cD,error:cE}=await sb.from('bodega_compras').insert(compra).select().single();
+  if(cE){ toast('Error: '+cE.message,'err'); return; }
+
+  const detalles = compraItems.map(c=>({
+    compra_id:cD.id,
+    producto_id:c.producto_id,
+    cantidad:(parseInt(c.cantidad)||0)*(parseInt(c.uds)||1),
+    costo_unitario:parseFloat(c.costo)||0
+  }));
+  const {error:dE}=await sb.from('bodega_compras_detalle').insert(detalles);
+  if(dE){ toast('Error detalle: '+dE.message,'err'); return; }
+
+  if(estado === 'finalizado') await impactarStock(cD.id, compraItems);
+  toast(`✓ Compra registrada (${estado}): ${fmtGs(total)}`);
+  await loadCaches();
+  compraItems = [];
+  renderCompras();
+};
+
+try{
+  if(typeof pages !== 'undefined'){
+    pages.compras = renderCompras;
+    pages['historial-compras'] = renderHistorialCompras;
+  }
+}catch(e){}
+// ===== FIN FIX EDICIÓN REAL DE COMPRAS =====
 </script>
 </body>
 </html>
