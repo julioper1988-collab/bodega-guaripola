@@ -1045,6 +1045,278 @@ async function saveCat(id=null){
   if(url&&key){document.getElementById('setup').style.display='none';await initSB(url,key);}
   else document.getElementById('loading').style.display='none';
 })();
+
+/*
+Bodega Guaripola - Parche Fiado + Clientes + borrar/editar ventas/compras
+PEGAR este bloque al final del <script>, justo ANTES de </script>.
+Antes de pegarlo, ejecutar el SQL de bodega_guaripola_supabase_fiado.sql en Supabase.
+*/
+
+// ─── PARCHE CLIENTES / FIADOS ──────────────────────────────────
+let clienteCache = [];
+
+async function cargarClientes(){
+  try{
+    const {data,error}=await sb.from('bodega_clientes').select('*').eq('activo',true).order('nombre');
+    if(error) throw error;
+    clienteCache=data||[];
+  }catch(e){
+    clienteCache=[];
+    console.warn('No se pudo cargar clientes:', e.message);
+  }
+}
+
+function clienteSelectHTML(selectedId=''){
+  return `<div style="display:flex;gap:6px;align-items:end">
+    <div style="flex:1">
+      <select id="v-cliente-id">
+        <option value="">Ocasional / sin cliente</option>
+        ${clienteCache.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="openClienteModal()" title="Agregar cliente">+ Cliente</button>
+  </div>`;
+}
+
+function getClienteVenta(){
+  const sel=gs('v-cliente-id');
+  if(sel){
+    const id=sel.value||null;
+    const c=clienteCache.find(x=>x.id===id);
+    return {id, nombre:c?.nombre||null};
+  }
+  const input=gs('v-cliente');
+  return {id:null, nombre:input?.value?.trim()||null};
+}
+
+function openClienteModal(){
+  openModal('Nuevo cliente',`
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="cl-nombre" placeholder="Ej: Carlos"></div>
+      <div class="form-group"><label>Teléfono</label><input id="cl-telefono" placeholder="Opcional"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="cl-direccion" placeholder="Opcional"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="cl-notas" rows="2" placeholder="Opcional"></textarea></div>
+    </div>`,saveCliente,'Guardar cliente');
+}
+
+async function saveCliente(){
+  const nombre=gs('cl-nombre').value.trim();
+  if(!nombre){toast('Nombre obligatorio','err');return;}
+  const obj={nombre,telefono:gs('cl-telefono').value||null,direccion:gs('cl-direccion').value||null,notas:gs('cl-notas').value||null,activo:true};
+  const {data,error}=await sb.from('bodega_clientes').insert(obj).select().single();
+  if(error){toast('Error cliente: '+error.message,'err');return;}
+  toast('Cliente guardado');
+  closeModal();
+  await cargarClientes();
+  const box=gs('v-cliente-box');
+  if(box) box.innerHTML=clienteSelectHTML(data.id);
+}
+
+// Guardamos versiones originales y mejoramos la pantalla de ventas sin romper tu código base.
+const __renderVentasOriginal = renderVentas;
+renderVentas = async function(){
+  await cargarClientes();
+  await __renderVentasOriginal();
+
+  const clienteInput=gs('v-cliente');
+  if(clienteInput){
+    const wrap=document.createElement('div');
+    wrap.id='v-cliente-box';
+    wrap.innerHTML=clienteSelectHTML();
+    clienteInput.replaceWith(wrap);
+  }
+
+  const payGrid=document.querySelector('.pay-grid');
+  if(payGrid && !gs('pay-fiado')){
+    const div=document.createElement('div');
+    div.className='pay-btn';
+    div.id='pay-fiado';
+    div.setAttribute('onclick',"selectPay('fiado')");
+    div.textContent='Fiado';
+    payGrid.appendChild(div);
+  }
+};
+
+const __selectPayOriginal = selectPay;
+selectPay = function(p){
+  __selectPayOriginal(p);
+  const imp=gs('v-importe');
+  if(imp && p==='fiado') imp.value=0;
+  updateVTotals();
+};
+
+// Reemplaza finalizarVenta para crear deuda cuando el pago sea FIADO.
+finalizarVenta = async function(){
+  if(!cart.length){toast('No hay productos','err');return;}
+  const desc=parseFloat(gs('v-desc').value)||0;
+  const total=cart.reduce((s,c)=>s+c.precio*c.cantidad,0), totalFinal=Math.max(0,total-desc);
+  const importe=parseFloat(gs('v-importe').value)||0;
+  const cli=getClienteVenta();
+
+  if(selectedPay==='fiado' && !cli.id && !cli.nombre){
+    toast('Para vender fiado elegí o creá un cliente','err');
+    return;
+  }
+
+  const venta={
+    fecha:new Date().toISOString().split('T')[0],
+    tipo:ventaTipo,
+    cliente_nombre:cli.nombre,
+    total,descuento:desc,total_final:totalFinal,
+    metodo_pago:selectedPay,
+    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec').value)||0:(selectedPay==='efectivo'?importe:0),
+    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf').value)||0:(selectedPay==='transferencia'?importe:0),
+    monto_otro:(selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0
+  };
+
+  const {data:vD,error:vE}=await sb.from('bodega_ventas').insert(venta).select().single();
+  if(vE){toast('Error: '+vE.message,'err');return;}
+
+  const {error:dE}=await sb.from('bodega_ventas_detalle').insert(cart.map(c=>({venta_id:vD.id,producto_id:c.producto_id,cantidad:c.cantidad*c.uds,precio_unitario:c.precio})));
+  if(dE){toast('Error detalle: '+dE.message,'err');return;}
+
+  if(selectedPay==='fiado'){
+    const {error:fE}=await sb.from('bodega_fiados').insert({
+      venta_id:vD.id,cliente_id:cli.id,cliente_nombre:cli.nombre,
+      monto_total:totalFinal,monto_pagado:0,saldo:totalFinal,estado:'pendiente',fecha:venta.fecha
+    });
+    if(fE){toast('Venta guardada, pero falló fiado: '+fE.message,'err');}
+  }
+
+  for(const c of cart){
+    const p=prodCache.find(x=>x.id===c.producto_id); if(!p) continue;
+    const totalUds=c.cantidad*c.uds, ns=(p.stock||0)-totalUds;
+    await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
+    await sb.from('bodega_ajustes_stock').insert({producto_id:c.producto_id,tipo:'salida',cantidad:totalUds,motivo:selectedPay==='fiado'?'Venta fiada':'Venta',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:vD.id,referencia_tipo:'venta'});
+  }
+
+  toast(selectedPay==='fiado'?`✓ Fiado registrado: ${fmtGs(totalFinal)}`:`✓ Cobrado: ${fmtGs(totalFinal)}`);
+  await loadCaches();cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;renderVentas();
+};
+
+// Historial de ventas con Ver / Editar / Borrar.
+renderHistorialVentas = async function(){
+  const {data}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
+  gs('content').innerHTML=`<div class="card">
+    <div class="card-header"><h3>Historial de ventas</h3></div>
+    <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
+    ${(data||[]).map(v=>`<tr>
+      <td>${fmtDate(v.fecha)}</td>
+      <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${v.tipo}</span></td>
+      <td>${v.cliente_nombre||'-'}</td>
+      <td>${fmtGs(v.total)}</td>
+      <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
+      <td style="font-weight:600;color:${v.metodo_pago==='fiado'?'var(--amber)':'var(--green)'}">${fmtGs(v.total_final)}</td>
+      <td style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':(v.metodo_pago||'-')}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
+        <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+};
+
+async function borrarVenta(id, silencioso=false){
+  if(!silencioso && !confirm('¿Borrar esta venta? Se devolverá el stock y se borrará el fiado si corresponde.')) return false;
+  const {data:detalles,error:dErr}=await sb.from('bodega_ventas_detalle').select('*').eq('venta_id',id);
+  if(dErr){toast('Error: '+dErr.message,'err');return false;}
+
+  for(const d of detalles||[]){
+    const p=prodCache.find(x=>x.id===d.producto_id);
+    if(!p) continue;
+    const ns=(p.stock||0)+(d.cantidad||0);
+    await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
+    await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'entrada',cantidad:d.cantidad,motivo:'Venta borrada',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:id,referencia_tipo:'venta_borrada'});
+  }
+
+  await sb.from('bodega_fiados').delete().eq('venta_id',id);
+  await sb.from('bodega_ventas_detalle').delete().eq('venta_id',id);
+  const {error}=await sb.from('bodega_ventas').delete().eq('id',id);
+  if(error){toast('Error borrando venta: '+error.message,'err');return false;}
+  if(!silencioso){toast('Venta borrada y stock corregido');await loadCaches();renderHistorialVentas();}
+  return true;
+}
+
+async function editarVenta(id){
+  if(!confirm('Se va a cargar esta venta otra vez para editarla. Al guardar, reemplazará la venta anterior. ¿Continuar?')) return;
+  const {data:det}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
+  const {data:v}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
+  if(!v || !det){toast('No se pudo abrir la venta','err');return;}
+  await borrarVenta(id,true);
+  await loadCaches();
+  cart=(det||[]).map(d=>({key:d.producto_id,producto_id:d.producto_id,embalaje_id:null,nombre:d.bodega_productos?.nombre||'Producto',precio:d.precio_unitario,cantidad:d.cantidad,uds:1}));
+  ventaTipo=v.tipo||'minorista';
+  selectedPay=v.metodo_pago||'efectivo';
+  await renderVentas();
+  if(gs('v-desc')) gs('v-desc').value=v.descuento||0;
+  const c = clienteCache.find(x=>x.nombre===v.cliente_nombre);
+  if(gs('v-cliente-id') && c) gs('v-cliente-id').value=c.id;
+  selectPay(selectedPay);
+  renderVentaTable();
+  toast('Venta cargada para editar. Revisá y volvé a cobrar/guardar.');
+}
+
+// Historial compras con Ver / Editar / Borrar.
+renderHistorialCompras = async function(){
+  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  gs('content').innerHTML=`<div class="card">
+    <div class="card-header"><h3>Historial de compras</h3></div>
+    <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead><tbody>
+    ${(data||[]).map(c=>`<tr>
+      <td>${fmtDate(c.fecha)}</td><td>${c.bodega_proveedores?.nombre||'-'}</td>
+      <td style="font-size:11px;color:var(--text2)">${c.numero_factura||'-'}</td>
+      <td><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
+      <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">Ver</button>
+        ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="borrarCompra('${c.id}')">Borrar</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+};
+
+async function borrarCompra(id, silencioso=false){
+  if(!silencioso && !confirm('¿Borrar esta compra? Si estaba finalizada se descontará el stock.')) return false;
+  const {data:compra}=await sb.from('bodega_compras').select('*').eq('id',id).single();
+  const {data:detalles}=await sb.from('bodega_compras_detalle').select('*').eq('compra_id',id);
+
+  if(compra?.estado==='finalizado'){
+    for(const d of detalles||[]){
+      const p=prodCache.find(x=>x.id===d.producto_id); if(!p) continue;
+      const ns=Math.max(0,(p.stock||0)-(d.cantidad||0));
+      await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
+      await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'salida',cantidad:d.cantidad,motivo:'Compra borrada',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:id,referencia_tipo:'compra_borrada'});
+    }
+  }
+  await sb.from('bodega_compras_detalle').delete().eq('compra_id',id);
+  const {error}=await sb.from('bodega_compras').delete().eq('id',id);
+  if(error){toast('Error borrando compra: '+error.message,'err');return false;}
+  if(!silencioso){toast('Compra borrada');await loadCaches();renderHistorialCompras();}
+  return true;
+}
+
+async function editarCompra(id){
+  if(!confirm('Se va a cargar esta compra otra vez para editarla. Al guardar, reemplazará la compra anterior. ¿Continuar?')) return;
+  const {data:compra}=await sb.from('bodega_compras').select('*').eq('id',id).single();
+  const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id',id);
+  if(!compra || !det){toast('No se pudo abrir la compra','err');return;}
+  await borrarCompra(id,true);
+  await loadCaches();
+  compraItems=(det||[]).map(d=>({key:d.producto_id,producto_id:d.producto_id,embalaje_id:null,nombre:d.bodega_productos?.nombre||'Producto',costo:d.costo_unitario,cantidad:d.cantidad,uds:1}));
+  renderCompras();
+  if(gs('comp-fecha')) gs('comp-fecha').value=compra.fecha;
+  if(gs('comp-prov')) gs('comp-prov').value=compra.proveedor_id||'';
+  if(gs('comp-factura')) gs('comp-factura').value=compra.numero_factura||'';
+  if(gs('comp-metpago')) gs('comp-metpago').value=compra.metodo_pago||'efectivo';
+  if(gs('comp-estado')) gs('comp-estado').value=compra.estado||'finalizado';
+  if(gs('comp-notas')) gs('comp-notas').value=compra.notas||'';
+  renderCompraItems();
+  toast('Compra cargada para editar. Revisá y volvé a guardar.');
+}
+
 </script>
 </body>
 </html>
