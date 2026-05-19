@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 <style>
 :root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#21253a;--border:#2e3350;--text:#e2e8f0;--text2:#8892a4;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--teal:#14b8a6;--radius:8px;--sidebar:220px;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -1924,9 +1925,12 @@ initMobileShell();
     toast('Agregado a compra: '+prod.nombre);
   };
 
-  let scanStream=null, scanTimer=null, scanBusy=false;
+  let scanStream=null, scanTimer=null, scanBusy=false, scanReader=null, scanControls=null;
   window.stopBarcodeScanner = function(){
     if(scanTimer){clearInterval(scanTimer);scanTimer=null;}
+    try{ if(scanControls && scanControls.stop) scanControls.stop(); }catch(e){}
+    try{ if(scanReader && scanReader.reset) scanReader.reset(); }catch(e){}
+    scanControls=null; scanReader=null;
     if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
   };
   window.applyScannedBarcode = function(context,code){
@@ -1941,35 +1945,47 @@ initMobileShell();
     stopBarcodeScanner(); scanBusy=false;
     openModal('Escanear código de barras',`
       <div class="scanner-box">
-        <div class="scanner-help">Apuntá la cámara al código. Si tu navegador no permite escanear, cargá el número manualmente.</div>
-        <video id="scanner-video" class="scanner-video" playsinline muted></video>
-        <div class="scanner-manual"><input id="scanner-manual-code" placeholder="Código manual"><button class="btn btn-primary" onclick="applyScannedBarcode('${context}',gs('scanner-manual-code').value)">Usar código</button></div>
+        <div class="scanner-help">Apuntá la cámara al código. En iPhone/Safari usamos un lector alternativo para EAN/UPC. Si no detecta, cargá el número manualmente.</div>
+        <video id="scanner-video" class="scanner-video" playsinline webkit-playsinline muted autoplay></video>
+        <div class="scanner-manual"><input id="scanner-manual-code" inputmode="numeric" placeholder="Código manual"><button class="btn btn-primary" onclick="applyScannedBarcode('${context}',gs('scanner-manual-code').value)">Usar código</button></div>
         <div class="scanner-actions"><button class="btn btn-secondary" onclick="stopBarcodeScanner();closeModal()">Cerrar</button></div>
       </div>`,null,'');
     const video=gs('scanner-video');
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false};
     try{
-      if(!('BarcodeDetector' in window)){
-        toast('Este navegador no tiene lector automático. Usá código manual.','err');
+      // Safari/iPhone no suele tener BarcodeDetector. Por eso primero probamos ZXing.
+      if(window.ZXing && ZXing.BrowserMultiFormatReader){
+        scanReader=new ZXing.BrowserMultiFormatReader();
+        scanControls=await scanReader.decodeFromConstraints(constraints, video, (result, err)=>{
+          if(result && result.text){ applyScannedBarcode(context,result.text); }
+        });
+        toast('Cámara abierta. Acercá el código de barras.');
         return;
       }
-      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
-      scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-      video.srcObject=scanStream;
-      await video.play();
-      scanTimer=setInterval(async()=>{
-        if(scanBusy || !video.videoWidth) return;
-        scanBusy=true;
-        try{
-          const codes=await detector.detect(video);
-          if(codes && codes.length){
-            const raw=codes[0].rawValue;
-            if(raw) applyScannedBarcode(context,raw);
-          }
-        }catch(e){}
-        scanBusy=false;
-      },450);
+      // Fallback para navegadores que sí tienen BarcodeDetector.
+      if('BarcodeDetector' in window){
+        const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
+        scanStream=await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject=scanStream;
+        await video.play();
+        scanTimer=setInterval(async()=>{
+          if(scanBusy || !video.videoWidth) return;
+          scanBusy=true;
+          try{
+            const codes=await detector.detect(video);
+            if(codes && codes.length){
+              const raw=codes[0].rawValue;
+              if(raw) applyScannedBarcode(context,raw);
+            }
+          }catch(e){}
+          scanBusy=false;
+        },350);
+        toast('Cámara abierta. Acercá el código de barras.');
+        return;
+      }
+      toast('El lector automático no cargó. Usá código manual.','err');
     }catch(e){
-      toast('No pude abrir la cámara. Revisá permisos o usá carga manual.','err');
+      toast('No pude abrir la cámara. Permití cámara en el navegador o usá código manual.','err');
     }
   };
 
