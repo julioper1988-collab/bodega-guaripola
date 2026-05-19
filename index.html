@@ -568,6 +568,7 @@ let ventaNum = Math.floor(Math.random()*90000)+10000;
 let acResults = [];
 
 function renderVentas(){
+  selectedPay='efectivo';
   cart=[];
   gs('content').innerHTML=`
   <div id="venta-layout">
@@ -626,7 +627,11 @@ function renderVentas(){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
             <div class="form-group"><label>Efectivo</label><input id="v-efec" type="number" value="0"></div>
             <div class="form-group"><label>Transferencia</label><input id="v-transf" type="number" value="0"></div>
+            <div class="form-group"><label>QR</label><input id="v-qr" type="number" value="0"></div>
+            <div class="form-group"><label>Débito</label><input id="v-debito" type="number" value="0"></div>
+            <div class="form-group"><label>Crédito</label><input id="v-credito-mix" type="number" value="0"></div>
           </div>
+          <div style="font-size:11px;color:var(--text2);margin-top:6px">En mixto, QR/Débito/Crédito se guardan como otros medios para el arqueo.</div>
         </div>
       </div>
       <div class="section">
@@ -804,9 +809,9 @@ async function finalizarVenta(){
     cliente_nombre:gs('v-cliente').value||null,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
-    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec').value)||0:(selectedPay==='efectivo'?importe:0),
-    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf').value)||0:(selectedPay==='transferencia'?importe:0),
-    monto_otro:0
+    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+    monto_otro:selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
   };
   const {data:vD,error:vE}=await sb.from('bodega_ventas').insert(venta).select().single();
   if(vE){toast('Error: '+vE.message,'err');return;}
@@ -1324,9 +1329,9 @@ finalizarVenta = async function(){
     cliente_nombre:cli.nombre,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
-    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec').value)||0:(selectedPay==='efectivo'?importe:0),
-    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf').value)||0:(selectedPay==='transferencia'?importe:0),
-    monto_otro:(selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0
+    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+    monto_otro:selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
   };
 
   const {data:vD,error:vE}=await sb.from('bodega_ventas').insert(venta).select().single();
@@ -4147,6 +4152,119 @@ initMobileShell();
     };
     try{pages.caja=renderCaja;}catch(e){}
   }
+})();
+
+
+/* ─── AJUSTES VENTAS: efectivo por defecto, mixto completo y precio automático por pack ─── */
+(function(){
+  function ventaPrecioNormalProducto(prod){
+    if(!prod) return 0;
+    return ventaTipo==='mayorista' && Number(prod.precio_mayorista)>0 ? Number(prod.precio_mayorista) : Number(prod.precio_venta)||0;
+  }
+  function ventaPrecioPack(emb){
+    if(!emb) return 0;
+    return ventaTipo==='mayorista' && Number(emb.precio_mayorista)>0 ? Number(emb.precio_mayorista) : Number(emb.precio_venta)||0;
+  }
+  function aplicarPrecioPackAutomaticoItem(item){
+    if(!item || item.embalaje_id || item.precioManual) return;
+    const prod=prodCache.find(p=>p.id===item.producto_id);
+    if(!prod) return;
+    const qty=Number(item.cantidad)||1;
+    const packs=(embCache[item.producto_id]||[])
+      .filter(e=>Number(e.cantidad)>1 && qty>=Number(e.cantidad) && qty%Number(e.cantidad)===0 && ventaPrecioPack(e)>0)
+      .sort((a,b)=>Number(b.cantidad)-Number(a.cantidad));
+    if(packs.length){
+      const emb=packs[0];
+      item.precio=ventaPrecioPack(emb)/Number(emb.cantidad);
+      item.packInfo=`Precio pack x${emb.cantidad} aplicado`;
+    }else{
+      item.precio=ventaPrecioNormalProducto(prod);
+      item.packInfo='';
+    }
+  }
+  function aplicarPrecioPackAutomatico(){
+    cart.forEach(aplicarPrecioPackAutomaticoItem);
+  }
+  window.aplicarPrecioPackAutomatico=aplicarPrecioPackAutomatico;
+
+  const addToVentaBase=window.addToVenta || addToVenta;
+  window.addToVenta=addToVenta=function(prodId,embId,qty=1){
+    addToVentaBase(prodId,embId,qty);
+    aplicarPrecioPackAutomatico();
+    renderVentaTable();
+  };
+
+  window.renderVentaTable=renderVentaTable=function(){
+    aplicarPrecioPackAutomatico();
+    const tbody=gs('venta-tbody');if(!tbody)return;
+    tbody.innerHTML=cart.map((item,i)=>`<tr>
+      <td>${item.nombre}<br><span style="font-size:12px;color:var(--teal)">Mueve ${item.uds*item.cantidad} uds${item.packInfo?` · ${item.packInfo}`:''}</span></td>
+      <td style="text-align:center">
+        <div style="display:flex;align-items:center;justify-content:center;gap:4px">
+          <button onclick="vQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:28px;border-radius:6px;cursor:pointer">-</button>
+          <input type="number" value="${item.cantidad}" min="1" onchange="vQtySet(${i},this.value)" style="width:58px;text-align:center;padding:5px;font-weight:700">
+          <button onclick="vQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:28px;border-radius:6px;cursor:pointer">+</button>
+        </div>
+      </td>
+      <td style="text-align:right">
+        <input type="number" value="${Math.round(item.precio)}" min="0" step="100" onchange="vPriceSet(${i},this.value)" oninput="vPriceSet(${i},this.value,false)" style="width:112px;text-align:right;padding:5px;font-weight:700;color:var(--accent2)">
+      </td>
+      <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(item.precio*item.cantidad)}</td>
+      <td><button onclick="vRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button></td>
+    </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
+    if(gs('v-count'))gs('v-count').textContent=cart.length;
+    updateVTotals();
+  };
+  window.vQty=vQty=function(i,d){
+    if(!cart[i])return;
+    cart[i].cantidad=Math.max(1,(parseInt(cart[i].cantidad)||1)+d);
+    if(!cart[i].embalaje_id) cart[i].precioManual=false;
+    aplicarPrecioPackAutomaticoItem(cart[i]);
+    renderVentaTable();
+  };
+  window.vQtySet=vQtySet=function(i,v){
+    if(!cart[i])return;
+    cart[i].cantidad=Math.max(1,parseInt(v)||1);
+    if(!cart[i].embalaje_id) cart[i].precioManual=false;
+    aplicarPrecioPackAutomaticoItem(cart[i]);
+    renderVentaTable();
+  };
+  window.vPriceSet=vPriceSet=function(i,v,rerender=true){
+    if(!cart[i])return;
+    const n=Math.max(0,parseFloat(v)||0);
+    cart[i].precio=n;
+    cart[i].precioManual=true;
+    cart[i].packInfo='Precio manual';
+    updateVTotals();
+    if(rerender)renderVentaTable();
+    else{
+      const sub=cart[i].precio*cart[i].cantidad;
+      const row=gs('venta-tbody')?.children?.[i];
+      if(row&&row.children&&row.children[3])row.children[3].textContent=fmtGs(sub);
+    }
+  };
+
+  const renderVentasBase=window.renderVentas || renderVentas;
+  window.renderVentas=renderVentas=function(){
+    selectedPay='efectivo';
+    renderVentasBase();
+    setTimeout(()=>{
+      try{
+        const mix=gs('mixto-fields');
+        if(mix && !gs('v-qr')){
+          mix.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div class="form-group"><label>Efectivo</label><input id="v-efec" type="number" value="0"></div>
+            <div class="form-group"><label>Transferencia</label><input id="v-transf" type="number" value="0"></div>
+            <div class="form-group"><label>QR</label><input id="v-qr" type="number" value="0"></div>
+            <div class="form-group"><label>Débito</label><input id="v-debito" type="number" value="0"></div>
+            <div class="form-group"><label>Crédito</label><input id="v-credito-mix" type="number" value="0"></div>
+          </div><div style="font-size:11px;color:var(--text2);margin-top:6px">QR/Débito/Crédito en mixto se suman como “otros medios”.</div>`;
+        }
+        selectPay('efectivo');
+      }catch(e){console.warn('Ajuste mixto/efectivo:',e);}
+    },0);
+  };
+  try{pages.ventas=renderVentas;}catch(e){}
 })();
 
 
