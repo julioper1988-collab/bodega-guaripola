@@ -2291,6 +2291,8 @@ initMobileShell();
 /* ─── PARCHE: editar packs / embalajes con código de barras ─── */
 (function(){
   function embEsc(s){return String(s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+  // Alias defensivo: corrige versiones anteriores que llamaban embFsc por error.
+  function embFsc(s){return embEsc(s);}
   function embQ(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');}
 
   window.clearEmbForm = function(){
