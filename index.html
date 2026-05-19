@@ -1316,6 +1316,252 @@ try{
 }catch(e){ console.warn('No se pudo actualizar páginas parcheadas:', e.message); }
 
 
+
+// ─── PARCHE EXTRA: RUC CLIENTES + ORDEN/PDF COMPRAS ────────────
+function normalizarRucPy(valor){
+  const raw=(valor||'').trim().replace(/\s+/g,'');
+  const m=raw.match(/^(\d+)(?:-?(\d))?$/);
+  if(!m) return {ruc:raw,dv:'',full:raw};
+  return {ruc:m[1],dv:m[2]||'',full:m[2]?`${m[1]}-${m[2]}`:m[1]};
+}
+
+function setClienteFormFromData(d){
+  if(!d) return;
+  const ruc=(d.ruc||'').toString();
+  const dv=(d.dv||'').toString();
+  const nombre=d.name||d.razon_social||d.razonSocial||d.nombre||d.nombre_comercial||d.nombreComercial||'';
+  const estado=d.state||d.estado||'';
+  const comercial=d.nombre_comercial||d.nombreComercial||'';
+
+  if(gs('cl-ruc') && ruc) gs('cl-ruc').value=dv?`${ruc}-${dv}`:ruc;
+  if(gs('cl-dv')) gs('cl-dv').value=dv;
+  if(gs('cl-razon-social')) gs('cl-razon-social').value=nombre;
+  if(gs('cl-nombre') && nombre) gs('cl-nombre').value=nombre;
+  if(gs('cl-nombre-comercial')) gs('cl-nombre-comercial').value=comercial;
+  if(gs('cl-estado-ruc')) gs('cl-estado-ruc').value=estado;
+}
+
+async function buscarRucCliente(){
+  const input=gs('cl-ruc');
+  if(!input){toast('No encontré el campo RUC','err');return;}
+  const info=normalizarRucPy(input.value);
+  if(!info.ruc || info.ruc.length<3){toast('Ingresá un RUC válido','err');return;}
+
+  const local=(clienteCache||[]).find(c=>{
+    const cr=(c.ruc||'').toString();
+    const cd=(c.dv||'').toString();
+    return cr===info.ruc || (cd && `${cr}-${cd}`===info.full);
+  });
+  if(local){
+    setClienteFormFromData({
+      ruc:local.ruc,dv:local.dv,name:local.razon_social||local.nombre,
+      nombre_comercial:local.nombre_comercial,state:local.estado_ruc
+    });
+    toast('Cliente encontrado en tu base');
+    return;
+  }
+
+  try{
+    toast('Buscando RUC...');
+    let resp=await fetch(`https://ruc.sun.com.py/api/ruc/${encodeURIComponent(info.full)}`,{headers:{'Accept':'application/json'}});
+    let data=null;
+    if(resp.ok) data=await resp.json();
+
+    if(!data || data.error || (!data.name && !data.ruc)){
+      resp=await fetch(`https://ruc.sun.com.py/api/search?q=${encodeURIComponent(info.full)}&state=ACTIVO`,{headers:{'Accept':'application/json'}});
+      if(resp.ok){
+        const arr=await resp.json();
+        data=Array.isArray(arr)?arr[0]:(arr?.results?.[0]||arr?.data?.[0]||null);
+      }
+    }
+
+    if(!data || (!data.name && !data.ruc)){
+      toast('No encontré datos para ese RUC','err');
+      return;
+    }
+
+    setClienteFormFromData(data);
+    toast('Datos del RUC cargados');
+  }catch(e){
+    console.warn('Error consultando RUC:',e);
+    toast('No se pudo consultar RUC. Podés cargarlo manualmente.','err');
+  }
+}
+
+openClienteModal = function(){
+  openModal('Nuevo cliente',`
+    <div class="form-grid">
+      <div class="form-group">
+        <label>RUC</label>
+        <div style="display:flex;gap:6px">
+          <input id="cl-ruc" placeholder="Ej: 80012345-6" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarRucCliente();}">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="buscarRucCliente()">Buscar</button>
+        </div>
+      </div>
+      <div class="form-group"><label>DV</label><input id="cl-dv" placeholder="Auto"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Nombre / Razón social *</label><input id="cl-nombre" placeholder="Ej: Carlos o razón social"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Razón social</label><input id="cl-razon-social" placeholder="Se completa al buscar RUC"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Nombre comercial</label><input id="cl-nombre-comercial" placeholder="Opcional"></div>
+      <div class="form-group"><label>Estado RUC</label><input id="cl-estado-ruc" placeholder="ACTIVO / BLOQUEADO / etc."></div>
+      <div class="form-group"><label>Teléfono</label><input id="cl-telefono" placeholder="Opcional"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="cl-direccion" placeholder="Opcional"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="cl-notas" rows="2" placeholder="Opcional"></textarea></div>
+    </div>`,saveCliente,'Guardar cliente');
+};
+
+saveCliente = async function(){
+  const nombre=gs('cl-nombre').value.trim();
+  if(!nombre){toast('Nombre obligatorio','err');return;}
+  const nr=normalizarRucPy(gs('cl-ruc')?.value||'');
+  const obj={
+    nombre,
+    ruc:nr.ruc||null,
+    dv:(gs('cl-dv')?.value||nr.dv||'')||null,
+    razon_social:gs('cl-razon-social')?.value||nombre,
+    nombre_comercial:gs('cl-nombre-comercial')?.value||null,
+    estado_ruc:gs('cl-estado-ruc')?.value||null,
+    telefono:gs('cl-telefono').value||null,
+    direccion:gs('cl-direccion').value||null,
+    notas:gs('cl-notas').value||null,
+    activo:true
+  };
+  const {data,error}=await sb.from('bodega_clientes').insert(obj).select().single();
+  if(error){
+    toast('Error cliente: '+error.message,'err');
+    return;
+  }
+  toast('Cliente guardado');
+  closeModal();
+  await cargarClientes();
+  const box=gs('v-cliente-box');
+  if(box) box.innerHTML=clienteSelectHTML(data.id);
+};
+
+clienteSelectHTML = function(selectedId=''){
+  return `<div style="display:flex;gap:6px;align-items:end">
+    <div style="flex:1">
+      <select id="v-cliente-id">
+        <option value="">Ocasional / sin cliente</option>
+        ${clienteCache.map(c=>{
+          const rucTxt=c.ruc?` — RUC ${c.dv?`${c.ruc}-${c.dv}`:c.ruc}`:'';
+          return `<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nombre}${rucTxt}</option>`;
+        }).join('')}
+      </select>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="openClienteModal()" title="Agregar cliente">+ Cliente</button>
+  </div>`;
+};
+
+async function imprimirOrdenCompra(id){
+  const {data:compra,error:cErr}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').eq('id',id).single();
+  if(cErr || !compra){toast('No se pudo abrir la compra','err');return;}
+  const {data:detalles,error:dErr}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('compra_id',id);
+  if(dErr){toast('No se pudo leer el detalle','err');return;}
+
+  const prov=compra.bodega_proveedores?.nombre||'Sin proveedor';
+  const filas=(detalles||[]).map((d,i)=>{
+    const cant=Number(d.cantidad||0);
+    const costo=Number(d.costo_unitario||0);
+    const subtotal=Number(d.subtotal || (cant*costo));
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${d.bodega_productos?.codigo_barra||''}</td>
+      <td>${d.bodega_productos?.nombre||'Producto'}</td>
+      <td class="num">${cant.toLocaleString('es-PY')}</td>
+      <td class="num">${fmtGs(costo)}</td>
+      <td class="num">${fmtGs(subtotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const estado=compra.estado==='en_proceso'?'EN PROCESO':(compra.estado||'').toUpperCase();
+  const total=fmtGs(compra.total||0);
+  const fecha=fmtDate(compra.fecha);
+  const notas=compra.notas||'';
+
+  const doc = `<!doctype html>
+  <html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>Orden de pedido - Bodega Guaripola</title>
+    <style>
+      body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:13px}
+      .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:18px}
+      h1{font-size:22px;margin:0}
+      .muted{color:#555;font-size:12px}
+      .box{border:1px solid #ccc;border-radius:8px;padding:10px;margin:12px 0}
+      table{width:100%;border-collapse:collapse;margin-top:14px}
+      th,td{border:1px solid #ccc;padding:7px;text-align:left}
+      th{background:#f0f0f0;font-size:12px}
+      .num{text-align:right}
+      .total{font-size:18px;font-weight:bold;text-align:right;margin-top:14px}
+      .estado{display:inline-block;border:1px solid #111;border-radius:20px;padding:4px 10px;font-weight:bold}
+      .firma{margin-top:45px;display:flex;justify-content:space-between;gap:30px}
+      .firma div{border-top:1px solid #111;text-align:center;padding-top:6px;width:45%}
+      @media print{button{display:none} body{margin:18px}}
+    </style>
+  </head>
+  <body>
+    <button onclick="window.print()" style="float:right;padding:8px 12px">Imprimir / Guardar PDF</button>
+    <div class="top">
+      <div>
+        <h1>Bodega Guaripola</h1>
+        <div class="muted">Orden de pedido / compra</div>
+      </div>
+      <div style="text-align:right">
+        <div class="estado">${estado}</div>
+        <div class="muted" style="margin-top:8px">Fecha: ${fecha}</div>
+      </div>
+    </div>
+    <div class="box">
+      <strong>Proveedor:</strong> ${prov}<br>
+      <strong>Factura / referencia:</strong> ${compra.numero_factura||'-'}<br>
+      <strong>Método de pago:</strong> ${compra.metodo_pago||'-'}
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Código</th><th>Producto</th><th>Cantidad</th><th>Costo unit.</th><th>Subtotal</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="6">Sin productos</td></tr>'}</tbody>
+    </table>
+    <div class="total">Total estimado: ${total}</div>
+    ${notas?`<div class="box"><strong>Notas:</strong><br>${notas}</div>`:''}
+    <div class="firma"><div>Preparado por</div><div>Recibido por</div></div>
+  </body>
+  </html>`;
+
+  const w=window.open('','_blank');
+  if(!w){toast('El navegador bloqueó la ventana. Permití pop-ups para imprimir.','err');return;}
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
+}
+
+renderHistorialCompras = async function(){
+  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  gs('content').innerHTML=`<div class="card">
+    <div class="card-header"><h3>Historial de compras</h3></div>
+    <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead><tbody>
+    ${(data||[]).map(c=>`<tr>
+      <td>${fmtDate(c.fecha)}</td><td>${c.bodega_proveedores?.nombre||'-'}</td>
+      <td style="font-size:11px;color:var(--text2)">${c.numero_factura||'-'}</td>
+      <td><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
+      <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">Ver</button>
+        <button class="btn btn-secondary btn-sm" onclick="imprimirOrdenCompra('${c.id}')">Orden/PDF</button>
+        ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="borrarCompra('${c.id}')">Borrar</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+};
+
+try{
+  pages.ventas = renderVentas;
+  pages['historial-compras'] = renderHistorialCompras;
+}catch(e){ console.warn('No se pudo actualizar parche extra:', e.message); }
+
+
 // ─── ARRANQUE ─────────────────────────────────────────────────
 (async function(){
   const url=localStorage.getItem('bg_url'),key=localStorage.getItem('bg_key');
