@@ -757,7 +757,7 @@ function renderVentaTable(){
     <td style="text-align:right">
       <input type="number" value="${item.precio}" min="0" step="100" onchange="vPriceSet(${i},this.value)" oninput="vPriceSet(${i},this.value,false)" style="width:105px;text-align:right;padding:4px;font-weight:600;color:var(--accent2)">
     </td>
-    <td style="text-align:right;font-weight:600;color:var(--accent2)">${fmtGs(item.precio*item.cantidad)}</td>
+    <td style="text-align:right;font-weight:600;color:var(--accent2)">${fmtGs(item.subtotalCalculado ?? (item.precio*item.cantidad))}</td>
     <td><button onclick="vRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button></td>
   </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
   if(gs('v-count'))gs('v-count').textContent=cart.length;
@@ -772,7 +772,7 @@ function vPriceSet(i,v,rerender=true){
   updateVTotals();
   if(rerender)renderVentaTable();
   else{
-    const sub=cart[i].precio*cart[i].cantidad;
+    const sub=cart[i].subtotalCalculado ?? (cart[i].precio*cart[i].cantidad);
     const row=gs('venta-tbody')?.children?.[i];
     if(row&&row.children&&row.children[3])row.children[3].textContent=fmtGs(sub);
   }
@@ -780,7 +780,7 @@ function vPriceSet(i,v,rerender=true){
 function vRemove(i){cart.splice(i,1);renderVentaTable();}
 
 function updateVTotals(){
-  const sub=cart.reduce((s,c)=>s+c.precio*c.cantidad,0);
+  const sub=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
   const desc=parseFloat(gs('v-desc')?.value)||0,total=Math.max(0,sub-desc);
   const importe=parseFloat(gs('v-importe')?.value)||0;
   const vuelto=importe-total;
@@ -802,7 +802,7 @@ function cancelarVenta(){
 async function finalizarVenta(){
   if(!cart.length){toast('No hay productos','err');return;}
   const desc=parseFloat(gs('v-desc').value)||0;
-  const total=cart.reduce((s,c)=>s+c.precio*c.cantidad,0),totalFinal=Math.max(0,total-desc);
+  const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0),totalFinal=Math.max(0,total-desc);
   const importe=parseFloat(gs('v-importe').value)||0;
   const venta={
     fecha:new Date().toISOString().split('T')[0],tipo:ventaTipo,
@@ -1314,7 +1314,7 @@ selectPay = function(p){
 finalizarVenta = async function(){
   if(!cart.length){toast('No hay productos','err');return;}
   const desc=parseFloat(gs('v-desc').value)||0;
-  const total=cart.reduce((s,c)=>s+c.precio*c.cantidad,0), totalFinal=Math.max(0,total-desc);
+  const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0), totalFinal=Math.max(0,total-desc);
   const importe=parseFloat(gs('v-importe').value)||0;
   const cli=getClienteVenta();
 
@@ -4169,18 +4169,50 @@ initMobileShell();
     if(!item || item.embalaje_id || item.precioManual) return;
     const prod=prodCache.find(p=>p.id===item.producto_id);
     if(!prod) return;
-    const qty=Number(item.cantidad)||1;
+    const qty=Math.max(1,Number(item.cantidad)||1);
+    const unit=ventaPrecioNormalProducto(prod);
     const packs=(embCache[item.producto_id]||[])
-      .filter(e=>Number(e.cantidad)>1 && qty>=Number(e.cantidad) && qty%Number(e.cantidad)===0 && ventaPrecioPack(e)>0)
-      .sort((a,b)=>Number(b.cantidad)-Number(a.cantidad));
-    if(packs.length){
-      const emb=packs[0];
-      item.precio=ventaPrecioPack(emb)/Number(emb.cantidad);
-      item.packInfo=`Precio pack x${emb.cantidad} aplicado`;
-    }else{
-      item.precio=ventaPrecioNormalProducto(prod);
+      .map(e=>({cantidad:Number(e.cantidad)||0, precio:ventaPrecioPack(e)}))
+      .filter(e=>e.cantidad>1 && e.precio>0 && e.cantidad<=qty);
+
+    if(!packs.length){
+      item.precio=unit;
+      item.subtotalCalculado=unit*qty;
       item.packInfo='';
+      return;
     }
+
+    const dp=Array(qty+1).fill(Infinity);
+    const prev=Array(qty+1).fill(null);
+    dp[0]=0;
+    for(let i=1;i<=qty;i++){
+      dp[i]=dp[i-1]+unit;
+      prev[i]={tipo:'unidad', cantidad:1, precio:unit, from:i-1};
+      for(const pk of packs){
+        if(i>=pk.cantidad && dp[i-pk.cantidad]+pk.precio < dp[i]){
+          dp[i]=dp[i-pk.cantidad]+pk.precio;
+          prev[i]={tipo:'pack', cantidad:pk.cantidad, precio:pk.precio, from:i-pk.cantidad};
+        }
+      }
+    }
+
+    const total=dp[qty];
+    item.subtotalCalculado=total;
+    item.precio=qty>0 ? total/qty : unit;
+
+    const usados={}; let unidades=0; let k=qty;
+    while(k>0 && prev[k]){
+      const step=prev[k];
+      if(step.tipo==='pack') usados[step.cantidad]=(usados[step.cantidad]||0)+1;
+      else unidades+=1;
+      k=step.from;
+    }
+    const partes=[];
+    Object.keys(usados).sort((a,b)=>Number(b)-Number(a)).forEach(c=>{
+      const n=usados[c]; partes.push(`${n} pack${n>1?'s':''} x${c}`);
+    });
+    if(unidades) partes.push(`${unidades} suelto${unidades>1?'s':''}`);
+    item.packInfo = total < unit*qty ? partes.join(' + ') : '';
   }
   function aplicarPrecioPackAutomatico(){
     cart.forEach(aplicarPrecioPackAutomaticoItem);
@@ -4209,7 +4241,7 @@ initMobileShell();
       <td style="text-align:right">
         <input type="number" value="${Math.round(item.precio)}" min="0" step="100" onchange="vPriceSet(${i},this.value)" oninput="vPriceSet(${i},this.value,false)" style="width:112px;text-align:right;padding:5px;font-weight:700;color:var(--accent2)">
       </td>
-      <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(item.precio*item.cantidad)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(item.subtotalCalculado ?? (item.precio*item.cantidad))}</td>
       <td><button onclick="vRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button></td>
     </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
     if(gs('v-count'))gs('v-count').textContent=cart.length;
@@ -4235,10 +4267,11 @@ initMobileShell();
     cart[i].precio=n;
     cart[i].precioManual=true;
     cart[i].packInfo='Precio manual';
+    cart[i].subtotalCalculado=n*cart[i].cantidad;
     updateVTotals();
     if(rerender)renderVentaTable();
     else{
-      const sub=cart[i].precio*cart[i].cantidad;
+      const sub=cart[i].subtotalCalculado ?? (cart[i].precio*cart[i].cantidad);
       const row=gs('venta-tbody')?.children?.[i];
       if(row&&row.children&&row.children[3])row.children[3].textContent=fmtGs(sub);
     }
