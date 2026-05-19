@@ -2811,6 +2811,285 @@ initMobileShell();
   try{ if(window.pages) pages.reportes=window.renderReportes; }catch(e){}
 })();
 
+
+
+// ─── OPTIMIZACIÓN CAJA/ARQUEO + USUARIOS/MÓDULOS ─────────────
+(function(){
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const moneyVal = id => Number(gs(id)?.value || 0) || 0;
+  let cajaVistaActual = 'actual';
+  let cajaFechaActual = '';
+
+  window.obtenerGastosCaja = async function(fecha, cajaId){
+    try{
+      let q = sb.from('bodega_caja_gastos').select('*').order('created_at',{ascending:false});
+      if(cajaId) q = q.eq('caja_id', cajaId); else q = q.eq('fecha', fecha);
+      const {data,error}=await q;
+      if(error) return {items:[],total:0,error};
+      const items=data||[];
+      return {items,total:items.reduce((s,g)=>s+(Number(g.monto)||0),0),error:null};
+    }catch(e){ return {items:[],total:0,error:e}; }
+  };
+
+  window.renderCaja = async function(){
+    const hoy=new Date().toISOString().split('T')[0];
+    const fecha=gs('caja-fecha')?.value || cajaFechaActual || hoy;
+    cajaFechaActual=fecha;
+    if(cajaVistaActual==='historial') return renderHistorialArqueosOptimizado(fecha);
+    const caja=await obtenerCajaFecha(fecha);
+    const ventas=await resumenVentasDia(fecha);
+    const gastos=await obtenerGastosCaja(fecha,caja?.id);
+    const apertura=Number(caja?.apertura_efectivo)||0;
+    const esperado=apertura+ventas.efectivo-gastos.total;
+    const dif=caja?.estado==='cerrada'?Number(caja.diferencia||0):null;
+    gs('content').innerHTML=`
+    ${cajaTabsHTML('actual',fecha)}
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja?.estado==='abierta'?'var(--green)':caja?.estado==='cerrada'?'var(--amber)':'var(--red)'}">${caja?caja.estado:'Sin abrir'}</div><div class="sub">${fmtDate(fecha)}</div></div>
+      <div class="stat-card"><div class="label">Apertura efectivo</div><div class="value">${fmtGs(apertura)}</div></div>
+      <div class="stat-card"><div class="label">Ventas efectivo</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">según ventas del día</div></div>
+      <div class="stat-card"><div class="label">Gastos varios</div><div class="value" style="color:var(--red)">${fmtGs(gastos.total)}</div><div class="sub">cargados en caja</div></div>
+      <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
+      ${dif!==null?`<div class="stat-card"><div class="label">Diferencia cierre</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div><div class="sub">contado - esperado</div></div>`:''}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Resumen de ventas del día</h3><span class="badge">${ventas.cantidad} ventas</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total ventas</th></tr></thead><tbody>
+        <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
+      </tbody></table></div>
+    </div>
+    ${!caja?cajaAperturaHTML(fecha):cajaGastosHTML(caja,fecha,gastos)+cajaCierreOptimizadoHTML(caja,ventas,esperado,gastos.total)}
+    `;
+    setTimeout(()=>{actualizarTotalConteo('ap');actualizarTotalConteo('ci');},50);
+  };
+
+  function cajaTabsHTML(active,fecha){
+    return `<div class="search-bar" style="align-items:end;flex-wrap:wrap">
+      <div class="form-group" style="max-width:180px"><label>Fecha de caja</label><input id="caja-fecha" type="date" value="${fecha}" onchange="cajaFechaActual=this.value;renderCaja()"></div>
+      <button class="btn ${active==='actual'?'btn-primary':'btn-secondary'}" onclick="cajaVistaActual='actual';renderCaja()">Caja del día</button>
+      <button class="btn ${active==='historial'?'btn-primary':'btn-secondary'}" onclick="cajaVistaActual='historial';renderCaja()">Historial de arqueos</button>
+      <button class="btn btn-secondary" onclick="renderCaja()">Actualizar</button>
+    </div>`;
+  }
+
+  function cajaGastosHTML(caja,fecha,gastos){
+    const rows=(gastos.items||[]).map(g=>`<tr>
+      <td>${escapeHtml(g.descripcion||'Gasto')}</td>
+      <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
+      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="borrarGastoCaja('${g.id}')">🗑</button></td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
+    return `<div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Gastos varios de caja</h3><span class="badge">Total: ${fmtGs(gastos.total||0)}</span></div>
+      <div style="padding:14px">
+        ${gastos.error?`<div class="alert alert-error">No se pudo leer bodega_caja_gastos. Ejecutá el SQL nuevo de gastos varios.</div>`:''}
+        <div class="form-grid" style="align-items:end">
+          <div class="form-group" style="grid-column:span 2"><label>Descripción</label><input id="cg-desc" placeholder="Ej: hielo, flete, merienda, vuelto entregado"></div>
+          <div class="form-group"><label>Monto</label><input id="cg-monto" type="number" value="0"></div>
+          <button class="btn btn-primary" onclick="agregarGastoCaja('${caja.id}','${fecha}')">+ Agregar gasto</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Descripción</th><th>Monto</th><th>Hora</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }
+
+  window.agregarGastoCaja = async function(cajaId,fecha){
+    const descripcion=(gs('cg-desc')?.value||'').trim();
+    const monto=moneyVal('cg-monto');
+    if(!descripcion){toast('Describí el gasto','err');return;}
+    if(monto<=0){toast('Monto inválido','err');return;}
+    const {error}=await sb.from('bodega_caja_gastos').insert({caja_id:cajaId,fecha,descripcion,monto});
+    if(error){toast('Error guardando gasto: '+error.message,'err');return;}
+    await recalcularCaja(cajaId);
+    toast('Gasto agregado');renderCaja();
+  };
+  window.borrarGastoCaja = async function(id){
+    if(!confirm('¿Borrar este gasto de caja?'))return;
+    let cajaId=null;
+    try{const {data}=await sb.from('bodega_caja_gastos').select('caja_id').eq('id',id).single();cajaId=data?.caja_id||null;}catch(e){}
+    const {error}=await sb.from('bodega_caja_gastos').delete().eq('id',id);
+    if(error){toast('Error: '+error.message,'err');return;}
+    if(cajaId) await recalcularCaja(cajaId);
+    toast('Gasto borrado');renderCaja();
+  };
+
+  function cajaCierreOptimizadoHTML(caja,ventas,esperado,totalGastos){
+    const cerrado=caja.estado==='cerrada';
+    const vals=cerrado?(caja.denominaciones_cierre||{}):{};
+    return `<div class="card"><div class="card-header"><h3>${cerrado?'Editar cierre de caja':'Cerrar caja / arqueo'}</h3><span class="badge">Sin reabrir caja</span></div><div style="padding:16px">
+      ${cerrado?`<div class="alert alert-warning">Esta caja ya fue cerrada. Podés corregir el conteo desde acá y queda guardado en el historial, sin reabrir la jornada.</div>`:''}
+      ${cajaInputRows('ci',vals)}
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Transferencia contada</label><input id="ci-transferencia" type="number" value="${caja.transferencia_contado||ventas.transferencia}"></div>
+        <div class="form-group"><label>QR contado</label><input id="ci-qr" type="number" value="${caja.qr_contado||ventas.qr}"></div>
+        <div class="form-group"><label>Débito contado</label><input id="ci-debito" type="number" value="${caja.debito_contado||ventas.debito}"></div>
+        <div class="form-group"><label>Crédito contado</label><input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}"></div>
+        <div class="form-group"><label>Gastos varios calculados</label><input type="number" value="${totalGastos}" disabled></div>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${escapeHtml(caja.notas_cierre||'')}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn-primary" onclick="cerrarCaja('${caja.id}',${esperado})">${cerrado?'Guardar edición de cierre':'Cerrar caja'}</button>
+        <button class="btn btn-secondary" onclick="imprimirArqueo('${caja.id}')">Imprimir/PDF</button>
+        <button class="btn btn-secondary" onclick="cajaVistaActual='historial';renderCaja()">Ver historial</button>
+      </div>
+    </div></div>`;
+  }
+
+  window.cerrarCaja = async function(id,esperadoFinal){
+    const c=leerConteo('ci');
+    const diferencia=c.total-esperadoFinal;
+    const obj={estado:'cerrada',denominaciones_cierre:c.denoms,efectivo_contado:c.total,transferencia_contado:moneyVal('ci-transferencia'),qr_contado:moneyVal('ci-qr'),debito_contado:moneyVal('ci-debito'),credito_contado:moneyVal('ci-credito'),gastos_caja:0,diferencia,notas_cierre:gs('ci-notas')?.value||null,closed_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+    const gastos=await obtenerGastosCaja('',id); obj.gastos_caja=gastos.total||0;
+    const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
+    if(error){toast('Error al guardar cierre: '+error.message,'err');return;}
+    toast('Cierre guardado. Diferencia: '+fmtGs(diferencia));renderCaja();
+  };
+
+  async function recalcularCaja(id){
+    try{
+      const {data:caja}=await sb.from('bodega_caja').select('*').eq('id',id).single(); if(!caja) return;
+      const ventas=await resumenVentasDia(caja.fecha);
+      const gastos=await obtenerGastosCaja(caja.fecha,id);
+      const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
+      const diferencia=(Number(caja.efectivo_contado)||0)-esperado;
+      await sb.from('bodega_caja').update({gastos_caja:gastos.total||0,diferencia,updated_at:new Date().toISOString()}).eq('id',id);
+    }catch(e){console.warn('No se pudo recalcular caja',e.message);}
+  }
+
+  async function renderHistorialArqueosOptimizado(fechaRef){
+    const hasta=fechaRef || new Date().toISOString().split('T')[0];
+    const desde=new Date(new Date(hasta+'T00:00:00').getTime()-1000*60*60*24*60).toISOString().split('T')[0];
+    const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(90);
+    const rows=error?`<tr><td colspan="9" class="alert-error">Error: ${escapeHtml(error.message)}</td></tr>`:(data||[]).map(c=>`<tr>
+      <td>${fmtDate(c.fecha)}</td><td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
+      <td>${fmtGs(c.apertura_efectivo)}</td><td>${fmtGs(c.gastos_caja)}</td><td>${fmtGs(c.efectivo_contado)}</td>
+      <td style="font-weight:700;color:${Number(c.diferencia||0)===0?'var(--green)':Number(c.diferencia||0)>0?'var(--amber)':'var(--red)'}">${fmtGs(c.diferencia)}</td>
+      <td>${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="irCajaFecha('${c.fecha}')">Editar cierre</button><button class="btn btn-secondary btn-sm" onclick="imprimirArqueo('${c.id}')">PDF</button></td>
+    </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
+    gs('content').innerHTML=`${cajaTabsHTML('historial',hasta)}
+    <div class="card"><div class="card-header"><h3>Historial de arqueos</h3><span class="badge">Últimos 60 días</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Apertura</th><th>Gastos</th><th>Efectivo contado</th><th>Diferencia</th><th>Cerrado</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }
+  window.irCajaFecha=function(fecha){cajaFechaActual=fecha;cajaVistaActual='actual';renderCaja();};
+
+  window.imprimirArqueo = async function(id){
+    const {data:caja}=await sb.from('bodega_caja').select('*').eq('id',id).single();
+    if(!caja){toast('No encontré la caja','err');return;}
+    const ventas=await resumenVentasDia(caja.fecha);
+    const gastos=await obtenerGastosCaja(caja.fecha,id);
+    const den=caja.denominaciones_cierre||{};
+    const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
+    const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
+    const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
+  };
+
+  // ─── USUARIOS Y PERMISOS DE MÓDULOS ───
+  const MODS=[
+    ['dashboard','Dashboard'],['productos','Productos'],['ventas','Nueva venta'],['historial-ventas','Historial ventas'],['caja','Caja / Arqueo'],['compras','Nueva compra'],['historial-compras','Historial compras'],['proveedores','Proveedores'],['ajustes','Ajuste de stock'],['reportes','Reportes'],['categorias','Categorías'],['usuarios','Usuarios']
+  ];
+  let usuarioActual=null, usuariosDisponibles=false;
+  const oldGoTo = window.goTo;
+  window.goTo = async function(page){
+    if(!usuarioPuede(page)){ toast('Este usuario no tiene acceso a este módulo','err'); return; }
+    return oldGoTo(page);
+  };
+  function usuarioPuede(page){
+    if(!usuariosDisponibles || !usuarioActual) return true;
+    if(usuarioActual.rol==='admin') return true;
+    const mods=usuarioActual.modulos||{}; return !!mods[page];
+  }
+  function applyUsuarioPermisos(){
+    MODS.forEach(([key])=>{const nav=gs('nav-'+key); if(nav) nav.style.display=usuarioPuede(key)?'flex':'none';});
+    const ub=gs('user-badge'); if(ub) ub.textContent=usuarioActual?`👤 ${usuarioActual.nombre}`:'👤 Sin usuario';
+  }
+  async function cargarUsuariosInicial(){
+    try{
+      const {data,error}=await sb.from('bodega_usuarios').select('*').eq('activo',true).order('created_at');
+      if(error){usuariosDisponibles=false;return;}
+      usuariosDisponibles=true;
+      const usuarios=data||[];
+      initUsuariosNav(); initUserBadge();
+      if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();return;}
+      const saved=localStorage.getItem('bg_usuario_actual');
+      if(saved){try{const obj=JSON.parse(saved); const ok=usuarios.find(u=>u.id===obj.id); if(ok) usuarioActual=ok;}catch(e){} }
+      if(!usuarioActual) mostrarLoginUsuarios(usuarios); else applyUsuarioPermisos();
+    }catch(e){usuariosDisponibles=false;}
+  }
+  const oldInitSB = window.initSB;
+  window.initSB = async function(url,key){
+    await oldInitSB(url,key);
+    if(window.sb || sb){ setTimeout(()=>cargarUsuariosInicial(),400); }
+  };
+
+  function initUserBadge(){
+    if(gs('user-badge')) return;
+    const top=document.getElementById('topbar'); if(!top) return;
+    const b=document.createElement('button'); b.id='user-badge'; b.className='btn btn-secondary btn-sm'; b.textContent='👤 Usuario'; b.onclick=()=>mostrarMenuUsuario();
+    top.appendChild(b);
+  }
+  function initUsuariosNav(){
+    if(gs('nav-usuarios')) return;
+    const nav=document.querySelector('#sidebar nav'); if(!nav) return;
+    const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico">👥</span> Usuarios';
+    nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
+  }
+  function mostrarLoginUsuarios(usuarios){
+    const opts=usuarios.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
+    openModal('Ingresar al sistema',`<div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1"><label>Usuario</label><select id="login-user">${opts}</select></div>
+      <div class="form-group" style="grid-column:1/-1"><label>PIN</label><input id="login-pin" type="password" inputmode="numeric" placeholder="PIN del usuario" onkeydown="if(event.key==='Enter')loginUsuarioSistema()"></div>
+      <div class="alert alert-warning" style="grid-column:1/-1">Control interno por usuario. Para seguridad fuerte habría que usar Supabase Auth y RLS por usuario.</div>
+    </div>`,()=>loginUsuarioSistema(),'Entrar');
+  }
+  window.loginUsuarioSistema = async function(){
+    const id=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
+    const {data,error}=await sb.from('bodega_usuarios').select('*').eq('id',id).eq('pin',pin).eq('activo',true).maybeSingle();
+    if(error||!data){toast('Usuario o PIN incorrecto','err');return;}
+    usuarioActual=data; localStorage.setItem('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); goTo('dashboard');
+  };
+  function mostrarMenuUsuario(){
+    openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
+  }
+  window.logoutUsuarioSistema=function(){localStorage.removeItem('bg_usuario_actual');usuarioActual=null;closeModal();cargarUsuariosInicial();};
+
+  async function renderUsuarios(){
+    const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
+    if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
+    const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')">🗑</button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
+    gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  }
+  function modsToText(u){ if(u.rol==='admin') return 'Todos'; const m=u.modulos||{}; return MODS.filter(([k])=>m[k]).map(x=>x[1]).join(', ')||'-'; }
+  window.openUsuarioModal=async function(id=null){
+    let u=null; if(id){const {data}=await sb.from('bodega_usuarios').select('*').eq('id',id).single();u=data;}
+    const isAdmin=(u?.rol||'usuario')==='admin'; const mods=u?.modulos||{};
+    const checks=MODS.filter(([k])=>k!=='usuarios').map(([k,t])=>`<label style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg3);border-radius:6px"><input type="checkbox" class="mod-check" value="${k}" ${isAdmin||mods[k]?'checked':''}> ${t}</label>`).join('');
+    openModal(id?'Editar usuario':'Nuevo usuario',`<div class="form-grid">
+      <div class="form-group"><label>Nombre</label><input id="usr-nombre" value="${escapeHtml(u?.nombre||'')}"></div>
+      <div class="form-group"><label>PIN</label><input id="usr-pin" type="text" inputmode="numeric" value="${escapeHtml(u?.pin||'')}"></div>
+      <div class="form-group"><label>Rol</label><select id="usr-rol" onchange="document.querySelectorAll('.mod-check').forEach(c=>c.disabled=this.value==='admin')"><option value="usuario" ${!isAdmin?'selected':''}>Usuario</option><option value="admin" ${isAdmin?'selected':''}>Administrador</option></select></div>
+      <div class="form-group"><label>Estado</label><select id="usr-activo"><option value="true" ${u?.activo!==false?'selected':''}>Activo</option><option value="false" ${u?.activo===false?'selected':''}>Inactivo</option></select></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Módulos visibles para usuario común</label><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">${checks}</div></div>
+    </div>`,()=>guardarUsuario(id));
+  };
+  window.guardarUsuario=async function(id=null){
+    const nombre=(gs('usr-nombre')?.value||'').trim(), pin=(gs('usr-pin')?.value||'').trim(), rol=gs('usr-rol')?.value||'usuario';
+    if(!nombre||!pin){toast('Nombre y PIN son obligatorios','err');return;}
+    const modulos={}; document.querySelectorAll('.mod-check').forEach(c=>{modulos[c.value]=c.checked;});
+    if(rol==='admin') MODS.forEach(([k])=>modulos[k]=true);
+    const obj={nombre,pin,rol,modulos,activo:gs('usr-activo')?.value==='true'};
+    const {error}=id?await sb.from('bodega_usuarios').update(obj).eq('id',id):await sb.from('bodega_usuarios').insert(obj);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Usuario guardado');closeModal();await cargarUsuariosInicial();renderUsuarios();
+  };
+  window.desactivarUsuario=async function(id){if(!confirm('¿Desactivar este usuario?'))return;const {error}=await sb.from('bodega_usuarios').update({activo:false}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Usuario desactivado');renderUsuarios();};
+
+  // Si este parche se carga después de que el sistema ya conectó, inicializa también.
+  setTimeout(()=>{try{initUsuariosNav(); initUserBadge(); if(sb) cargarUsuariosInicial(); titles.caja='Caja / Arqueo'; pages.caja=renderCaja;}catch(e){}},800);
+})();
 </script>
 </body>
 </html>
