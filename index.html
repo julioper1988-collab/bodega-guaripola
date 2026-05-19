@@ -1329,8 +1329,8 @@ function setClienteFormFromData(d){
   if(!d) return;
   const ruc=(d.ruc||'').toString();
   const dv=(d.dv||'').toString();
-  const nombre=d.name||d.razon_social||d.razonSocial||d.nombre||d.nombre_comercial||d.nombreComercial||'';
-  const estado=d.state||d.estado||'';
+  const nombre=d.razon_social||d.razonSocial||d.name||d.nombre||d.nombre_comercial||d.nombreComercial||'';
+  const estado=d.estado_ruc||d.state||d.estado||'';
   const comercial=d.nombre_comercial||d.nombreComercial||'';
 
   if(gs('cl-ruc') && ruc) gs('cl-ruc').value=dv?`${ruc}-${dv}`:ruc;
@@ -1341,55 +1341,88 @@ function setClienteFormFromData(d){
   if(gs('cl-estado-ruc')) gs('cl-estado-ruc').value=estado;
 }
 
-async function buscarRucCliente(){
-  const input=gs('cl-ruc');
-  if(!input){toast('No encontré el campo RUC','err');return;}
-  const info=normalizarRucPy(input.value);
-  if(!info.ruc || info.ruc.length<3){toast('Ingresá un RUC válido','err');return;}
-
+async function buscarRucEnClientesLocales(info){
   const local=(clienteCache||[]).find(c=>{
     const cr=(c.ruc||'').toString();
     const cd=(c.dv||'').toString();
     return cr===info.ruc || (cd && `${cr}-${cd}`===info.full);
   });
   if(local){
-    setClienteFormFromData({
-      ruc:local.ruc,dv:local.dv,name:local.razon_social||local.nombre,
-      nombre_comercial:local.nombre_comercial,state:local.estado_ruc
-    });
-    toast('Cliente encontrado en tu base');
+    return {
+      ruc:local.ruc,dv:local.dv,
+      razon_social:local.razon_social||local.nombre,
+      nombre_comercial:local.nombre_comercial,
+      estado_ruc:local.estado_ruc
+    };
+  }
+  return null;
+}
+
+async function buscarRucEnCacheSupabase(info){
+  try{
+    let q=sb.from('bodega_rucs_cache').select('*').eq('full_ruc',info.full).limit(1);
+    let {data,error}=await q;
+    if(error) throw error;
+    if(data && data.length) return data[0];
+
+    let q2=sb.from('bodega_rucs_cache').select('*').eq('ruc',info.ruc).limit(1);
+    if(info.dv) q2=q2.eq('dv',info.dv);
+    const r2=await q2;
+    if(r2.error) throw r2.error;
+    if(r2.data && r2.data.length) return r2.data[0];
+  }catch(e){
+    console.warn('No se pudo consultar cache RUC:', e.message);
+  }
+  return null;
+}
+
+async function guardarRucCache(obj){
+  try{
+    if(!obj || !obj.ruc || !(obj.razon_social||obj.nombre)) return;
+    const full=obj.dv?`${obj.ruc}-${obj.dv}`:obj.ruc;
+    await sb.from('bodega_rucs_cache').upsert({
+      full_ruc:full,
+      ruc:obj.ruc,
+      dv:obj.dv||null,
+      razon_social:obj.razon_social||obj.nombre,
+      nombre_comercial:obj.nombre_comercial||null,
+      estado_ruc:obj.estado_ruc||null,
+      fuente:obj.fuente||'manual_cliente',
+      updated_at:new Date().toISOString()
+    },{onConflict:'full_ruc'});
+  }catch(e){
+    console.warn('No se pudo guardar cache RUC:', e.message);
+  }
+}
+
+async function buscarRucCliente(){
+  const input=gs('cl-ruc');
+  if(!input){toast('No encontré el campo RUC','err');return;}
+  const info=normalizarRucPy(input.value);
+  if(!info.ruc || info.ruc.length<3){toast('Ingresá un RUC válido','err');return;}
+
+  const local=await buscarRucEnClientesLocales(info);
+  if(local){
+    setClienteFormFromData(local);
+    toast('RUC encontrado en tus clientes');
     return;
   }
 
-  try{
-    toast('Buscando RUC...');
-    let resp=await fetch(`https://ruc.sun.com.py/api/ruc/${encodeURIComponent(info.full)}`,{headers:{'Accept':'application/json'}});
-    let data=null;
-    if(resp.ok) data=await resp.json();
-
-    if(!data || data.error || (!data.name && !data.ruc)){
-      resp=await fetch(`https://ruc.sun.com.py/api/search?q=${encodeURIComponent(info.full)}&state=ACTIVO`,{headers:{'Accept':'application/json'}});
-      if(resp.ok){
-        const arr=await resp.json();
-        data=Array.isArray(arr)?arr[0]:(arr?.results?.[0]||arr?.data?.[0]||null);
-      }
-    }
-
-    if(!data || (!data.name && !data.ruc)){
-      toast('No encontré datos para ese RUC','err');
-      return;
-    }
-
-    setClienteFormFromData(data);
-    toast('Datos del RUC cargados');
-  }catch(e){
-    console.warn('Error consultando RUC:',e);
-    toast('No se pudo consultar RUC. Podés cargarlo manualmente.','err');
+  const cache=await buscarRucEnCacheSupabase(info);
+  if(cache){
+    setClienteFormFromData(cache);
+    toast('RUC encontrado en tu base guardada');
+    return;
   }
+
+  toast('Ese RUC todavía no está guardado. Cargá los datos una vez y después se completará solo.','err');
 }
 
 openClienteModal = function(){
   openModal('Nuevo cliente',`
+    <div class="alert alert-warning" style="margin-bottom:14px">
+      🔎 El buscador primero revisa tus clientes y la tabla local de RUC. Si no encuentra, cargalo manualmente una vez y queda guardado para la próxima.
+    </div>
     <div class="form-grid">
       <div class="form-group">
         <label>RUC</label>
@@ -1398,9 +1431,9 @@ openClienteModal = function(){
           <button type="button" class="btn btn-secondary btn-sm" onclick="buscarRucCliente()">Buscar</button>
         </div>
       </div>
-      <div class="form-group"><label>DV</label><input id="cl-dv" placeholder="Auto"></div>
+      <div class="form-group"><label>DV</label><input id="cl-dv" placeholder="Auto o manual"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre / Razón social *</label><input id="cl-nombre" placeholder="Ej: Carlos o razón social"></div>
-      <div class="form-group" style="grid-column:1/-1"><label>Razón social</label><input id="cl-razon-social" placeholder="Se completa al buscar RUC"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Razón social</label><input id="cl-razon-social" placeholder="Se guarda para autocompletar por RUC"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre comercial</label><input id="cl-nombre-comercial" placeholder="Opcional"></div>
       <div class="form-group"><label>Estado RUC</label><input id="cl-estado-ruc" placeholder="ACTIVO / BLOQUEADO / etc."></div>
       <div class="form-group"><label>Teléfono</label><input id="cl-telefono" placeholder="Opcional"></div>
@@ -1413,11 +1446,13 @@ saveCliente = async function(){
   const nombre=gs('cl-nombre').value.trim();
   if(!nombre){toast('Nombre obligatorio','err');return;}
   const nr=normalizarRucPy(gs('cl-ruc')?.value||'');
+  const dv=(gs('cl-dv')?.value||nr.dv||'').trim();
+  const razon=(gs('cl-razon-social')?.value||nombre).trim();
   const obj={
     nombre,
     ruc:nr.ruc||null,
-    dv:(gs('cl-dv')?.value||nr.dv||'')||null,
-    razon_social:gs('cl-razon-social')?.value||nombre,
+    dv:dv||null,
+    razon_social:razon||nombre,
     nombre_comercial:gs('cl-nombre-comercial')?.value||null,
     estado_ruc:gs('cl-estado-ruc')?.value||null,
     telefono:gs('cl-telefono').value||null,
@@ -1430,7 +1465,8 @@ saveCliente = async function(){
     toast('Error cliente: '+error.message,'err');
     return;
   }
-  toast('Cliente guardado');
+  await guardarRucCache({...obj, fuente:'manual_cliente'});
+  toast('Cliente guardado y RUC cacheado');
   closeModal();
   await cargarClientes();
   const box=gs('v-cliente-box');
