@@ -297,6 +297,14 @@ function escapeHtml(value){
     return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]);
   });
 }
+
+function embEsc(value){
+  return escapeHtml(value);
+}
+function embQ(value){
+  return String(value ?? '').split('\\').join('\\\\').split("'").join("\\'").split('\n').join(' ');
+}
+
 function getCatName(id){const c=catCache.find(x=>x.id===id);return c?.nombre||'-';}
 function getCatColor(id){const c=catCache.find(x=>x.id===id);return c?.color||'#6b7280';}
 
