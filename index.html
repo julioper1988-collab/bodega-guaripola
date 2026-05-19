@@ -829,6 +829,216 @@ body.sidebar-collapsed #sidebar .cfg-btn::before{content:'⚙️';font-size:20px
   #venta-table thead th, thead th{font-size:12px;}
   .btn-sm{font-size:13px;padding:6px 11px;}
 </style>
+
+<!-- ═══════════════════════════════════════════════════════
+     MEJORAS MÓVIL Y CONTRASTE — BODEGA GUARIPOLA 2026
+     ═══════════════════════════════════════════════════════ -->
+<style id="mobile-contrast-boost">
+
+/* ── 1. VARIABLES DE COLOR: MAYOR CONTRASTE ─────────────── */
+:root {
+  --bg:      #0d1117;
+  --bg2:     #161b26;
+  --bg3:     #1e2535;
+  --border:  #3a4560;
+  --text:    #f1f5fb;
+  --text2:   #b0bdd4;
+  --accent:  #6366f1;
+  --accent2: #a5b4fc;
+  --green:   #4ade80;
+  --red:     #f87171;
+  --amber:   #fcd34d;
+  --teal:    #2dd4bf;
+}
+
+/* ── 2. TIPOGRAFÍA BASE MÁS LEGIBLE ─────────────────────── */
+body {
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.card-header h3  { font-size: 15px; font-weight: 700; color: var(--text); }
+thead th         { color: #c8d6ef !important; font-size: 12px !important; background: #1e2840 !important; }
+tbody td         { color: var(--text) !important; font-size: 14px; }
+.form-group label{ color: #c4cfe6 !important; font-size: 13px; font-weight: 600; }
+input, select, textarea {
+  color: #f1f5fb !important;
+  background: #1c2436 !important;
+  border-color: #48567a !important;
+  font-size: 15px;
+}
+input::placeholder, textarea::placeholder { color: #7a8faa !important; }
+.stat-card .label { color: #a8b8d0 !important; font-size: 11px; }
+.stat-card .value { color: var(--text) !important; }
+.stat-card .sub   { color: #8ba0bb !important; }
+
+/* ── 3. SIDEBAR MÁS LEGIBLE ─────────────────────────────── */
+#sidebar nav a            { color: #c8d5eb !important; font-size: 14px; }
+#sidebar nav a:hover      { color: #f1f5fb !important; background: #252e45; }
+#sidebar nav a.active     { color: var(--accent2) !important; }
+#sidebar .logo h1         { color: #f1f5fb; font-size: 15px; }
+#sidebar .logo p          { color: #8fa3be; }
+#sidebar .cfg-btn         { color: #8fa3be; font-size: 13px; }
+
+/* ── 4. TOPBAR ───────────────────────────────────────────── */
+#topbar h2    { font-size: 16px; font-weight: 700; color: #f1f5fb; }
+#db-badge     { font-size: 12px; color: #a8bbd0; }
+
+/* ── 5. BOTONES MÁS VISIBLES ─────────────────────────────── */
+.btn-primary   { background: var(--accent) !important; color: #fff !important; font-weight: 700; }
+.btn-secondary { background: #252e45 !important; color: #d8e4f5 !important; border-color: #3f4f6b !important; }
+.btn-danger    { color: var(--red) !important; border-color: #4a3548 !important; }
+.btn-green     { background: #16a34a !important; color: #fff !important; }
+.cobrar-btn    { font-size: 18px !important; font-weight: 800 !important; padding: 17px !important; }
+.pay-btn       { color: #e0eaff !important; background: #202b42 !important; border-color: #404f6d !important; font-size: 13px; }
+.pay-btn.active{ color: var(--accent2) !important; border-color: var(--accent) !important; background: rgba(99,102,241,.18) !important; }
+
+/* ── 6. MODAL MÁS LEGIBLE ────────────────────────────────── */
+.modal              { background: #161b26 !important; border-color: #3a4560 !important; }
+.modal-header h3    { font-size: 16px !important; color: #f1f5fb; font-weight: 800; }
+.modal-body         { color: var(--text); }
+.modal-footer       { background: #1a2030; }
+
+/* ── 7. BADGES Y ESTADOS ─────────────────────────────────── */
+.badge        { color: #c0d0e8 !important; background: #1e2840 !important; border-color: #3a4a68 !important; }
+.badge-cat    { font-weight: 700; font-size: 12px; }
+.estado-proceso   { color: #fcd34d !important; background: rgba(252,211,77,.12) !important; }
+.estado-finalizado{ color: #4ade80 !important; background: rgba(74,222,128,.12) !important; }
+.estado-cancelado { color: #f87171 !important; background: rgba(248,113,113,.12) !important; }
+
+/* ── 8. ALERTAS ─────────────────────────────────────────── */
+.alert-warning { color: #fcd34d !important; background: rgba(252,211,77,.08) !important; border-color: rgba(252,211,77,.3) !important; }
+.alert-error   { color: #f87171 !important; background: rgba(248,113,113,.08) !important; }
+
+/* ── 9. TOTAL Y VUELTO ───────────────────────────────────── */
+.total-display  { font-size: 32px !important; color: #a5b4fc !important; font-weight: 900 !important; }
+.vuelto-display { color: #4ade80 !important; font-size: 20px !important; font-weight: 800 !important; }
+
+/* ── 10. AUTOCOMPLETE ────────────────────────────────────── */
+.autocomplete-list { background: #1a2236 !important; border-color: #6366f1 !important; }
+.ac-item           { font-size: 15px; color: var(--text) !important; }
+.ac-item .ac-sub   { color: #9aabca !important; font-size: 12px; }
+.ac-item:hover, .ac-item.selected { background: #252f48 !important; }
+
+/* ── 11. TOAST ───────────────────────────────────────────── */
+.toast-msg { background: #1e2840 !important; color: #eef2ff !important; border-color: #3a4a68 !important; font-size: 14px; }
+
+/* ═══════════════════════════════════════════════════════════
+   MÓVIL: pantallas ≤ 900px
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+
+  /* Topbar más alto y legible */
+  #topbar {
+    height: 58px !important;
+    padding: 0 12px !important;
+    gap: 10px !important;
+  }
+  #topbar h2 {
+    font-size: 17px !important;
+    font-weight: 800 !important;
+  }
+
+  /* Botón hamburguesa más grande y visible */
+  .mobile-menu-btn {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    font-size: 22px !important;
+    border-radius: 10px !important;
+    background: #252f48 !important;
+    border-color: #404f6b !important;
+    color: #d8e8ff !important;
+  }
+
+  /* Content con padding cómodo */
+  #content { padding: 12px !important; }
+
+  /* Stats grid 2 columnas en móvil, 1 en muy pequeño */
+  .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+  .stat-card  { padding: 14px 12px !important; border-radius: 10px; }
+  .stat-card .value { font-size: 20px !important; font-weight: 800 !important; }
+  .stat-card .label { font-size: 10px !important; }
+
+  /* Tablas: scroll horizontal con indicador visual */
+  .card { overflow-x: auto; }
+  table { min-width: 680px; }
+  thead th { font-size: 11px !important; padding: 11px 10px !important; white-space: nowrap; }
+  tbody td  { font-size: 13px !important; padding: 12px 10px !important; }
+
+  /* Inputs y botones touch-friendly */
+  input, select, textarea {
+    font-size: 16px !important; /* evita zoom en iOS */
+    min-height: 48px !important;
+    padding: 12px 14px !important;
+    border-radius: 10px !important;
+  }
+  .btn         { min-height: 44px !important; font-size: 15px !important; padding: 10px 16px !important; border-radius: 10px !important; }
+  .btn-sm      { min-height: 38px !important; font-size: 13px !important; padding: 8px 12px !important; }
+  .cobrar-btn  { min-height: 60px !important; font-size: 20px !important; border-radius: 14px !important; }
+
+  /* Métodos de pago: 2 col cómodas */
+  .pay-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .pay-btn  { min-height: 52px !important; font-size: 14px !important; border-radius: 10px !important; }
+
+  /* Panel derecho de venta sticky al fondo */
+  #venta-right {
+    border-top: 2px solid var(--accent) !important;
+    box-shadow: 0 -6px 24px rgba(0,0,0,.4) !important;
+  }
+
+  /* Modal ocupa casi toda la pantalla */
+  .modal            { max-width: 97vw !important; max-height: 90dvh !important; border-radius: 14px 14px 0 0 !important; }
+  .modal-header     { padding: 16px 16px !important; }
+  .modal-header h3  { font-size: 17px !important; }
+  .modal-body       { padding: 14px !important; }
+  .modal-footer     { padding: 12px 14px !important; position: sticky; bottom: 0; z-index: 10; }
+  .modal-footer .btn{ min-height: 50px !important; font-size: 16px !important; flex: 1; justify-content: center; }
+
+  /* Form grid columna única */
+  .form-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .form-group label { font-size: 13px !important; font-weight: 700 !important; margin-bottom: 4px; }
+
+  /* Toast más visible y abajo del todo */
+  #toast { bottom: 72px !important; right: 12px !important; left: 12px !important; }
+  .toast-msg { font-size: 15px !important; padding: 12px 16px !important; border-radius: 10px !important; }
+
+  /* Sidebar más amplio y con buena tipografía */
+  #sidebar           { width: 270px !important; }
+  #sidebar nav a     { font-size: 15px !important; padding: 13px 18px !important; gap: 12px !important; }
+  #sidebar nav a .ico{ font-size: 18px !important; }
+  #sidebar .logo h1  { font-size: 16px !important; }
+  #sidebar .cfg-btn  { font-size: 13px !important; padding: 14px 18px !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MÓVIL PEQUEÑO: pantallas ≤ 480px
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .stats-grid  { grid-template-columns: 1fr !important; }
+  #topbar h2   { font-size: 15px !important; }
+  .card-header { flex-wrap: wrap; gap: 8px !important; padding: 12px !important; }
+  .card-header h3 { font-size: 15px !important; width: 100%; }
+  .cobrar-btn  { font-size: 19px !important; }
+  .total-display { font-size: 30px !important; }
+  /* Overflow horizontal con flechita de pista */
+  .card::after {
+    content: '';
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,.4), transparent);
+    border-radius: 2px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DETALLE: scrollbar más fino y elegante
+   ═══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: #3a4a68; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #505f88; }
+
+</style>
 </head>
 <body>
 
