@@ -350,31 +350,65 @@
   window.renderInvProductList = function(){
     const el=gs('inv-product-list'); if(!el) return;
     const q=(gs('inv-search')?.value??invSearch).trim();
-    let results;
+
+    // Sin búsqueda: mostrar solo 4 últimos agregados o mensaje
     if(!q){
-      results=prodCache.slice(0,120);
-    } else {
-      // Primero intentar por código exacto/flexible
-      const byCode=prodCache.filter(p=>invMatchCodigo(p.codigo_barra,q));
-      if(byCode.length){
-        results=byCode;
+      const recientes=invItems.slice(-4).reverse();
+      if(recientes.length){
+        el.innerHTML=`<div style="padding:10px 12px 4px;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Últimos agregados</div>`+
+          recientes.map(it=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);opacity:.7">
+              <div style="flex:1">
+                <div style="font-weight:800;font-size:14px">${htmlInv(it.nombre)}</div>
+                <div style="font-size:12px;color:var(--text2)">Stock sistema: <b>${it.stock_sistema}</b></div>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="addInvItem('${it.producto_id}')">+ Depósito</button>
+            </div>`).join('')+
+          `<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px">🔍 Escribí para buscar productos</div>`;
       } else {
-        results=prodCache.filter(p=>matchInvProducto(p,q)).slice(0,120);
+        el.innerHTML=`<div style="padding:32px 20px;text-align:center;color:var(--text2)">
+          <div style="font-size:32px;margin-bottom:10px">🔍</div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">Buscá un producto</div>
+          <div style="font-size:13px">Escribí el nombre o escaneá el código con 📷</div>
+        </div>`;
       }
+      return;
     }
+
+    // Con búsqueda: resultados filtrados
+    let results;
+    const byCode=prodCache.filter(p=>invMatchCodigo(p.codigo_barra,q));
+    if(byCode.length){
+      results=byCode;
+    } else {
+      results=prodCache.filter(p=>matchInvProducto(p,q)).slice(0,40);
+    }
+
+    if(!results.length){
+      el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text2)">Sin resultados para "<b>${htmlInv(q)}</b>"</div>`;
+      return;
+    }
+
     el.innerHTML=results.map(p=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="addInvItem('${p.id}')">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="invAgregarYLimpiar('${p.id}')">
         <div style="flex:1">
           <div style="font-weight:800;font-size:15px">${htmlInv(p.nombre)}</div>
           <div style="font-size:12px;color:var(--text2)">${htmlInv(p.codigo_barra||'-')} · Stock: <b style="color:var(--accent2)">${p.stock||0}</b></div>
         </div>
-        <button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="event.stopPropagation();addInvItem('${p.id}')">+ Contar</button>
-      </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--text2)">Sin resultados</div>';
+        <button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="event.stopPropagation();invAgregarYLimpiar('${p.id}')">+ Contar</button>
+      </div>`).join('');
+  };
+
+  // Agrega el producto y limpia la búsqueda
+  window.invAgregarYLimpiar = function(prodId){
+    addInvItem(prodId);
+    if(gs('inv-search')){ gs('inv-search').value=''; }
+    invSearch='';
+    renderInvProductList();
   };
 
   window.invSearchByCode = function(){
     const q=(gs('inv-search')?.value||'').trim(); if(!q) return;
-    // Búsqueda flexible por código
     let prod=prodCache.find(p=>invMatchCodigo(p.codigo_barra,q));
     if(!prod){
       for(const pid in embCache){
@@ -383,9 +417,7 @@
       }
     }
     if(prod){
-      addInvItem(prod.id);
-      gs('inv-search').value=''; invSearch='';
-      renderInvProductList();
+      invAgregarYLimpiar(prod.id);
     } else {
       renderInvProductList();
       toast('Código no encontrado: '+q,'err');
@@ -1624,6 +1656,106 @@ async function renderProductos(){
     </div>
   </div>`;
 }
+/* ── BLOQUEO GLOBAL DE SCROLL EN INPUTS NUMÉRICOS ── */
+document.addEventListener('wheel', function(e){
+  if(document.activeElement && document.activeElement.type==='number'){
+    e.preventDefault();
+  }
+},{passive:false});
+document.addEventListener('keydown', function(e){
+  if(document.activeElement && document.activeElement.type==='number'){
+    if(e.key==='ArrowUp'||e.key==='ArrowDown') e.preventDefault();
+  }
+});
+
+/* ── CALCULADORA INLINE PARA CAMPOS NUMÉRICOS ─────── */
+// mathInput(id, valor, {integer, mini})
+// Genera un input + botones + mini-calculadora interna
+function mathInput(id, val=0, opts={}){
+  const {integer=false, mini=false} = opts;
+  const step = integer ? 1 : 1000;
+  const btnH = mini ? '32px' : '38px';
+  const btnF = mini ? '13px' : '14px';
+  return `
+  <div class="math-input-wrap" id="miw-${id}">
+    <input id="${id}" type="number" value="${val}" inputmode="numeric"
+      style="border-radius:var(--radius) var(--radius) 0 0;border-bottom:none"
+      onwheel="event.preventDefault()"
+      onfocus="miShowCalc('${id}',${integer?'true':'false'})"
+    >
+    <div class="math-calc-bar" id="mic-${id}">
+      <button type="button" onclick="miOp('${id}','+',${step})" title="Sumar">＋</button>
+      <button type="button" onclick="miOp('${id}','-',${step})" title="Restar">－</button>
+      <button type="button" onclick="miOpPrompt('${id}','×')" title="Multiplicar">×</button>
+      <button type="button" onclick="miOpPrompt('${id}','÷')" title="Dividir">÷</button>
+      <button type="button" class="mi-ok" onclick="miHideCalc('${id}')" title="Confirmar">✓</button>
+    </div>
+  </div>`;
+}
+window.miShowCalc=function(id){
+  const bar=document.getElementById('mic-'+id);
+  if(bar) bar.classList.add('active');
+};
+window.miHideCalc=function(id){
+  const bar=document.getElementById('mic-'+id);
+  if(bar) bar.classList.remove('active');
+};
+window.miOp=function(id,op,step){
+  const inp=document.getElementById(id); if(!inp) return;
+  let v=parseFloat(inp.value)||0;
+  if(op==='+') v+=step;
+  else if(op==='-') v=Math.max(0,v-step);
+  inp.value=Number.isInteger(step)?Math.round(v):v;
+  inp.dispatchEvent(new Event('input',{bubbles:true}));
+};
+window.miOpPrompt=function(id,op){
+  const inp=document.getElementById(id); if(!inp) return;
+  const cur=parseFloat(inp.value)||0;
+  const sym=op==='×'?'multiplicar':'dividir';
+  const n=parseFloat(prompt(`¿Por cuánto querés ${sym} ${cur}?`));
+  if(isNaN(n)||n===0) return;
+  let v=op==='×'?cur*n:cur/n;
+  inp.value=Math.round(v);
+  inp.dispatchEvent(new Event('input',{bubbles:true}));
+};
+
+// CSS de la calculadora inline
+(function(){
+  const s=document.createElement('style');
+  s.textContent=`
+    /* Sin scroll ni flechas en cualquier input number */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    input[type=number]{ -moz-appearance:textfield; }
+
+    /* Wrapper de mathInput */
+    .math-input-wrap { display:flex; flex-direction:column; }
+    .math-input-wrap input { border-radius:var(--radius) var(--radius) 0 0 !important; border-bottom-color:transparent !important; }
+
+    /* Barra de botones — oculta por defecto, aparece al enfocar */
+    .math-calc-bar {
+      display:none;
+      flex-direction:row;
+      background:#1a2236;
+      border:1px solid var(--accent);
+      border-top:none;
+      border-radius:0 0 var(--radius) var(--radius);
+      overflow:hidden;
+    }
+    .math-calc-bar.active { display:flex; }
+    .math-calc-bar button {
+      flex:1; border:none; background:none; color:var(--text);
+      font-size:16px; font-weight:700; padding:6px 2px; cursor:pointer;
+      border-right:1px solid var(--border); transition:background .12s;
+    }
+    .math-calc-bar button:last-child { border-right:none; }
+    .math-calc-bar button:hover { background:#252f48; color:var(--accent2); }
+    .math-calc-bar button.mi-ok { color:var(--green); font-size:18px; }
+    .math-calc-bar button.mi-ok:hover { background:rgba(74,222,128,.12); }
+  `;
+  document.head.appendChild(s);
+})();
+
 function openProdModal(prod=null){
   openModal(prod?'Editar producto':'Nuevo producto',`<div class="form-grid">
     <div class="form-group"><label>Código de barra</label><input id="p-cod" value="${prod?.codigo_barra||''}"></div>
@@ -1631,11 +1763,11 @@ function openProdModal(prod=null){
     <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
     <div class="form-group"><label>Proveedor</label><select id="p-prov"><option value="">Sin proveedor</option>${provCache.map(p=>`<option value="${p.id}" ${prod?.proveedor_id===p.id?'selected':''}>${p.nombre}</option>`).join('')}</select></div>
     <div class="form-group"><label>Unidad</label><select id="p-uni">${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}</select></div>
-    <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
-    <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
-    <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}"></div>
-    <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}"></div>
-    <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}"></div>
+    <div class="form-group"><label>Stock actual</label>${mathInput('p-stock', prod?.stock||0, {integer:true})}</div>
+    <div class="form-group"><label>Stock mínimo</label>${mathInput('p-stmin', prod?.stock_minimo||0, {integer:true})}</div>
+    <div class="form-group"><label>Precio costo (Gs.)</label>${mathInput('p-costo', prod?.precio_costo||0)}</div>
+    <div class="form-group"><label>Precio venta (Gs.)</label>${mathInput('p-venta', prod?.precio_venta||0)}</div>
+    <div class="form-group"><label>Precio mayorista (Gs.)</label>${mathInput('p-mayor', prod?.precio_mayorista||0)}</div>
     <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${prod?.notas||''}</textarea></div>
   </div>`,()=>saveProd(prod?.id));
 }
@@ -1663,11 +1795,11 @@ async function openEmbModal(prodId,prodNombre){
   <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px">
     <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">NUEVA PRESENTACIÓN</div>
     <div class="emb-row-inputs">
-      <div class="form-group"><label>Cant. uds</label><input id="emb-cant" type="number" value="3" min="1"></div>
+      <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
       <div class="form-group"><label>Código barra del pack</label><input id="emb-cod" placeholder="Ej: 7840050026393"></div>
-      <div class="form-group"><label>P. Costo</label><input id="emb-costo" type="number" value="0"></div>
-      <div class="form-group"><label>P. Venta</label><input id="emb-venta" type="number" value="0"></div>
-      <div class="form-group"><label>P. Mayorista</label><input id="emb-mayor" type="number" value="0"></div>
+      <div class="form-group"><label>P. Costo</label>${mathInput('emb-costo',0,{mini:true})}</div>
+      <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
+      <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
       <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="saveEmb('${prodId}','${prodNombre.replace(/'/g,"\\'")}')">+ Agregar</button></div>
     </div>
   </div>
@@ -3527,11 +3659,11 @@ initMobileShell();
       <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
       <div class="form-group"><label>Proveedor</label><select id="p-prov"><option value="">Sin proveedor</option>${provCache.map(pr=>`<option value="${pr.id}" ${prod?.proveedor_id===pr.id?'selected':''}>${escapeHtml(pr.nombre)}</option>`).join('')}</select></div>
       <div class="form-group"><label>Unidad</label><select id="p-uni">${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}</select></div>
-      <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
-      <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
-      <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}"></div>
-      <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}"></div>
-      <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}"></div>
+      <div class="form-group"><label>Stock actual</label>${mathInput('p-stock', prod?.stock||0, {integer:true})}</div>
+      <div class="form-group"><label>Stock mínimo</label>${mathInput('p-stmin', prod?.stock_minimo||0, {integer:true})}</div>
+      <div class="form-group"><label>Precio costo (Gs.)</label>${mathInput('p-costo', prod?.precio_costo||0)}</div>
+      <div class="form-group"><label>Precio venta (Gs.)</label>${mathInput('p-venta', prod?.precio_venta||0)}</div>
+      <div class="form-group"><label>Precio mayorista (Gs.)</label>${mathInput('p-mayor', prod?.precio_mayorista||0)}</div>
       <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
     </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
   };
