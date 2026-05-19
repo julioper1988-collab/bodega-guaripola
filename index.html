@@ -3687,6 +3687,218 @@ initMobileShell();
   try{ titles.reportes='Reportes'; pages.reportes=window.renderReportes; }catch(e){}
 })();
 
+
+
+/* ===== PATCH CLIENTES + DEUDAS / FIADOS ===== */
+(function(){
+  function esc(v){
+    try{ if(typeof escapeHtml==='function') return escapeHtml(v); }catch(e){}
+    return String(v ?? '').replace(/[&<>'"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  }
+  function money(n){ try{return fmtGs(Number(n)||0);}catch(e){return 'Gs. '+(Number(n)||0).toLocaleString('es-PY');} }
+  function norm(s){return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+  function onlyNum(s){return String(s||'').replace(/[^0-9]/g,'');}
+  function safeDate(d){try{return fmtDate(d);}catch(e){return d||'-';}}
+  function ensureClientesNav(){
+    if(document.getElementById('nav-clientes')) return;
+    const nav=document.querySelector('#sidebar nav'); if(!nav) return;
+    const a=document.createElement('a');
+    a.onclick=()=>goTo('clientes');
+    a.id='nav-clientes';
+    a.innerHTML='<span class="ico">👤</span> Clientes / Deudas';
+    const ref=document.getElementById('nav-historial-ventas') || document.getElementById('nav-ventas');
+    if(ref && ref.nextSibling) nav.insertBefore(a, ref.nextSibling); else nav.appendChild(a);
+  }
+  function deudaBadge(deuda){
+    const color=deuda>0?'var(--red)':'var(--green)';
+    const txt=deuda>0?'Debe':'Al día';
+    return `<span class="estado-badge" style="background:${deuda>0?'rgba(239,68,68,.15)':'rgba(34,197,94,.15)'};color:${color}">${txt}</span>`;
+  }
+  async function loadClientesData(){
+    const [clientesR, fiadosR, ventasR, pagosR]=await Promise.all([
+      sb.from('bodega_clientes').select('*').order('nombre'),
+      sb.from('bodega_fiados').select('*').order('fecha',{ascending:false}),
+      sb.from('bodega_ventas').select('id,fecha,created_at,cliente_nombre,total_final,metodo_pago').order('created_at',{ascending:false}).limit(3000),
+      sb.from('bodega_pagos_fiado').select('*').order('created_at',{ascending:false}).limit(1000).then(r=>r).catch(e=>({data:[],error:e}))
+    ]);
+    if(clientesR.error) throw clientesR.error;
+    return {clientes:clientesR.data||[], fiados:fiadosR.data||[], ventas:ventasR.data||[], pagos:pagosR.data||[]};
+  }
+  function matchCliente(cliente, row){
+    if(!row) return false;
+    const cn=norm(cliente?.nombre||cliente?.razon_social||'');
+    const rn=norm(cliente?.razon_social||cliente?.nombre||'');
+    const ruc=onlyNum(cliente?.ruc||'');
+    if(row.cliente_id && cliente.id && row.cliente_id===cliente.id) return true;
+    const rowName=norm(row.cliente_nombre||'');
+    const rowRuc=onlyNum(row.cliente_ruc||row.ruc||'');
+    return (!!rowName && (rowName===cn || rowName===rn)) || (!!ruc && !!rowRuc && rowRuc===ruc);
+  }
+  function calcResumenCliente(cliente, data){
+    const fiados=data.fiados.filter(f=>matchCliente(cliente,f));
+    const ventas=data.ventas.filter(v=>matchCliente(cliente,v));
+    const deuda=fiados.reduce((s,f)=>s+(Number(f.saldo ?? f.monto_total ?? 0)||0),0);
+    const fiadoTotal=fiados.reduce((s,f)=>s+(Number(f.monto_total)||0),0);
+    const pagadoFiado=fiados.reduce((s,f)=>s+(Number(f.monto_pagado)||0),0);
+    const comprado=ventas.reduce((s,v)=>s+(Number(v.total_final)||0),0);
+    const ultima=ventas[0]?.fecha || fiados[0]?.fecha || null;
+    return {fiados,ventas,deuda,fiadoTotal,pagadoFiado,comprado,ultima};
+  }
+  window.renderClientes = async function(){
+    ensureClientesNav();
+    const content=gs('content');
+    content.className='';
+    content.innerHTML='<div style="color:var(--text2);padding:40px;text-align:center"><div class="spinner" style="margin:0 auto 12px"></div>Cargando clientes...</div>';
+    try{
+      const data=await loadClientesData();
+      const q=norm(localStorage.getItem('bg_clientes_q')||'');
+      const filtro=localStorage.getItem('bg_clientes_filtro')||'todos';
+      const rowsData=data.clientes.map(c=>({cliente:c,res:calcResumenCliente(c,data)})).filter(x=>{
+        const c=x.cliente, r=x.res;
+        const text=norm([c.nombre,c.razon_social,c.nombre_comercial,c.ruc,c.telefono].join(' '));
+        if(q && !text.includes(q)) return false;
+        if(filtro==='deuda' && !(r.deuda>0)) return false;
+        if(filtro==='aldia' && r.deuda>0) return false;
+        return true;
+      });
+      const totalDeuda=rowsData.reduce((s,x)=>s+x.res.deuda,0);
+      const conDeuda=rowsData.filter(x=>x.res.deuda>0).length;
+      const totalComprado=rowsData.reduce((s,x)=>s+x.res.comprado,0);
+      const rows=rowsData.sort((a,b)=>b.res.deuda-a.res.deuda || String(a.cliente.nombre||'').localeCompare(String(b.cliente.nombre||''))).map(({cliente:c,res:r})=>`<tr>
+        <td><div style="font-weight:700">${esc(c.nombre||c.razon_social||'-')}</div><div style="font-size:11px;color:var(--text2)">${esc(c.ruc?('RUC '+c.ruc+(c.dv?'-'+c.dv:'')):(c.telefono||''))}</div></td>
+        <td>${deudaBadge(r.deuda)}</td>
+        <td style="font-weight:800;color:${r.deuda>0?'var(--red)':'var(--green)'}">${money(r.deuda)}</td>
+        <td>${money(r.comprado)}</td>
+        <td>${r.ventas.length}</td>
+        <td>${safeDate(r.ultima)}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="verCuentaCliente('${c.id}')">Ver cuenta</button>
+          <button class="btn btn-green btn-sm" onclick="registrarPagoCliente('${c.id}')" ${r.deuda>0?'':'disabled style="opacity:.45;cursor:not-allowed"'}>Cobrar</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarClienteDesdeModulo('${c.id}')">✏️</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:20px">Sin clientes con ese filtro.</td></tr>';
+      content.innerHTML=`
+        <div class="stats-grid">
+          <div class="stat-card"><div class="label">Clientes</div><div class="value">${rowsData.length}</div><div class="sub">${conDeuda} con deuda</div></div>
+          <div class="stat-card"><div class="label">Deuda total</div><div class="value" style="color:var(--red)">${money(totalDeuda)}</div><div class="sub">Fiados pendientes</div></div>
+          <div class="stat-card"><div class="label">Compras de clientes</div><div class="value" style="color:var(--accent2)">${money(totalComprado)}</div><div class="sub">Últimas ventas guardadas</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Clientes / Deudas</h3><button class="btn btn-primary" onclick="openClienteModal()">+ Cliente</button></div>
+          <div style="padding:14px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 180px auto;gap:8px;align-items:end">
+            <div class="form-group"><label>Buscar cliente, RUC o teléfono</label><input id="cli-search" value="${esc(localStorage.getItem('bg_clientes_q')||'')}" placeholder="Ej: Juan, 800..., 0981..." oninput="localStorage.setItem('bg_clientes_q',this.value);renderClientes()"></div>
+            <div class="form-group"><label>Filtro</label><select id="cli-filtro" onchange="localStorage.setItem('bg_clientes_filtro',this.value);renderClientes()"><option value="todos" ${filtro==='todos'?'selected':''}>Todos</option><option value="deuda" ${filtro==='deuda'?'selected':''}>Solo con deuda</option><option value="aldia" ${filtro==='aldia'?'selected':''}>Al día</option></select></div>
+            <button class="btn btn-secondary" onclick="localStorage.removeItem('bg_clientes_q');localStorage.setItem('bg_clientes_filtro','todos');renderClientes()">Limpiar</button>
+          </div>
+          <div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Estado</th><th>Deuda</th><th>Total comprado</th><th>Ventas</th><th>Última compra</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
+        </div>`;
+    }catch(e){
+      console.error(e);
+      content.innerHTML=`<div class="alert alert-error">No pude cargar clientes/deudas: ${esc(e.message||e)}. Revisá que existan las tablas bodega_clientes y bodega_fiados.</div>`;
+    }
+  };
+  window.verCuentaCliente = async function(clienteId){
+    try{
+      const data=await loadClientesData();
+      const cliente=data.clientes.find(c=>c.id===clienteId);
+      if(!cliente){toast('Cliente no encontrado','err');return;}
+      const r=calcResumenCliente(cliente,data);
+      const fiadoRows=r.fiados.map(f=>`<tr><td>${safeDate(f.fecha)}</td><td>${esc(f.estado||'-')}</td><td>${money(f.monto_total)}</td><td>${money(f.monto_pagado)}</td><td style="font-weight:700;color:${(Number(f.saldo)||0)>0?'var(--red)':'var(--green)'}">${money(f.saldo)}</td><td>${esc(f.notas||'')}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:14px">Sin fiados.</td></tr>';
+      const ventasRows=r.ventas.slice(0,50).map(v=>`<tr><td>${safeDate(v.fecha)}</td><td>${esc(v.metodo_pago||'-')}</td><td>${money(v.total_final)}</td><td><button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button></td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin ventas.</td></tr>';
+      openModal('Cuenta de cliente',`
+        <div class="stats-grid" style="margin-bottom:14px">
+          <div class="stat-card"><div class="label">Cliente</div><div class="value" style="font-size:17px">${esc(cliente.nombre||cliente.razon_social||'-')}</div><div class="sub">${esc(cliente.ruc?('RUC '+cliente.ruc+(cliente.dv?'-'+cliente.dv:'')):'')}</div></div>
+          <div class="stat-card"><div class="label">Deuda actual</div><div class="value" style="color:${r.deuda>0?'var(--red)':'var(--green)'}">${money(r.deuda)}</div></div>
+          <div class="stat-card"><div class="label">Total comprado</div><div class="value" style="color:var(--accent2)">${money(r.comprado)}</div><div class="sub">${r.ventas.length} ventas</div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn btn-green" onclick="registrarPagoCliente('${cliente.id}')" ${r.deuda>0?'':'disabled'}>Registrar pago</button><button class="btn btn-secondary" onclick="editarClienteDesdeModulo('${cliente.id}')">Editar cliente</button></div>
+        <h3 style="font-size:14px;margin:12px 0 8px">Fiados / deudas</h3><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Notas</th></tr></thead><tbody>${fiadoRows}</tbody></table></div>
+        <h3 style="font-size:14px;margin:16px 0 8px">Últimas ventas</h3><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Pago</th><th>Total</th><th></th></tr></thead><tbody>${ventasRows}</tbody></table></div>
+      `,null,'');
+    }catch(e){toast('Error: '+(e.message||e),'err');}
+  };
+  window.registrarPagoCliente = async function(clienteId){
+    try{
+      const data=await loadClientesData();
+      const cliente=data.clientes.find(c=>c.id===clienteId);
+      if(!cliente){toast('Cliente no encontrado','err');return;}
+      const r=calcResumenCliente(cliente,data);
+      if(!(r.deuda>0)){toast('Este cliente no tiene deuda');return;}
+      openModal('Registrar pago de fiado',`
+        <div class="alert alert-warning">Cliente: <b>${esc(cliente.nombre||cliente.razon_social||'-')}</b><br>Deuda actual: <b>${money(r.deuda)}</b></div>
+        <div class="form-grid">
+          <div class="form-group"><label>Monto pagado</label><input id="pago-fiado-monto" type="number" value="${Math.round(r.deuda)}"></div>
+          <div class="form-group"><label>Método de pago</label><select id="pago-fiado-metodo"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="qr">QR</option><option value="debito">Débito</option><option value="credito">Crédito</option></select></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="pago-fiado-notas" rows="2" placeholder="Ej: pago parcial, transferencia..."></textarea></div>
+        </div>
+      `,()=>guardarPagoCliente(cliente.id),'Guardar pago');
+    }catch(e){toast('Error: '+(e.message||e),'err');}
+  };
+  window.guardarPagoCliente = async function(clienteId){
+    try{
+      let monto=Number(gs('pago-fiado-monto')?.value)||0;
+      const metodo=gs('pago-fiado-metodo')?.value||'efectivo';
+      const notas=gs('pago-fiado-notas')?.value||null;
+      if(monto<=0){toast('Ingresá un monto válido','err');return;}
+      const data=await loadClientesData();
+      const cliente=data.clientes.find(c=>c.id===clienteId);
+      const deudas=calcResumenCliente(cliente,data).fiados.filter(f=>(Number(f.saldo)||0)>0).sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')));
+      let restante=monto;
+      for(const f of deudas){
+        if(restante<=0) break;
+        const saldo=Number(f.saldo)||0;
+        const aplicado=Math.min(saldo,restante);
+        const nuevoPagado=(Number(f.monto_pagado)||0)+aplicado;
+        const nuevoSaldo=Math.max(0,saldo-aplicado);
+        const estado=nuevoSaldo<=0?'pagado':'pendiente';
+        const {error}=await sb.from('bodega_fiados').update({monto_pagado:nuevoPagado,saldo:nuevoSaldo,estado}).eq('id',f.id);
+        if(error) throw error;
+        await sb.from('bodega_pagos_fiado').insert({fiado_id:f.id,cliente_id:clienteId,cliente_nombre:cliente.nombre||cliente.razon_social,monto:aplicado,metodo_pago:metodo,notas}).then(()=>{}).catch(()=>{});
+        restante-=aplicado;
+      }
+      toast('Pago registrado: '+money(monto-restante));
+      closeModal();
+      renderClientes();
+    }catch(e){toast('Error registrando pago: '+(e.message||e),'err');}
+  };
+  window.editarClienteDesdeModulo = async function(clienteId){
+    try{
+      const {data,error}=await sb.from('bodega_clientes').select('*').eq('id',clienteId).single();
+      if(error) throw error;
+      openModal('Editar cliente',`
+        <div class="form-grid">
+          <div class="form-group"><label>Nombre *</label><input id="edit-cli-nombre" value="${esc(data.nombre||'')}"></div>
+          <div class="form-group"><label>RUC</label><input id="edit-cli-ruc" value="${esc(data.ruc||'')}"></div>
+          <div class="form-group"><label>DV</label><input id="edit-cli-dv" value="${esc(data.dv||'')}"></div>
+          <div class="form-group"><label>Teléfono</label><input id="edit-cli-tel" value="${esc(data.telefono||'')}"></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="edit-cli-dir" value="${esc(data.direccion||'')}"></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="edit-cli-notas" rows="2">${esc(data.notas||'')}</textarea></div>
+        </div>
+      `,()=>guardarEdicionCliente(clienteId),'Guardar');
+    }catch(e){toast('Error: '+(e.message||e),'err');}
+  };
+  window.guardarEdicionCliente = async function(clienteId){
+    const obj={nombre:gs('edit-cli-nombre').value.trim(),ruc:gs('edit-cli-ruc').value.trim()||null,dv:gs('edit-cli-dv').value.trim()||null,telefono:gs('edit-cli-tel').value.trim()||null,direccion:gs('edit-cli-dir').value.trim()||null,notas:gs('edit-cli-notas').value||null};
+    if(!obj.nombre){toast('Nombre obligatorio','err');return;}
+    const {error}=await sb.from('bodega_clientes').update(obj).eq('id',clienteId);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Cliente actualizado');closeModal();renderClientes();
+  };
+  const oldGoTo=window.goTo || goTo;
+  window.goTo=async function(page){
+    ensureClientesNav();
+    if(page==='clientes'){
+      document.querySelectorAll('#sidebar nav a').forEach(a=>a.classList.remove('active'));
+      const nav=gs('nav-clientes'); if(nav) nav.classList.add('active');
+      gs('page-title').textContent='Clientes / Deudas';
+      await renderClientes(); return;
+    }
+    return oldGoTo(page);
+  };
+  try{ titles.clientes='Clientes / Deudas'; pages.clientes=renderClientes; }catch(e){}
+  document.addEventListener('DOMContentLoaded',ensureClientesNav);
+  setTimeout(ensureClientesNav,500);
+})();
 </script>
 </body>
 </html>
