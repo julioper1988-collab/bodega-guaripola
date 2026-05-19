@@ -292,6 +292,11 @@ async function loadCaches(){
 const gs=id=>document.getElementById(id);
 const fmtGs=n=>'Gs. '+(n||0).toLocaleString('es-PY');
 const fmtDate=d=>d?new Date(d+'T00:00:00').toLocaleDateString('es-PY'):'-';
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>'"]/g, function(ch){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]);
+  });
+}
 function getCatName(id){const c=catCache.find(x=>x.id===id);return c?.nombre||'-';}
 function getCatColor(id){const c=catCache.find(x=>x.id===id);return c?.color||'#6b7280';}
 
@@ -3090,6 +3095,287 @@ initMobileShell();
   // Si este parche se carga después de que el sistema ya conectó, inicializa también.
   setTimeout(()=>{try{initUsuariosNav(); initUserBadge(); if(sb) cargarUsuariosInicial(); titles.caja='Caja / Arqueo'; pages.caja=renderCaja;}catch(e){}},800);
 })();
+
+
+// ─── CAJA POR TURNOS / HISTORIAL SEPARADO (FIX MULTI-APERTURA) ───
+(function(){
+  const escapeHtml2 = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const moneyVal2 = id => Number(gs(id)?.value || 0) || 0;
+  let cajaTabTurno = 'actual';
+  let cajaHistFecha = new Date().toISOString().split('T')[0];
+  let cajaEditId = null;
+
+  function cajaTurnoTitulo(c){
+    if(!c) return 'Sin caja abierta';
+    const n = c.numero_caja ? `Caja #${c.numero_caja}` : 'Caja';
+    const turno = c.nombre_turno ? ` · ${escapeHtml2(c.nombre_turno)}` : '';
+    return `${n}${turno}`;
+  }
+
+  async function obtenerCajaAbierta(){
+    try{
+      const {data,error}=await sb.from('bodega_caja').select('*').eq('estado','abierta').order('opened_at',{ascending:false}).limit(1);
+      if(error) return null;
+      return (data||[])[0]||null;
+    }catch(e){return null;}
+  }
+
+  async function obtenerCajaPorId(id){
+    try{const {data}=await sb.from('bodega_caja').select('*').eq('id',id).single(); return data||null;}catch(e){return null;}
+  }
+
+  async function proximoNumeroCaja(fecha){
+    try{
+      const {data}=await sb.from('bodega_caja').select('id').eq('fecha',fecha);
+      return (data||[]).length+1;
+    }catch(e){return 1;}
+  }
+
+  async function resumenVentasCaja(caja){
+    if(!caja) return {efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:0};
+    let q=sb.from('bodega_ventas').select('*').eq('fecha',caja.fecha);
+    if(caja.opened_at) q=q.gte('created_at',caja.opened_at);
+    if(caja.closed_at) q=q.lte('created_at',caja.closed_at);
+    const {data,error}=await q;
+    if(error){
+      console.warn('No se pudo filtrar ventas por turno, usando resumen por día:', error.message);
+      return resumenVentasDia(caja.fecha);
+    }
+    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:(data||[]).length};
+    (data||[]).forEach(v=>{
+      const m=(v.metodo_pago||'').toLowerCase();
+      const t=Number(v.total_final)||0;
+      r.total+=t;
+      if(m==='efectivo') r.efectivo+=t;
+      else if(m==='transferencia') r.transferencia+=t;
+      else if(m==='qr') r.qr+=t;
+      else if(m==='debito') r.debito+=t;
+      else if(m==='credito') r.credito+=t;
+      else if(m==='fiado') r.fiado+=t;
+      else if(m==='mixto'){
+        r.mixto+=t;
+        r.efectivo+=Number(v.monto_efectivo)||0;
+        r.transferencia+=Number(v.monto_transferencia)||0;
+      }
+    });
+    return r;
+  }
+
+  window.obtenerGastosCaja = async function(fecha, cajaId){
+    try{
+      let q=sb.from('bodega_caja_gastos').select('*').order('created_at',{ascending:false});
+      if(cajaId) q=q.eq('caja_id',cajaId); else q=q.eq('fecha',fecha);
+      const {data,error}=await q;
+      if(error) return {items:[],total:0,error};
+      const items=data||[];
+      return {items,total:items.reduce((s,g)=>s+(Number(g.monto)||0),0),error:null};
+    }catch(e){return {items:[],total:0,error:e};}
+  };
+
+  function cajaTabsTurnoHTML(active){
+    return `<div class="search-bar" style="align-items:end;flex-wrap:wrap">
+      <button class="btn ${active==='actual'?'btn-primary':'btn-secondary'}" onclick="cajaTabTurno='actual';cajaEditId=null;renderCaja()">Caja actual</button>
+      <button class="btn ${active==='historial'?'btn-primary':'btn-secondary'}" onclick="cajaTabTurno='historial';cajaEditId=null;renderCaja()">Historial de arqueos</button>
+      <button class="btn btn-secondary" onclick="renderCaja()">Actualizar</button>
+    </div>`;
+  }
+
+  function cajaAperturaTurnoHTML(fecha){
+    return `<div class="card">
+      <div class="card-header"><h3>Abrir nueva caja</h3><span class="badge">Se puede abrir otra caja el mismo día</span></div>
+      <div style="padding:16px">
+        <div class="form-grid" style="margin-bottom:12px">
+          <div class="form-group"><label>Fecha</label><input id="ap-fecha" type="date" value="${fecha}"></div>
+          <div class="form-group"><label>Nombre del turno / caja</label><input id="ap-turno" placeholder="Ej: mañana, tarde, noche, caja 1"></div>
+          <div class="form-group"><label>Usuario apertura</label><input id="ap-usuario" placeholder="Ej: Julio, cajera"></div>
+        </div>
+        <div class="alert alert-warning">Contá el efectivo inicial de esta apertura. Al cerrar, el sistema compara: apertura + ventas en efectivo del turno - gastos.</div>
+        ${cajaInputRows('ap')}
+        <div class="form-group" style="margin-top:12px"><label>Notas de apertura</label><textarea id="ap-notas" rows="2" placeholder="Ej: cambio inicial, observaciones"></textarea></div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="abrirCajaTurno()">Abrir caja</button>
+      </div>
+    </div>`;
+  }
+
+  function cajaGastosTurnoHTML(caja, gastos){
+    const cerrado=caja.estado==='cerrada';
+    const rows=(gastos.items||[]).map(g=>`<tr>
+      <td>${escapeHtml2(g.descripcion||'Gasto')}</td>
+      <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
+      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
+      <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
+    return `<div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Gastos varios del turno</h3><span class="badge">Total: ${fmtGs(gastos.total||0)}</span></div>
+      <div style="padding:14px">
+        ${gastos.error?`<div class="alert alert-error">No se pudo leer bodega_caja_gastos. Ejecutá el SQL de gastos.</div>`:''}
+        ${cerrado?`<div class="alert alert-warning">Caja cerrada: los gastos quedan guardados en el historial.</div>`:`<div class="form-grid" style="align-items:end">
+          <div class="form-group" style="grid-column:span 2"><label>Descripción</label><input id="cg-desc" placeholder="Ej: hielo, flete, merienda, cambio entregado"></div>
+          <div class="form-group"><label>Monto</label><input id="cg-monto" type="number" value="0"></div>
+          <button class="btn btn-primary" onclick="agregarGastoCajaTurno('${caja.id}','${caja.fecha}')">+ Agregar gasto</button>
+        </div>`}
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Descripción</th><th>Monto</th><th>Hora</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }
+
+  function cajaCierreTurnoHTML(caja, ventas, esperado, gastosTotal){
+    const cerrado=caja.estado==='cerrada';
+    const vals=cerrado?(caja.denominaciones_cierre||{}):{};
+    return `<div class="card"><div class="card-header"><h3>${cerrado?'Editar cierre guardado':'Cerrar caja / arqueo'}</h3><span class="badge">${cajaTurnoTitulo(caja)}</span></div><div style="padding:16px">
+      ${cerrado?`<div class="alert alert-warning">Esta caja ya fue cerrada. Desde acá solo editás el cierre guardado; no se reabre la caja.</div>`:''}
+      ${cajaInputRows('ci',vals)}
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Transferencia contada</label><input id="ci-transferencia" type="number" value="${caja.transferferencia_contado||caja.transferencia_contado||ventas.transferencia}"></div>
+        <div class="form-group"><label>QR contado</label><input id="ci-qr" type="number" value="${caja.qr_contado||ventas.qr}"></div>
+        <div class="form-group"><label>Débito contado</label><input id="ci-debito" type="number" value="${caja.debito_contado||ventas.debito}"></div>
+        <div class="form-group"><label>Crédito contado</label><input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}"></div>
+        <div class="form-group"><label>Gastos varios calculados</label><input type="number" value="${gastosTotal}" disabled></div>
+        <div class="form-group"><label>Usuario cierre</label><input id="ci-usuario" value="${escapeHtml2(caja.usuario_cierre||'')}" placeholder="Ej: Julio, cajera"></div>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${escapeHtml2(caja.notas_cierre||'')}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn-primary" onclick="cerrarCajaTurno('${caja.id}',${esperado})">${cerrado?'Guardar edición de cierre':'Cerrar caja'}</button>
+        <button class="btn btn-secondary" onclick="imprimirArqueo('${caja.id}')">Imprimir/PDF</button>
+        ${cerrado?`<button class="btn btn-secondary" onclick="cajaTabTurno='historial';cajaEditId=null;renderCaja()">Volver al historial</button>`:''}
+      </div>
+    </div></div>`;
+  }
+
+  window.renderCaja = async function(){
+    const hoy=new Date().toISOString().split('T')[0];
+    if(cajaTabTurno==='historial') return renderHistorialArqueosTurno();
+    const caja=cajaEditId ? await obtenerCajaPorId(cajaEditId) : await obtenerCajaAbierta();
+    if(!caja){
+      gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
+        <div class="stats-grid">
+          <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:var(--red)">Sin caja abierta</div><div class="sub">Podés abrir una nueva caja aunque hoy ya hayas cerrado otra.</div></div>
+        </div>
+        ${cajaAperturaTurnoHTML(hoy)}`;
+      setTimeout(()=>actualizarTotalConteo('ap'),50);
+      return;
+    }
+    const ventas=await resumenVentasCaja(caja);
+    const gastos=await obtenerGastosCaja(caja.fecha,caja.id);
+    const apertura=Number(caja.apertura_efectivo)||0;
+    const esperado=apertura+ventas.efectivo-gastos.total;
+    const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
+    gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
+      <div class="stats-grid">
+        <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja.estado==='abierta'?'var(--green)':'var(--amber)'}">${caja.estado}</div><div class="sub">${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}</div></div>
+        <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
+        <div class="stat-card"><div class="label">Ventas efectivo del turno</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas</div></div>
+        <div class="stat-card"><div class="label">Gastos varios</div><div class="value" style="color:var(--red)">${fmtGs(gastos.total)}</div></div>
+        <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
+        ${dif!==null?`<div class="stat-card"><div class="label">Diferencia</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div></div>`:''}
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><h3>Transacciones del turno</h3><span class="badge">Desde apertura hasta ${caja.closed_at?'cierre':'ahora'}</span></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody>
+          <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
+        </tbody></table></div>
+      </div>
+      ${cajaGastosTurnoHTML(caja,gastos)}
+      ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total)}`;
+    setTimeout(()=>{actualizarTotalConteo('ci');},50);
+  };
+
+  window.abrirCajaTurno = async function(){
+    const fecha=gs('ap-fecha')?.value || new Date().toISOString().split('T')[0];
+    const abierta=await obtenerCajaAbierta();
+    if(abierta){toast('Ya existe una caja abierta. Cerrala antes de abrir otra.','err');return;}
+    const c=leerConteo('ap');
+    const numero=await proximoNumeroCaja(fecha);
+    const obj={fecha,estado:'abierta',numero_caja:numero,nombre_turno:gs('ap-turno')?.value||null,usuario_apertura:gs('ap-usuario')?.value||null,apertura_efectivo:c.total,denominaciones_apertura:c.denoms,notas_apertura:gs('ap-notas')?.value||null,opened_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+    const {error}=await sb.from('bodega_caja').insert(obj);
+    if(error){toast('Error al abrir caja: '+error.message,'err');return;}
+    cajaEditId=null;cajaTabTurno='actual';toast('Caja abierta');renderCaja();
+  };
+
+  window.agregarGastoCajaTurno = async function(cajaId,fecha){
+    const descripcion=(gs('cg-desc')?.value||'').trim();
+    const monto=moneyVal2('cg-monto');
+    if(!descripcion){toast('Describí el gasto','err');return;}
+    if(monto<=0){toast('Monto inválido','err');return;}
+    const {error}=await sb.from('bodega_caja_gastos').insert({caja_id:cajaId,fecha,descripcion,monto});
+    if(error){toast('Error guardando gasto: '+error.message,'err');return;}
+    await recalcularCajaTurno(cajaId);
+    toast('Gasto agregado');renderCaja();
+  };
+
+  window.borrarGastoCajaTurno = async function(id){
+    if(!confirm('¿Borrar este gasto de caja?'))return;
+    let cajaId=null;
+    try{const {data}=await sb.from('bodega_caja_gastos').select('caja_id').eq('id',id).single();cajaId=data?.caja_id||null;}catch(e){}
+    const {error}=await sb.from('bodega_caja_gastos').delete().eq('id',id);
+    if(error){toast('Error: '+error.message,'err');return;}
+    if(cajaId) await recalcularCajaTurno(cajaId);
+    toast('Gasto borrado');renderCaja();
+  };
+
+  window.cerrarCajaTurno = async function(id,esperadoFinal){
+    const c=leerConteo('ci');
+    const diferencia=c.total-esperadoFinal;
+    const gastos=await obtenerGastosCaja('',id);
+    const obj={estado:'cerrada',denominaciones_cierre:c.denoms,efectivo_contado:c.total,transferencia_contado:moneyVal2('ci-transferencia'),qr_contado:moneyVal2('ci-qr'),debito_contado:moneyVal2('ci-debito'),credito_contado:moneyVal2('ci-credito'),gastos_caja:gastos.total||0,diferencia,notas_cierre:gs('ci-notas')?.value||null,usuario_cierre:gs('ci-usuario')?.value||null,closed_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+    const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
+    if(error){toast('Error al guardar cierre: '+error.message,'err');return;}
+    toast('Cierre guardado. Diferencia: '+fmtGs(diferencia));
+    cajaEditId=null;cajaTabTurno='actual';renderCaja();
+  };
+
+  async function recalcularCajaTurno(id){
+    try{
+      const caja=await obtenerCajaPorId(id); if(!caja) return;
+      const ventas=await resumenVentasCaja(caja);
+      const gastos=await obtenerGastosCaja(caja.fecha,id);
+      const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
+      const diferencia=(Number(caja.efectivo_contado)||0)-esperado;
+      await sb.from('bodega_caja').update({gastos_caja:gastos.total||0,diferencia,updated_at:new Date().toISOString()}).eq('id',id);
+    }catch(e){console.warn('No se pudo recalcular caja', e.message);}
+  }
+
+  async function renderHistorialArqueosTurno(){
+    const hasta=gs('hist-hasta')?.value || cajaHistFecha || new Date().toISOString().split('T')[0];
+    cajaHistFecha=hasta;
+    const desde=gs('hist-desde')?.value || new Date(new Date(hasta+'T00:00:00').getTime()-1000*60*60*24*30).toISOString().split('T')[0];
+    const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('opened_at',{ascending:false}).limit(200);
+    const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml2(error.message)}</td></tr>`:(data||[]).map(c=>`<tr>
+      <td>${fmtDate(c.fecha)}</td><td>${cajaTurnoTitulo(c)}</td><td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
+      <td>${c.opened_at?new Date(c.opened_at).toLocaleString('es-PY'):'-'}</td><td>${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
+      <td>${fmtGs(c.apertura_efectivo)}</td><td>${fmtGs(c.gastos_caja)}</td><td>${fmtGs(c.efectivo_contado)}</td>
+      <td style="font-weight:700;color:${Number(c.diferencia||0)===0?'var(--green)':Number(c.diferencia||0)>0?'var(--amber)':'var(--red)'}">${fmtGs(c.diferencia)}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editarCierreTurno('${c.id}')">Editar cierre</button><button class="btn btn-secondary btn-sm" onclick="imprimirArqueo('${c.id}')">PDF</button></td>
+    </tr>`).join('')||`<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
+    gs('content').innerHTML=`${cajaTabsTurnoHTML('historial')}
+      <div class="search-bar" style="align-items:end;flex-wrap:wrap">
+        <div class="form-group" style="max-width:180px"><label>Desde</label><input id="hist-desde" type="date" value="${desde}"></div>
+        <div class="form-group" style="max-width:180px"><label>Hasta</label><input id="hist-hasta" type="date" value="${hasta}"></div>
+        <button class="btn btn-primary" onclick="renderCaja()">Filtrar</button>
+      </div>
+      <div class="card"><div class="card-header"><h3>Historial de arqueos</h3><span class="badge">Cada apertura queda guardada por separado</span></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Caja/Turno</th><th>Estado</th><th>Apertura hora</th><th>Cierre hora</th><th>Apertura</th><th>Gastos</th><th>Contado</th><th>Diferencia</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </div>`;
+  }
+
+  window.editarCierreTurno=function(id){cajaEditId=id;cajaTabTurno='actual';renderCaja();};
+
+  window.imprimirArqueo = async function(id){
+    const caja=await obtenerCajaPorId(id);
+    if(!caja){toast('No encontré la caja','err');return;}
+    const ventas=await resumenVentasCaja(caja);
+    const gastos=await obtenerGastosCaja(caja.fecha,id);
+    const den=caja.denominaciones_cierre||{};
+    const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
+    const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml2(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
+    const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml2(caja.notas_cierre||'')}</p></body></html>`;
+    const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
+  };
+
+  try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){}
+})();
+
 </script>
 </body>
 </html>
