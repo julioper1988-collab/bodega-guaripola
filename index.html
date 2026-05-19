@@ -3766,11 +3766,11 @@ initMobileShell();
       <div id="emb-form-title" style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">NUEVA PRESENTACIÓN / PACK</div>
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
-        <div class="form-group"><label>Cant. uds</label><input id="emb-cant" type="number" value="3" min="1"></div>
+        <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
         <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
-        <div class="form-group"><label>P. Costo</label><input id="emb-costo" type="number" value="0"></div>
-        <div class="form-group"><label>P. Venta</label><input id="emb-venta" type="number" value="0"></div>
-        <div class="form-group"><label>P. Mayorista</label><input id="emb-mayor" type="number" value="0"></div>
+        <div class="form-group"><label>P. Costo</label>${mathInput('emb-costo',0,{mini:true})}</div>
+        <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
+        <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
         <div class="form-group"><label>&nbsp;</label><button id="emb-save-btn" class="btn btn-primary" onclick="saveEmb('${prodId}','${prodArg}')">+ Agregar pack</button></div>
         <div class="form-group"><label>&nbsp;</label><button class="btn btn-secondary" onclick="clearEmbForm()">Limpiar</button></div>
       </div>
@@ -3933,15 +3933,22 @@ initMobileShell();
       <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
       <div class="form-group"><label>Proveedor</label><select id="p-prov"><option value="">Sin proveedor</option>${provCache.map(pr=>`<option value="${pr.id}" ${prod?.proveedor_id===pr.id?'selected':''}>${escapeHtml(pr.nombre)}</option>`).join('')}</select></div>
       <div class="form-group"><label>Unidad</label><select id="p-uni">${['unidad','caja','paquete','botella','lata','kg','litro'].map(u=>`<option ${prod?.unidad===u?'selected':''}>${u}</option>`).join('')}</select></div>
-      <div class="form-group"><label>Stock actual</label><input id="p-stock" type="number" value="${prod?.stock||0}"></div>
-      <div class="form-group"><label>Stock mínimo</label><input id="p-stmin" type="number" value="${prod?.stock_minimo||0}"></div>
-      <div class="form-group"><label>Precio costo (Gs.)</label><input id="p-costo" type="number" value="${prod?.precio_costo||0}" oninput="bgRefreshProdMargin()"></div>
-      <div class="form-group"><label>Precio venta (Gs.)</label><input id="p-venta" type="number" value="${prod?.precio_venta||0}" oninput="bgRefreshProdMargin()"></div>
-      <div class="form-group"><label>Precio mayorista (Gs.)</label><input id="p-mayor" type="number" value="${prod?.precio_mayorista||0}" oninput="bgRefreshProdMargin()"></div>
+      <div class="form-group"><label>Stock actual</label>${mathInput('p-stock', prod?.stock||0, {integer:true})}</div>
+      <div class="form-group"><label>Stock mínimo</label>${mathInput('p-stmin', prod?.stock_minimo||0, {integer:true})}</div>
+      <div class="form-group"><label>Precio costo (Gs.)</label>${mathInput('p-costo', prod?.precio_costo||0)}</div>
+      <div class="form-group"><label>Precio venta (Gs.)</label>${mathInput('p-venta', prod?.precio_venta||0)}</div>
+      <div class="form-group"><label>Precio mayorista (Gs.)</label>${mathInput('p-mayor', prod?.precio_mayorista||0)}</div>
       <div class="form-group" style="grid-column:1/-1"><label>Margen de ganancia</label><div id="p-margin-live" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;font-size:13px;color:var(--text)"></div></div>
       <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
     </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
-    setTimeout(bgRefreshProdMargin,0);
+    setTimeout(()=>{
+      bgRefreshProdMargin();
+      // Disparar actualización de margen al cambiar precios via mathInput
+      ['p-costo','p-venta','p-mayor'].forEach(id=>{
+        const inp=document.getElementById(id);
+        if(inp) inp.addEventListener('input', bgRefreshProdMargin);
+      });
+    },0);
   };
 
   // Ventas: mostrar margen en resultados para saber si el precio conviene.
@@ -4017,11 +4024,11 @@ initMobileShell();
       <div id="emb-form-title" style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">NUEVA PRESENTACIÓN / PACK</div>
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
-        <div class="form-group"><label>Cant. uds</label><input id="emb-cant" type="number" value="3" min="1" oninput="embAutoCosto()"></div>
+        <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
         <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
-        <div class="form-group"><label>P. Costo automático</label><input id="emb-costo" type="number" value="${initialCost}" oninput="bgRefreshEmbMargin()"></div>
-        <div class="form-group"><label>P. Venta</label><input id="emb-venta" type="number" value="0" oninput="bgRefreshEmbMargin()"></div>
-        <div class="form-group"><label>P. Mayorista</label><input id="emb-mayor" type="number" value="0" oninput="bgRefreshEmbMargin()"></div>
+        <div class="form-group"><label>P. Costo automático</label>${mathInput('emb-costo',initialCost,{mini:true})}</div>
+        <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
+        <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
         <div class="form-group"><label>&nbsp;</label><button id="emb-save-btn" class="btn btn-primary" onclick="saveEmb('${prodId}','${prodArg}')">+ Agregar pack</button></div>
         <div class="form-group"><label>&nbsp;</label><button class="btn btn-secondary" onclick="clearEmbForm()">Limpiar</button></div>
       </div>
@@ -4052,7 +4059,13 @@ initMobileShell();
       </tbody>
     </table>`;
     openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
-    setTimeout(bgRefreshEmbMargin,0);
+    setTimeout(()=>{
+      bgRefreshEmbMargin();
+      const cant=gs('emb-cant'); if(cant) cant.addEventListener('input',embAutoCosto);
+      ['emb-costo','emb-venta','emb-mayor'].forEach(id=>{
+        const el=gs(id); if(el) el.addEventListener('input',bgRefreshEmbMargin);
+      });
+    },0);
   };
 })();
 
