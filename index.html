@@ -5820,6 +5820,69 @@ try{
   `;
   document.head.appendChild(css);
 })();
+
+
+(function(){
+  function bgStockNum(v){ return Number(v)||0; }
+  function bgCalcStockValorizado(){
+    const productos=(Array.isArray(prodCache)?prodCache:[]).filter(p=>p && p.activo!==false);
+    let unidades=0,costo=0,venta=0,cero=0,bajo=0;
+    productos.forEach(p=>{
+      const st=bgStockNum(p.stock);
+      const pc=bgStockNum(p.precio_costo);
+      const pv=bgStockNum(p.precio_venta);
+      if(st<=0)cero++;
+      if(st>0 && st<5)bajo++;
+      if(st>0){
+        unidades+=st;
+        costo+=st*pc;
+        venta+=st*pv;
+      }
+    });
+    const ganancia=venta-costo;
+    const margen=costo>0?(ganancia/costo*100):0;
+    return {productos:productos.length,unidades,costo,venta,ganancia,margen,cero,bajo};
+  }
+  function bgMoney(n){ try{return fmtGs(Math.round(Number(n)||0));}catch(e){return 'Gs. '+Math.round(Number(n)||0).toLocaleString('es-PY');} }
+  function bgStockCardsHtml(compacto=false){
+    const x=bgCalcStockValorizado();
+    return `
+      <div id="bg-stock-valor-widget" class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="label">VALOR DE STOCK AL COSTO</div><div class="value" style="color:var(--amber)">${bgMoney(x.costo)}</div><div class="sub">${x.unidades.toLocaleString('es-PY')} unidades valorizadas</div></div>
+        <div class="stat-card"><div class="label">VALOR DE STOCK A VENTA</div><div class="value" style="color:var(--green)">${bgMoney(x.venta)}</div><div class="sub">si vendés todo al precio actual</div></div>
+        <div class="stat-card"><div class="label">GANANCIA ESTIMADA</div><div class="value" style="color:var(--accent2)">${bgMoney(x.ganancia)}</div><div class="sub">margen estimado: ${x.margen.toFixed(1)}%</div></div>
+        ${compacto?'':`<div class="stat-card"><div class="label">ALERTA DE STOCK</div><div class="value" style="color:${x.cero>0?'var(--red)':x.bajo>0?'var(--amber)':'var(--green)'}">${x.cero} / ${x.bajo}</div><div class="sub">sin stock / stock bajo</div></div>`}
+      </div>`;
+  }
+  function bgInjectDashboardStock(){
+    const grid=document.querySelector('#content .stats-grid');
+    if(!grid || document.getElementById('bg-stock-dashboard-card'))return;
+    const x=bgCalcStockValorizado();
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="stat-card" id="bg-stock-dashboard-card">
+        <div class="label">MONTO EN STOCK</div>
+        <div class="value" style="color:var(--amber)">${bgMoney(x.costo)}</div>
+        <div class="sub">Venta estimada: ${bgMoney(x.venta)} · Margen: ${x.margen.toFixed(1)}%</div>
+      </div>`);
+  }
+  function bgInjectProductosStock(){
+    const content=gs('content');
+    if(!content || document.getElementById('bg-stock-valor-widget'))return;
+    content.insertAdjacentHTML('afterbegin', bgStockCardsHtml(false));
+  }
+  const oldDash=window.renderDashboard || renderDashboard;
+  window.renderDashboard=async function(){
+    await oldDash.apply(this,arguments);
+    bgInjectDashboardStock();
+  };
+  if(typeof pages==='object' && pages) pages.dashboard=window.renderDashboard;
+  const oldProd=window.renderProductos || renderProductos;
+  window.renderProductos=async function(){
+    await oldProd.apply(this,arguments);
+    bgInjectProductosStock();
+  };
+  if(typeof pages==='object' && pages) pages.productos=window.renderProductos;
+})();
 </script>
 </body>
 </html>
