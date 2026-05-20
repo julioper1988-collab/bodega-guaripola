@@ -1060,6 +1060,21 @@ body.mobile-menu-open .mobile-backdrop { display: block; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #b0b8c8; }
 
+/* ── SIDEBAR TOGGLE ── */
+.sidebar-toggle-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.15); color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: all .15s; font-family: inherit;
+  flex-shrink: 0;
+}
+.sidebar-toggle-btn:hover { background: rgba(255,255,255,.25); }
+
+body.sidebar-collapsed #sidebar { display: none !important; }
+body.sidebar-collapsed #main { width: 100% !important; }
+
 /* Inventario móvil drawer */
 @media (max-width: 900px) {
   #inventario-layout { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 0 !important; gap: 0 !important; }
@@ -1464,6 +1479,32 @@ window.fmtHoraVenta=function(v){
   const ts=v.created_at||v.updated_at;
   if(!ts) return '--:--';
   return new Date(ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+};
+
+// ── FILTRO FECHA+HORA GLOBAL ───────────────────────────────────
+// Crea un par fecha+hora juntos. Uso: dateTimeInput('id-fecha','id-hora','Label')
+window.dateTimeInput=function(fechaId, horaId, label, fechaVal='', horaVal=''){
+  return `<div class="form-group">
+    <label>${label}</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="date" id="${fechaId}" value="${fechaVal}" style="flex:1;min-width:130px">
+      <input type="time" id="${horaId}" value="${horaVal}" style="width:100px;flex-shrink:0" title="Hora (opcional)">
+    </div>
+  </div>`;
+};
+
+// Obtener valor datetime combinado desde fecha+hora inputs
+window.getDateTimeVal=function(fechaId, horaId){
+  const f=document.getElementById(fechaId)?.value||'';
+  const h=document.getElementById(horaId)?.value||'';
+  if(!f) return '';
+  return h ? `${f}T${h}:00` : `${f}T00:00:00`;
+};
+window.getDateTimeValEnd=function(fechaId, horaId){
+  const f=document.getElementById(fechaId)?.value||'';
+  const h=document.getElementById(horaId)?.value||'';
+  if(!f) return '';
+  return h ? `${f}T${h}:59` : `${f}T23:59:59`;
 };
 
 // ── RELOJ EN VIVO ─────────────────────────────────────────────
@@ -3957,7 +3998,16 @@ initMobileShell();
   function rptProductCost(d){return Number(d?.bodega_productos?.precio_costo)||0;}
   function rptDateRange(){
     const today=new Date().toISOString().split('T')[0];
-    return {desde:gs('rpt-desde')?.value||today.slice(0,7)+'-01',hasta:gs('rpt-hasta')?.value||today};
+    const desde=gs('rpt-desde')?.value||today.slice(0,7)+'-01';
+    const hasta=gs('rpt-hasta')?.value||today;
+    const horaDesde=gs('rpt-hora-desde')?.value||'';
+    const horaHasta=gs('rpt-hora-hasta')?.value||'';
+    return {
+      desde, hasta,
+      desdeTs: horaDesde ? `${desde}T${horaDesde}:00` : `${desde}T00:00:00`,
+      hastaTs: horaHasta ? `${hasta}T${horaHasta}:59` : `${hasta}T23:59:59`,
+      tieneHora: !!(horaDesde||horaHasta)
+    };
   }
   function rptSetTab(tab){
     document.querySelectorAll('.rpt-tab').forEach(b=>b.classList.remove('active'));
@@ -3986,8 +4036,18 @@ initMobileShell();
         <div class="card-header"><h3>📈 Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button></div>
         <div style="padding:14px 16px">
           <div class="rpt-filters">
-            <div class="form-group"><label>Desde</label><input id="rpt-desde" type="date" value="${first}"></div>
-            <div class="form-group"><label>Hasta</label><input id="rpt-hasta" type="date" value="${today}"></div>
+            <div class="form-group"><label>Desde</label>
+              <div style="display:flex;gap:6px">
+                <input id="rpt-desde" type="date" value="${first}" style="flex:1">
+                <input id="rpt-hora-desde" type="time" value="" title="Hora desde" style="width:90px">
+              </div>
+            </div>
+            <div class="form-group"><label>Hasta</label>
+              <div style="display:flex;gap:6px">
+                <input id="rpt-hasta" type="date" value="${today}" style="flex:1">
+                <input id="rpt-hora-hasta" type="time" value="" title="Hora hasta" style="width:90px">
+              </div>
+            </div>
             <div class="form-group"><label>Cliente</label><input id="rpt-cliente" placeholder="Ej: Juan, Comercial..." onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="form-group"><label>Producto</label><input id="rpt-producto" placeholder="Ej: coca 1,5" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="rpt-actions">
@@ -4682,8 +4742,18 @@ initMobileShell();
     </tr>`).join('')||`<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('historial')}
       <div class="search-bar" style="align-items:end;flex-wrap:wrap">
-        <div class="form-group" style="max-width:180px"><label>Desde</label><input id="hist-desde" type="date" value="${desde}"></div>
-        <div class="form-group" style="max-width:180px"><label>Hasta</label><input id="hist-hasta" type="date" value="${hasta}"></div>
+        <div class="form-group" style="max-width:240px"><label>Desde</label>
+          <div style="display:flex;gap:6px">
+            <input id="hist-desde" type="date" value="${desde}" style="flex:1">
+            <input id="hist-hora-desde" type="time" value="" title="Hora desde" style="width:90px">
+          </div>
+        </div>
+        <div class="form-group" style="max-width:240px"><label>Hasta</label>
+          <div style="display:flex;gap:6px">
+            <input id="hist-hasta" type="date" value="${hasta}" style="flex:1">
+            <input id="hist-hora-hasta" type="time" value="" title="Hora hasta" style="width:90px">
+          </div>
+        </div>
         <button class="btn btn-primary" onclick="renderCaja()">Filtrar</button>
       </div>
       <div class="card"><div class="card-header"><h3>Historial de arqueos</h3><span class="badge">Cada apertura queda guardada por separado</span></div>
@@ -4854,8 +4924,18 @@ initMobileShell();
         </div>
         <div style="padding:14px 16px">
           <div class="rep-filters">
-            <div class="form-group"><label>Desde</label><input id="rep-desde" type="date" value="${first}"></div>
-            <div class="form-group"><label>Hasta</label><input id="rep-hasta" type="date" value="${today}"></div>
+            <div class="form-group"><label>Desde</label>
+              <div style="display:flex;gap:6px">
+                <input id="rep-desde" type="date" value="${first}" style="flex:1">
+                <input id="rep-hora-desde" type="time" value="" title="Hora desde" style="width:90px">
+              </div>
+            </div>
+            <div class="form-group"><label>Hasta</label>
+              <div style="display:flex;gap:6px">
+                <input id="rep-hasta" type="date" value="${today}" style="flex:1">
+                <input id="rep-hora-hasta" type="time" value="" title="Hora hasta" style="width:90px">
+              </div>
+            </div>
             <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
           </div>
@@ -5353,8 +5433,18 @@ initMobileShell();
 
     gs('content').innerHTML=`
       <div class="search-bar" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
-        <div class="form-group" style="max-width:160px"><label>Desde</label><input type="date" id="hv-fecha-desde" value="${desde}" onchange="renderHistorialVentas(1)"></div>
-        <div class="form-group" style="max-width:160px"><label>Hasta</label><input type="date" id="hv-fecha-hasta" value="${hasta}" onchange="renderHistorialVentas(1)"></div>
+        <div class="form-group"><label>Desde</label>
+          <div style="display:flex;gap:6px">
+            <input type="date" id="hv-fecha-desde" value="${desde}" onchange="renderHistorialVentas(1)" style="flex:1;min-width:120px">
+            <input type="time" id="hv-hora-desde" value="" title="Hora desde (opcional)" style="width:95px" onchange="filtrarHistVentas()">
+          </div>
+        </div>
+        <div class="form-group"><label>Hasta</label>
+          <div style="display:flex;gap:6px">
+            <input type="date" id="hv-fecha-hasta" value="${hasta}" onchange="renderHistorialVentas(1)" style="flex:1;min-width:120px">
+            <input type="time" id="hv-hora-hasta" value="" title="Hora hasta (opcional)" style="width:95px" onchange="filtrarHistVentas()">
+          </div>
+        </div>
         <div class="form-group" style="max-width:110px"><label>Hora desde</label><input type="time" id="hv-hora-desde" onchange="filtrarHistVentas()"></div>
         <div class="form-group" style="max-width:110px"><label>Hora hasta</label><input type="time" id="hv-hora-hasta" onchange="filtrarHistVentas()"></div>
         <div class="form-group" style="max-width:140px"><label>Método</label>
