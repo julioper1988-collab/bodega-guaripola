@@ -1603,28 +1603,30 @@ async function renderDashboard(){
   const cajaAbierta=cajaActiva&&cajaActiva.estado==='abierta';
   const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
 
-  // Ventas hoy completas
-  const [vH,vM,cM,sB]=await Promise.all([
-    sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').eq('fecha',today).order('created_at',{ascending:false}),
-    sb.from('bodega_ventas').select('total_final').gte('fecha',first),
-    sb.from('bodega_compras').select('total').gte('fecha',first).eq('estado','finalizado'),
-    sb.from('bodega_productos').select('id').lt('stock',5).eq('activo',true)
-  ]);
+  // Ventas: traer las de hoy Y las de la caja activa por timestamp
+  const ventasHoyQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').eq('fecha',today).order('created_at',{ascending:false});
+  const ventasMesQ=sb.from('bodega_ventas').select('total_final').gte('fecha',first);
+  const comprasQ=sb.from('bodega_compras').select('total').gte('fecha',first).eq('estado','finalizado');
+  const stockQ=sb.from('bodega_productos').select('id').lt('stock',5).eq('activo',true);
+
+  // Si la caja es de otro día (abierta ayer etc.), traer ventas desde opened_at
+  let ventasCajaQ=null;
+  if(cajaActiva?.opened_at){
+    const desde=cajaActiva.opened_at;
+    const hasta=cajaActiva.closed_at||new Date().toISOString();
+    ventasCajaQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').gte('created_at',desde).lte('created_at',hasta).order('created_at',{ascending:false});
+  }
+
+  const [vH,vM,cM,sB,vCajaRaw]=await Promise.all([ventasHoyQ,ventasMesQ,comprasQ,stockQ,ventasCajaQ||Promise.resolve({data:[]})]);
+
   const ventasHoy=vH.data||[];
   const tH=ventasHoy.reduce((s,v)=>s+(v.total_final||0),0);
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
   const bc=(sB.data||[]).length;
 
-  // Filtrar ventas por rango de hora si hay caja activa
-  let ventasCaja=ventasHoy;
-  if(cajaActiva?.opened_at){
-    const desde=new Date(cajaActiva.opened_at);
-    const hasta=cajaActiva.closed_at?new Date(cajaActiva.closed_at):new Date();
-    ventasCaja=ventasHoy.filter(v=>{
-      const t=new Date(v.created_at); return t>=desde&&t<=hasta;
-    });
-  }
+  // Ventas de la caja: usar query directa si hay caja, si no usar las de hoy
+  const ventasCaja=cajaActiva ? (vCajaRaw.data||[]) : ventasHoy;
   const tCaja=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0);
 
   // Ultimas ventas (8)
@@ -1669,6 +1671,7 @@ async function renderDashboard(){
   </div>`;
 
   // Guardar ventas hoy para el filtro
+  window.__dashVentasCaja=ventasCaja;
   window.__dashVentasHoy=ventasHoy;
 }
 
@@ -1687,13 +1690,10 @@ function dashRenderVentasTabla(ventas){
 window.dashFiltrarHoras=function(){
   const desde=gs('dash-desde')?.value||'00:00';
   const hasta=gs('dash-hasta')?.value||'23:59';
-  const [dh,dm]=desde.split(':').map(Number);
-  const [hh,hm]=hasta.split(':').map(Number);
-  const ventas=(window.__dashVentasHoy||[]).filter(v=>{
-    const t=new Date(v.created_at);
-    const vh=t.getHours(), vm=t.getMinutes();
-    const minV=vh*60+vm, minD=dh*60+dm, minH=hh*60+hm;
-    return minV>=minD && minV<=minH;
+  const ventas=(window.__dashVentasCaja||window.__dashVentasHoy||[]).filter(v=>{
+    const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'');
+    if(!hora) return true;
+    return hora>=desde && hora<=hasta;
   });
   const el=gs('dash-caja-ventas');
   const badge=gs('dash-caja-badge');
