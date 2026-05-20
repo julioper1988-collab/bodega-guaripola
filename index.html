@@ -1586,34 +1586,111 @@ async function goTo(page){
 
 // ─── DASHBOARD ────────────────────────────────────────────────
 async function renderDashboard(){
-  const today=new Date().toISOString().split('T')[0],first=today.slice(0,7)+'-01';
+  const today=new Date().toISOString().split('T')[0], first=today.slice(0,7)+'-01';
+
+  // Caja activa del día
+  const {data:cajas}=await sb.from('bodega_caja').select('*').eq('fecha',today).order('opened_at',{ascending:false}).limit(1);
+  const cajaActiva=cajas&&cajas[0];
+  const cajaAbierta=cajaActiva&&cajaActiva.estado==='abierta';
+  const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
+
+  // Ventas hoy completas
   const [vH,vM,cM,sB]=await Promise.all([
-    sb.from('bodega_ventas').select('total_final').eq('fecha',today),
+    sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').eq('fecha',today).order('created_at',{ascending:false}),
     sb.from('bodega_ventas').select('total_final').gte('fecha',first),
     sb.from('bodega_compras').select('total').gte('fecha',first).eq('estado','finalizado'),
     sb.from('bodega_productos').select('id').lt('stock',5).eq('activo',true)
   ]);
-  const tH=(vH.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
+  const ventasHoy=vH.data||[];
+  const tH=ventasHoy.reduce((s,v)=>s+(v.total_final||0),0);
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
   const bc=(sB.data||[]).length;
-  const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago').order('created_at',{ascending:false}).limit(8);
+
+  // Filtrar ventas por rango de hora si hay caja activa
+  let ventasCaja=ventasHoy;
+  if(cajaActiva?.opened_at){
+    const desde=new Date(cajaActiva.opened_at);
+    const hasta=cajaActiva.closed_at?new Date(cajaActiva.closed_at):new Date();
+    ventasCaja=ventasHoy.filter(v=>{
+      const t=new Date(v.created_at); return t>=desde&&t<=hasta;
+    });
+  }
+  const tCaja=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0);
+
+  // Ultimas ventas (8)
+  const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago,created_at,hora').order('created_at',{ascending:false}).limit(8);
+
   gs('content').innerHTML=`
   <div class="stats-grid">
-    <div class="stat-card"><div class="label">Ventas hoy</div><div class="value" style="color:var(--green)">${fmtGs(tH)}</div><div class="sub">${(vH.data||[]).length} transacciones</div></div>
+    <div class="stat-card"><div class="label">Ventas hoy</div><div class="value" style="color:var(--green)">${fmtGs(tH)}</div><div class="sub">${ventasHoy.length} transacciones</div></div>
+    <div class="stat-card"><div class="label">Caja ${cajaAbierta?'🟢 abierta':'🔴 cerrada'}</div><div class="value" style="color:var(--accent2)">${fmtGs(tCaja)}</div><div class="sub">${cajaAbierta?`Desde ${horaApertura||'--:--'}`:cajaActiva?`Cerrada · ${horaApertura||'--:--'}`:'Sin caja hoy'} · ${ventasCaja.length} ventas</div></div>
     <div class="stat-card"><div class="label">Ventas mes</div><div class="value" style="color:var(--accent2)">${fmtGs(tM)}</div><div class="sub">${(vM.data||[]).length} transacciones</div></div>
     <div class="stat-card"><div class="label">Compras mes</div><div class="value" style="color:var(--amber)">${fmtGs(tC)}</div></div>
     <div class="stat-card"><div class="label">Stock bajo</div><div class="value" style="color:${bc>0?'var(--red)':'var(--green)'}">${bc}</div><div class="sub">menos de 5 unidades</div></div>
-    <div class="stat-card"><div class="label">Productos</div><div class="value">${prodCache.length}</div><div class="sub">${catCache.length} categorías</div></div>
   </div>
   ${bc>0?`<div class="alert alert-warning">⚠️ ${bc} productos con stock bajo.</div>`:''}
+
+  <!-- Ventas de la caja activa con filtro de horas -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px">
+      <h3>Ventas de esta caja</h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text2)">Desde</label>
+        <input type="time" id="dash-desde" value="${cajaActiva?.opened_at?new Date(cajaActiva.opened_at).toTimeString().slice(0,5):'00:00'}" style="width:100px;font-size:13px;min-height:34px" onchange="dashFiltrarHoras()">
+        <label style="font-size:12px;color:var(--text2)">Hasta</label>
+        <input type="time" id="dash-hasta" value="${cajaActiva?.closed_at?new Date(cajaActiva.closed_at).toTimeString().slice(0,5):new Date().toTimeString().slice(0,5)}" style="width:100px;font-size:13px;min-height:34px" onchange="dashFiltrarHoras()">
+        <button class="btn btn-secondary btn-sm" onclick="dashFiltrarHoras()">Filtrar</button>
+      </div>
+      <span class="badge" id="dash-caja-badge">${ventasCaja.length} ventas · ${fmtGs(tCaja)}</span>
+    </div>
+    <div id="dash-caja-ventas">
+      ${dashRenderVentasTabla(ventasCaja)}
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-header"><h3>Últimas ventas</h3><button class="btn btn-secondary btn-sm" onclick="goTo('historial-ventas')">Ver todo</button></div>
-    <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Método</th><th>Total</th></tr></thead><tbody>
-      ${(uv.data||[]).map(v=>`<tr><td>${fmtDate(v.fecha)}</td><td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${v.tipo}</span></td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`).join('')}
+    <table><thead><tr><th>Hora</th><th>Fecha</th><th>Método</th><th>Total</th></tr></thead><tbody>
+      ${(uv.data||[]).map(v=>{
+        const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+        return `<tr><td style="color:var(--text2);font-size:13px">${hora}</td><td>${fmtDate(v.fecha)}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
+      }).join('')}
     </tbody></table>
   </div>`;
+
+  // Guardar ventas hoy para el filtro
+  window.__dashVentasHoy=ventasHoy;
 }
+
+function dashRenderVentasTabla(ventas){
+  if(!ventas.length) return `<div style="padding:20px;text-align:center;color:var(--text2)">Sin ventas en ese rango horario</div>`;
+  const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
+  return `<table><thead><tr><th>Hora</th><th>Método</th><th>Total</th></tr></thead><tbody>
+    ${ventas.map(v=>{
+      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      return `<tr><td style="color:var(--text2);font-size:13px">${hora}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
+    }).join('')}
+    <tr style="border-top:2px solid var(--border)"><td colspan="2" style="font-weight:800;padding:10px 12px">TOTAL</td><td style="font-weight:900;color:var(--green);font-size:16px">${fmtGs(total)}</td></tr>
+  </tbody></table>`;
+}
+
+window.dashFiltrarHoras=function(){
+  const desde=gs('dash-desde')?.value||'00:00';
+  const hasta=gs('dash-hasta')?.value||'23:59';
+  const [dh,dm]=desde.split(':').map(Number);
+  const [hh,hm]=hasta.split(':').map(Number);
+  const ventas=(window.__dashVentasHoy||[]).filter(v=>{
+    const t=new Date(v.created_at);
+    const vh=t.getHours(), vm=t.getMinutes();
+    const minV=vh*60+vm, minD=dh*60+dm, minH=hh*60+hm;
+    return minV>=minD && minV<=minH;
+  });
+  const el=gs('dash-caja-ventas');
+  const badge=gs('dash-caja-badge');
+  if(el) el.innerHTML=dashRenderVentasTabla(ventas);
+  if(badge){ const t=ventas.reduce((s,v)=>s+(v.total_final||0),0); badge.textContent=`${ventas.length} ventas · ${fmtGs(t)}`; }
+};
 
 // ─── PRODUCTOS ────────────────────────────────────────────────
 async function renderProductos(){
@@ -2122,8 +2199,11 @@ async function finalizarVenta(){
   const desc=parseFloat(gs('v-desc').value)||0;
   const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0),totalFinal=Math.max(0,total-desc);
   const importe=parseFloat(gs('v-importe').value)||0;
+  const ahora=new Date();
+  const hora=ahora.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
   const venta={
-    fecha:new Date().toISOString().split('T')[0],tipo:ventaTipo,
+    fecha:ahora.toISOString().split('T')[0],tipo:ventaTipo,
+    hora,
     cliente_nombre:gs('v-cliente').value||null,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
@@ -2641,9 +2721,12 @@ finalizarVenta = async function(){
     return;
   }
 
+  const ahora2=new Date();
+  const hora2=ahora2.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
   const venta={
-    fecha:new Date().toISOString().split('T')[0],
+    fecha:ahora2.toISOString().split('T')[0],
     tipo:ventaTipo,
+    hora:hora2,
     cliente_nombre:cli.nombre,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
@@ -2682,21 +2765,24 @@ renderHistorialVentas = async function(){
   const {data}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
   gs('content').innerHTML=`<div class="card">
     <div class="card-header"><h3>Historial de ventas</h3></div>
-    <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
-    ${(data||[]).map(v=>`<tr>
-      <td>${fmtDate(v.fecha)}</td>
-      <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${v.tipo}</span></td>
-      <td>${v.cliente_nombre||'-'}</td>
-      <td>${fmtGs(v.total)}</td>
-      <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
-      <td style="font-weight:600;color:${v.metodo_pago==='fiado'?'var(--amber)':'var(--green)'}">${fmtGs(v.total_final)}</td>
-      <td style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':(v.metodo_pago||'-')}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
-        <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
-      </td>
-    </tr>`).join('')}
+    <table><thead><tr><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
+    ${(data||[]).map(v=>{
+      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      return `<tr>
+        <td style="color:var(--accent2);font-weight:700;font-size:13px">${hora}</td>
+        <td>${fmtDate(v.fecha)}</td>
+        <td>${v.cliente_nombre||'-'}</td>
+        <td>${fmtGs(v.total)}</td>
+        <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
+        <td style="font-weight:600;color:${v.metodo_pago==='fiado'?'var(--amber)':'var(--green)'}">${fmtGs(v.total_final)}</td>
+        <td style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':(v.metodo_pago||'-')}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
+        </td>
+      </tr>`;
+    }).join('')}
     </tbody></table></div>`;
 };
 
@@ -3136,6 +3222,18 @@ async function renderCaja(){
   const apertura=Number(caja?.apertura_efectivo)||0;
   const esperado=apertura+ventas.efectivo-(Number(caja?.gastos_caja)||0);
   const dif=caja?.estado==='cerrada'?Number(caja.diferencia||0):null;
+
+  // Hora apertura/cierre
+  const fmtHora=ts=>ts?new Date(ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--';
+  const horaAp=fmtHora(caja?.opened_at);
+  const horaCi=fmtHora(caja?.closed_at);
+
+  // Ventas del día con hora para la tabla
+  const {data:ventasDetalle}=await sb.from('bodega_ventas')
+    .select('id,total_final,metodo_pago,created_at,hora,cliente')
+    .eq('fecha',fecha)
+    .order('created_at',{ascending:false});
+
   gs('content').innerHTML=`
   <div class="search-bar" style="align-items:end;flex-wrap:wrap">
     <div class="form-group" style="max-width:180px"><label>Fecha de caja</label><input id="caja-fecha" type="date" value="${fecha}" onchange="renderCaja()"></div>
@@ -3143,21 +3241,68 @@ async function renderCaja(){
   </div>
   <div class="stats-grid">
     <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja?.estado==='abierta'?'var(--green)':caja?.estado==='cerrada'?'var(--amber)':'var(--red)'}">${caja?caja.estado:'Sin abrir'}</div><div class="sub">${fmtDate(fecha)}</div></div>
-    <div class="stat-card"><div class="label">Apertura efectivo</div><div class="value">${fmtGs(apertura)}</div></div>
-    <div class="stat-card"><div class="label">Ventas efectivo</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">según ventas del día</div></div>
+    <div class="stat-card"><div class="label">Apertura</div><div class="value" style="font-size:20px">${horaAp}</div><div class="sub">${fmtGs(apertura)} efectivo inicial</div></div>
+    ${caja?.closed_at?`<div class="stat-card"><div class="label">Cierre</div><div class="value" style="font-size:20px;color:var(--amber)">${horaCi}</div><div class="sub">Turno cerrado</div></div>`:''}
+    <div class="stat-card"><div class="label">Ventas efectivo</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas del día</div></div>
     <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
     ${dif!==null?`<div class="stat-card"><div class="label">Diferencia cierre</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div><div class="sub">contado - esperado</div></div>`:''}
   </div>
   <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><h3>Resumen de ventas del día</h3><span class="badge">${ventas.cantidad} ventas</span></div>
+    <div class="card-header" style="flex-wrap:wrap;gap:8px">
+      <h3>Ventas del día</h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text2)">Desde</label>
+        <input type="time" id="caja-hora-desde" value="${caja?.opened_at?new Date(caja.opened_at).toTimeString().slice(0,5):'00:00'}" style="width:100px;font-size:13px;min-height:34px" onchange="cajaFiltrarHoras()">
+        <label style="font-size:12px;color:var(--text2)">Hasta</label>
+        <input type="time" id="caja-hora-hasta" value="${caja?.closed_at?new Date(caja.closed_at).toTimeString().slice(0,5):new Date().toTimeString().slice(0,5)}" style="width:100px;font-size:13px;min-height:34px" onchange="cajaFiltrarHoras()">
+        <button class="btn btn-secondary btn-sm" onclick="cajaFiltrarHoras()">Filtrar</button>
+      </div>
+      <span class="badge" id="caja-ventas-badge">${ventas.cantidad} ventas</span>
+    </div>
+    <div id="caja-ventas-tabla">
+      ${cajaRenderVentasTabla(ventasDetalle||[])}
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3>Resumen por método de pago</h3></div>
     <table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total ventas</th></tr></thead><tbody>
       <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
     </tbody></table>
   </div>
   ${!caja?cajaAperturaHTML(fecha):cajaCierreHTML(caja,ventas,esperado)}
   `;
+  window.__cajaVentasDetalle=ventasDetalle||[];
   setTimeout(()=>{actualizarTotalConteo('ap');actualizarTotalConteo('ci');},50);
 }
+
+function cajaRenderVentasTabla(ventas){
+  if(!ventas.length) return `<div style="padding:20px;text-align:center;color:var(--text2)">Sin ventas en ese rango</div>`;
+  const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
+  return `<table><thead><tr><th>Hora</th><th>Cliente</th><th>Método</th><th>Total</th></tr></thead><tbody>
+    ${ventas.map(v=>{
+      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      return `<tr><td style="color:var(--accent2);font-weight:700;font-size:13px">${hora}</td><td style="color:var(--text2);font-size:13px">${v.cliente||'Ocasional'}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
+    }).join('')}
+    <tr style="border-top:2px solid var(--border)"><td colspan="3" style="font-weight:800;padding:10px 12px">TOTAL</td><td style="font-weight:900;color:var(--green);font-size:16px">${fmtGs(total)}</td></tr>
+  </tbody></table>`;
+}
+
+window.cajaFiltrarHoras=function(){
+  const desde=gs('caja-hora-desde')?.value||'00:00';
+  const hasta=gs('caja-hora-hasta')?.value||'23:59';
+  const [dh,dm]=desde.split(':').map(Number);
+  const [hh,hm]=hasta.split(':').map(Number);
+  const ventas=(window.__cajaVentasDetalle||[]).filter(v=>{
+    const t=new Date(v.created_at);
+    const vh=t.getHours(),vm=t.getMinutes();
+    const minV=vh*60+vm,minD=dh*60+dm,minH=hh*60+hm;
+    return minV>=minD&&minV<=minH;
+  });
+  const el=gs('caja-ventas-tabla');
+  const badge=gs('caja-ventas-badge');
+  if(el) el.innerHTML=cajaRenderVentasTabla(ventas);
+  if(badge) badge.textContent=`${ventas.length} ventas`;
+};
 function cajaAperturaHTML(fecha){return `<div class="card"><div class="card-header"><h3>Abrir caja</h3></div><div style="padding:16px">
   <div class="alert alert-warning">Primero cargá el efectivo inicial. Ese monto será la base para controlar el cierre del día.</div>
   ${cajaInputRows('ap')}
