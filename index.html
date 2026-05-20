@@ -1480,7 +1480,7 @@ input::placeholder, textarea::placeholder { color: #7a8faa !important; }
 </div>
 
 <div id="main">
-  <div id="topbar"><h2 id="page-title">Dashboard</h2><span class="badge" id="db-badge">Conectando...</span></div>
+  <div id="topbar"><h2 id="page-title">Dashboard</h2><div id="live-clock" style="font-size:11px;color:var(--text2);text-align:right;line-height:1.35;white-space:nowrap"></div><span class="badge" id="db-badge">Conectando...</span></div>
   <div id="content"></div>
 </div>
 
@@ -1733,7 +1733,18 @@ async function renderProductos(){
     </div>
   </div>`;
 }
-/* ── BLOQUEO GLOBAL DE SCROLL EN INPUTS NUMÉRICOS ── */
+// ── RELOJ EN VIVO ─────────────────────────────────────────────
+(function(){
+  function tickClock(){
+    const el=document.getElementById('live-clock'); if(!el) return;
+    const now=new Date();
+    const fecha=now.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    const hora=now.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    el.innerHTML=`<span style="font-weight:700;color:var(--text);font-size:13px">${hora}</span><br><span style="font-size:10px">${fecha}</span>`;
+  }
+  tickClock();
+  setInterval(tickClock,1000);
+})();
 document.addEventListener('wheel', function(e){
   if(document.activeElement && document.activeElement.type==='number'){
     e.preventDefault();
