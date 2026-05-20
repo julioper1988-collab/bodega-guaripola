@@ -3226,65 +3226,28 @@ async function resumenVentasDia(fecha){
   return r;
 }
 async function renderCaja(){
+  // Esta función base es sobreescrita por el módulo de turnos más abajo.
+  // Si ya fue sobreescrita, ese módulo se encarga de todo.
+  // Solo se ejecuta si el módulo de turnos no cargó.
   const hoy=new Date().toISOString().split('T')[0];
   const fecha=gs('caja-fecha')?.value||hoy;
-  const caja=await obtenerCajaFecha(fecha);
+  const {data:cajas}=await sb.from('bodega_caja').select('*').eq('fecha',fecha).order('opened_at',{ascending:false}).limit(1);
+  const caja=cajas&&cajas[0];
+  if(!caja){
+    gs('content').innerHTML=`<div class="alert alert-warning">No hay caja para ${fmtDate(fecha)}. Abrí una desde la pestaña Caja.</div>`;
+    return;
+  }
   const ventas=await resumenVentasDia(fecha);
-  const apertura=Number(caja?.apertura_efectivo)||0;
-  const esperado=apertura+ventas.efectivo-(Number(caja?.gastos_caja)||0);
-  const dif=caja?.estado==='cerrada'?Number(caja.diferencia||0):null;
-
-  // Hora apertura/cierre
+  const apertura=Number(caja.apertura_efectivo)||0;
+  const esperado=apertura+ventas.efectivo-(Number(caja.gastos_caja)||0);
+  const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
   const fmtHora=ts=>ts?new Date(ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--';
-  const horaAp=fmtHora(caja?.opened_at);
-  const horaCi=fmtHora(caja?.closed_at);
-
-  // Ventas del día con hora para la tabla
-  const {data:ventasDetalle}=await sb.from('bodega_ventas')
-    .select('id,total_final,metodo_pago,created_at,hora,cliente')
-    .eq('fecha',fecha)
-    .order('created_at',{ascending:false});
-
-  gs('content').innerHTML=`
-  <div class="search-bar" style="align-items:end;flex-wrap:wrap">
-    <div class="form-group" style="max-width:180px"><label>Fecha de caja</label><input id="caja-fecha" type="date" value="${fecha}" onchange="renderCaja()"></div>
-    <button class="btn btn-secondary" onclick="renderCaja()">Actualizar</button>
-  </div>
-  <div class="stats-grid">
-    <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja?.estado==='abierta'?'var(--green)':caja?.estado==='cerrada'?'var(--amber)':'var(--red)'}">${caja?caja.estado:'Sin abrir'}</div><div class="sub">${fmtDate(fecha)}</div></div>
-    <div class="stat-card"><div class="label">Apertura</div><div class="value" style="font-size:20px">${horaAp}</div><div class="sub">${fmtGs(apertura)} efectivo inicial</div></div>
-    ${caja?.closed_at?`<div class="stat-card"><div class="label">Cierre</div><div class="value" style="font-size:20px;color:var(--amber)">${horaCi}</div><div class="sub">Turno cerrado</div></div>`:''}
-    <div class="stat-card"><div class="label">Ventas efectivo</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas del día</div></div>
-    <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
-    ${dif!==null?`<div class="stat-card"><div class="label">Diferencia cierre</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div><div class="sub">contado - esperado</div></div>`:''}
-  </div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header" style="flex-wrap:wrap;gap:8px">
-      <h3>Ventas del día</h3>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:12px;color:var(--text2)">Desde</label>
-        <input type="time" id="caja-hora-desde" value="${caja?.opened_at?new Date(caja.opened_at).toTimeString().slice(0,5):'00:00'}" style="width:100px;font-size:13px;min-height:34px" onchange="cajaFiltrarHoras()">
-        <label style="font-size:12px;color:var(--text2)">Hasta</label>
-        <input type="time" id="caja-hora-hasta" value="${caja?.closed_at?new Date(caja.closed_at).toTimeString().slice(0,5):new Date().toTimeString().slice(0,5)}" style="width:100px;font-size:13px;min-height:34px" onchange="cajaFiltrarHoras()">
-        <button class="btn btn-secondary btn-sm" onclick="cajaFiltrarHoras()">Filtrar</button>
-      </div>
-      <span class="badge" id="caja-ventas-badge">${ventas.cantidad} ventas</span>
-    </div>
-    <div id="caja-ventas-tabla">
-      ${cajaRenderVentasTabla(ventasDetalle||[])}
-    </div>
-  </div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><h3>Resumen por método de pago</h3></div>
-    <table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total ventas</th></tr></thead><tbody>
-      <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
-    </tbody></table>
-  </div>
-  ${!caja?cajaAperturaHTML(fecha):cajaCierreHTML(caja,ventas,esperado)}
-  `;
-  window.__cajaVentasDetalle=ventasDetalle||[];
-  setTimeout(()=>{actualizarTotalConteo('ap');actualizarTotalConteo('ci');},50);
+  gs('content').innerHTML=`<p>Redirigiendo a módulo de caja...</p>`;
+  // Delegar al módulo de turnos si existe
+  if(window.cajaTabTurno!==undefined){ window.cajaTabTurno='actual'; }
+  renderCaja();
 }
+
 
 function cajaRenderVentasTabla(ventas){
   if(!ventas.length) return `<div style="padding:20px;text-align:center;color:var(--text2)">Sin ventas en ese rango</div>`;
@@ -4853,22 +4816,37 @@ initMobileShell();
   window.renderCaja = async function(){
     const hoy=new Date().toISOString().split('T')[0];
     if(cajaTabTurno==='historial') return renderHistorialArqueosTurno();
-    const caja=cajaEditId ? await obtenerCajaPorId(cajaEditId) : await obtenerCajaAbierta();
+    // Busca caja abierta primero, si no hay busca la última del día
+    let caja = cajaEditId ? await obtenerCajaPorId(cajaEditId) : await obtenerCajaAbierta();
+    if(!caja && !cajaEditId){
+      // No hay caja abierta — buscar la última del día (puede estar cerrada)
+      const {data:ultima}=await sb.from('bodega_caja').select('*').eq('fecha',hoy).order('opened_at',{ascending:false}).limit(1);
+      caja=ultima&&ultima[0]||null;
+    }
     if(!caja){
       gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
         <div class="stats-grid">
-          <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:var(--red)">Sin caja abierta</div><div class="sub">Podés abrir una nueva caja aunque hoy ya hayas cerrado otra.</div></div>
+          <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:var(--red)">Sin caja hoy</div><div class="sub">Podés abrir una nueva caja aunque hoy ya hayas cerrado otra.</div></div>
         </div>
         ${cajaAperturaTurnoHTML(hoy)}`;
       setTimeout(()=>actualizarTotalConteo('ap'),50);
       return;
     }
+    // Si está cerrada y no es edición, mostrar aviso con botón reabrir + opción nueva caja
+    const cerrada=caja.estado==='cerrada' && !cajaEditId;
     const ventas=await resumenVentasCaja(caja);
     const gastos=await obtenerGastosCaja(caja.fecha,caja.id);
     const apertura=Number(caja.apertura_efectivo)||0;
     const esperado=apertura+ventas.efectivo-gastos.total;
     const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
+      ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>⚠️ La última caja del día está <b>cerrada</b>. Podés reabrirla para corregir o abrir una nueva caja.</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">🔓 Reabrir esta caja</button>
+          <button class="btn btn-primary btn-sm" onclick="cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
+        </div>
+      </div>`:''}
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja.estado==='abierta'?'var(--green)':'var(--amber)'}">${caja.estado}</div><div class="sub">${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}</div></div>
         <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
@@ -4886,6 +4864,20 @@ initMobileShell();
       ${cajaGastosTurnoHTML(caja,gastos)}
       ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total)}`;
     setTimeout(()=>{actualizarTotalConteo('ci');},50);
+  };
+
+  window.reabrirCajaDesdeAlerta = async function(id){
+    if(!confirm('¿Reabrir esta caja para seguir operando?')) return;
+    const {error}=await sb.from('bodega_caja').update({estado:'abierta',closed_at:null}).eq('id',id);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Caja reabierta'); cajaEditId=null; renderCaja();
+  };
+
+  window.renderCajaNueva = function(){
+    cajaTabTurno='actual'; cajaEditId=null;
+    const hoy=new Date().toISOString().split('T')[0];
+    gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}${cajaAperturaTurnoHTML(hoy)}`;
+    setTimeout(()=>actualizarTotalConteo('ap'),50);
   };
 
   window.abrirCajaTurno = async function(){
