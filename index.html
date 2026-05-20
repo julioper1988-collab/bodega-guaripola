@@ -1586,11 +1586,20 @@ async function goTo(page){
 
 // ─── DASHBOARD ────────────────────────────────────────────────
 async function renderDashboard(){
-  const today=new Date().toISOString().split('T')[0], first=today.slice(0,7)+'-01';
+  // Fecha en zona horaria de Paraguay (UTC-4)
+  const nowPY=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Asuncion'}));
+  const today=nowPY.toISOString().split('T')[0];
+  const first=today.slice(0,7)+'-01';
 
-  // Caja activa del día
-  const {data:cajas}=await sb.from('bodega_caja').select('*').eq('fecha',today).order('opened_at',{ascending:false}).limit(1);
-  const cajaActiva=cajas&&cajas[0];
+  // Caja activa: primero buscar abierta, si no la última del día
+  let cajaActiva=null;
+  const {data:cajasAbiertas}=await sb.from('bodega_caja').select('*').eq('estado','abierta').order('opened_at',{ascending:false}).limit(1);
+  if(cajasAbiertas&&cajasAbiertas[0]){
+    cajaActiva=cajasAbiertas[0];
+  } else {
+    const {data:cajasHoy}=await sb.from('bodega_caja').select('*').eq('fecha',today).order('opened_at',{ascending:false}).limit(1);
+    cajaActiva=cajasHoy&&cajasHoy[0]||null;
+  }
   const cajaAbierta=cajaActiva&&cajaActiva.estado==='abierta';
   const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
 
@@ -5599,16 +5608,55 @@ initMobileShell();
   window.renderHistorialVentas = renderHistorialVentas = async function(){
     const {data,error}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(200);
     if(error){gs('content').innerHTML=`<div class="alert alert-error">Error: ${h(error.message)}</div>`;return;}
-    gs('content').innerHTML=`<div class="card">
-      <div class="card-header" style="gap:8px;flex-wrap:wrap">
-        <h3>Historial de ventas</h3>
-        <span class="badge" id="ventas-sel-count">Ninguna seleccionada</span>
-        <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">🗑 Borrar seleccionadas</button>
+    window.__histVentas=data||[];
+    gs('content').innerHTML=`
+      <div class="search-bar" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
+        <div class="form-group" style="max-width:160px"><label>Desde fecha</label><input type="date" id="hv-fecha-desde" onchange="filtrarHistVentas()"></div>
+        <div class="form-group" style="max-width:160px"><label>Hasta fecha</label><input type="date" id="hv-fecha-hasta" value="${new Date().toISOString().split('T')[0]}" onchange="filtrarHistVentas()"></div>
+        <div class="form-group" style="max-width:110px"><label>Hora desde</label><input type="time" id="hv-hora-desde" onchange="filtrarHistVentas()"></div>
+        <div class="form-group" style="max-width:110px"><label>Hora hasta</label><input type="time" id="hv-hora-hasta" onchange="filtrarHistVentas()"></div>
+        <div class="form-group" style="max-width:140px"><label>Método</label>
+          <select id="hv-metodo" onchange="filtrarHistVentas()">
+            <option value="">Todos</option>
+            <option>efectivo</option><option>transferencia</option><option>qr</option>
+            <option>debito</option><option>credito</option><option>fiado</option><option>mixto</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="window.__histVentas=null;renderHistorialVentas()">↺ Actualizar</button>
       </div>
-      <div style="overflow-x:auto"><table><thead><tr><th><input type="checkbox" onchange="toggleVentasSeleccionadas(this)"></th><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
-      ${(data||[]).map(v=>`<tr>
+      <div class="card">
+        <div class="card-header" style="gap:8px;flex-wrap:wrap">
+          <h3>Historial de ventas</h3>
+          <span class="badge" id="hv-count">${(data||[]).length} ventas</span>
+          <span class="badge" id="ventas-sel-count">Ninguna seleccionada</span>
+          <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">🗑 Borrar seleccionadas</button>
+        </div>
+        <div style="overflow-x:auto" id="hv-tabla-wrap">
+          ${histVentasTabla(data||[])}
+        </div>
+      </div>`;
+  };
+
+  function histVentasTabla(ventas){
+    const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
+    return `<table><thead><tr>
+      <th><input type="checkbox" onchange="toggleVentasSeleccionadas(this)"></th>
+      <th style="color:var(--accent2)">HORA</th>
+      <th>FECHA</th>
+      <th>TIPO</th>
+      <th>CLIENTE</th>
+      <th>SUBTOTAL</th>
+      <th>DESC.</th>
+      <th>TOTAL</th>
+      <th>PAGO</th>
+      <th>ACCIONES</th>
+    </tr></thead><tbody>
+    ${ventas.map(v=>{
+      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      return `<tr>
         <td><input class="venta-check" type="checkbox" value="${v.id}" onchange="actualizarContadorVentasSeleccionadas()"></td>
-        <td>${fmtDate(v.fecha)}</td>
+        <td style="font-weight:800;color:var(--accent2);font-size:14px;white-space:nowrap">${hora}</td>
+        <td style="white-space:nowrap">${fmtDate(v.fecha)}</td>
         <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${h(v.tipo)}</span></td>
         <td>${h(v.cliente_nombre||'-')}</td>
         <td>${fmtGs(v.total)}</td>
@@ -5620,9 +5668,43 @@ initMobileShell();
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
         </td>
-      </tr>`).join('')}
-      ${!(data||[]).length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:18px">No hay ventas.</td></tr>':''}
-      </tbody></table></div></div>`;
+      </tr>`;
+    }).join('')}
+    ${!ventas.length?'<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay ventas con ese filtro.</td></tr>':''}
+    </tbody>
+    ${ventas.length?`<tfoot><tr style="border-top:2px solid var(--border)">
+      <td colspan="7" style="font-weight:800;padding:10px 12px;text-align:right">TOTAL:</td>
+      <td style="font-weight:900;color:var(--green);font-size:16px;padding:10px 12px">${fmtGs(total)}</td>
+      <td colspan="2"></td>
+    </tr></tfoot>`:''}
+    </table>`;
+  }
+  window.histVentasTabla=histVentasTabla;
+
+  window.filtrarHistVentas=function(){
+    const ventas=window.__histVentas||[];
+    const fDesde=gs('hv-fecha-desde')?.value||'';
+    const fHasta=gs('hv-fecha-hasta')?.value||'';
+    const hDesde=gs('hv-hora-desde')?.value||'';
+    const hHasta=gs('hv-hora-hasta')?.value||'';
+    const metodo=gs('hv-metodo')?.value||'';
+    const filtradas=ventas.filter(v=>{
+      if(fDesde && v.fecha<fDesde) return false;
+      if(fHasta && v.fecha>fHasta) return false;
+      if(metodo && (v.metodo_pago||'')!==metodo) return false;
+      if(hDesde||hHasta){
+        const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'');
+        if(hora){
+          if(hDesde && hora<hDesde) return false;
+          if(hHasta && hora>hHasta) return false;
+        }
+      }
+      return true;
+    });
+    const wrap=gs('hv-tabla-wrap');
+    const badge=gs('hv-count');
+    if(wrap) wrap.innerHTML=histVentasTabla(filtradas);
+    if(badge) badge.textContent=`${filtradas.length} ventas`;
   };
   try{pages['historial-ventas']=renderHistorialVentas;}catch(e){}
 
