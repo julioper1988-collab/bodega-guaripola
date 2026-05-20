@@ -3072,19 +3072,24 @@ window.cajaDenomEnter=function(e,prefix,idx){
 async function obtenerCajaFecha(fecha){const {data}=await sb.from('bodega_caja').select('*').eq('fecha',fecha).maybeSingle();return data||null;}
 async function resumenVentasDia(fecha){
   const {data}=await sb.from('bodega_ventas').select('*').eq('fecha',fecha);
-  const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:(data||[]).length};
+  const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:(data||[]).length};
   (data||[]).forEach(v=>{
-    const m=(v.metodo_pago||'').toLowerCase();const t=Number(v.total_final)||0;r.total+=t;
-    if(m==='efectivo')r.efectivo+=t;
-    else if(m==='transferencia')r.transferencia+=t;
-    else if(m==='qr')r.qr+=t;
-    else if(m==='debito')r.debito+=t;
-    else if(m==='credito')r.credito+=t;
-    else if(m==='fiado')r.fiado+=t;
-    else if(m==='mixto'){
-      r.mixto+=t;
-      r.efectivo+=Number(v.monto_efectivo)||0;
-      r.transferencia+=Number(v.monto_transferencia)||0;
+    const m=(v.metodo_pago||'').toLowerCase();const t=Number(v.total_final)||0;
+    r.total+=t; // total histórico incluyendo fiado
+    if(m==='fiado'){
+      r.fiado+=t; // fiado no entra a caja
+    } else {
+      r.total_cobrado+=t;
+      if(m==='efectivo')r.efectivo+=t;
+      else if(m==='transferencia')r.transferencia+=t;
+      else if(m==='qr')r.qr+=t;
+      else if(m==='debito')r.debito+=t;
+      else if(m==='credito')r.credito+=t;
+      else if(m==='mixto'){
+        r.mixto+=t;
+        r.efectivo+=Number(v.monto_efectivo)||0;
+        r.transferencia+=Number(v.monto_transferencia)||0;
+      }
     }
   });
   return r;
@@ -4597,21 +4602,26 @@ initMobileShell();
       console.warn('No se pudo filtrar ventas por turno, usando resumen por día:', error.message);
       return resumenVentasDia(caja.fecha);
     }
-    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:(data||[]).length};
+    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:(data||[]).length};
     (data||[]).forEach(v=>{
       const m=(v.metodo_pago||'').toLowerCase();
       const t=Number(v.total_final)||0;
-      r.total+=t;
-      if(m==='efectivo') r.efectivo+=t;
-      else if(m==='transferencia') r.transferencia+=t;
-      else if(m==='qr') r.qr+=t;
-      else if(m==='debito') r.debito+=t;
-      else if(m==='credito') r.credito+=t;
-      else if(m==='fiado') r.fiado+=t;
-      else if(m==='mixto'){
-        r.mixto+=t;
-        r.efectivo+=Number(v.monto_efectivo)||0;
-        r.transferencia+=Number(v.monto_transferencia)||0;
+      r.total+=t; // total histórico incluyendo fiado (para reportes)
+      if(m==='fiado'){
+        r.fiado+=t;
+        // fiado NO suma a total_cobrado — no ingresó dinero a la caja
+      } else {
+        r.total_cobrado+=t; // solo lo que realmente entró a la caja
+        if(m==='efectivo') r.efectivo+=t;
+        else if(m==='transferencia') r.transferencia+=t;
+        else if(m==='qr') r.qr+=t;
+        else if(m==='debito') r.debito+=t;
+        else if(m==='credito') r.credito+=t;
+        else if(m==='mixto'){
+          r.mixto+=t;
+          r.efectivo+=Number(v.monto_efectivo)||0;
+          r.transferencia+=Number(v.monto_transferencia)||0;
+        }
       }
     });
     return r;
@@ -4776,8 +4786,8 @@ initMobileShell();
     const gastos=await obtenerGastosCaja(caja.fecha,caja.id);
     const apertura=Number(caja.apertura_efectivo)||0;
     const esperado=apertura+ventas.efectivo-gastos.total;
-    // Total esperado incluyendo todos los métodos
-    window.__cajaEsperadoTotal=Math.round(apertura+ventas.total-gastos.total);
+    // Total esperado = apertura + cobrado real (sin fiado) - gastos
+    window.__cajaEsperadoTotal=Math.round(apertura+ventas.total_cobrado-gastos.total);
     const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
       ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -4797,8 +4807,16 @@ initMobileShell();
       </div>
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3>Transacciones del turno</h3><span class="badge">Desde apertura hasta ${caja.closed_at?'cierre':'ahora'}</span></div>
-        <div style="overflow-x:auto"><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody>
-          <tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td style="font-weight:700;color:var(--green)">${fmtGs(ventas.total)}</td></tr>
+        <div style="overflow-x:auto"><table><thead><tr><th>Efectivo</th><th>Transf.</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total cobrado</th></tr></thead><tbody>
+          <tr>
+            <td>${fmtGs(ventas.efectivo)}</td>
+            <td>${fmtGs(ventas.transferencia)}</td>
+            <td>${fmtGs(ventas.qr)}</td>
+            <td>${fmtGs(ventas.debito)}</td>
+            <td>${fmtGs(ventas.credito)}</td>
+            <td style="color:var(--amber);font-weight:600">${fmtGs(ventas.fiado)} <span style="font-size:10px;color:var(--text2)">(no ingresa)</span></td>
+            <td style="font-weight:800;color:var(--green)">${fmtGs(ventas.total_cobrado)}</td>
+          </tr>
         </tbody></table></div>
       </div>
       ${cajaGastosTurnoHTML(caja,gastos)}
