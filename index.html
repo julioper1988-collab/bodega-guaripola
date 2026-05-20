@@ -1072,8 +1072,30 @@ body.mobile-menu-open .mobile-backdrop { display: block; }
 }
 .sidebar-toggle-btn:hover { background: rgba(255,255,255,.25); }
 
-body.sidebar-collapsed #sidebar { display: none !important; }
-body.sidebar-collapsed #main { width: 100% !important; }
+/* Sidebar colapsado: solo íconos, no desaparece */
+body.sidebar-collapsed #sidebar {
+  width: 52px !important;
+  overflow: hidden;
+}
+body.sidebar-collapsed #sidebar .logo,
+body.sidebar-collapsed #sidebar .cfg-btn { display: none !important; }
+body.sidebar-collapsed #sidebar nav a {
+  padding: 12px 0 !important;
+  justify-content: center !important;
+  border-left: none !important;
+}
+body.sidebar-collapsed #sidebar nav a span:not(.ico) { display: none !important; }
+body.sidebar-collapsed #sidebar nav a .ico {
+  width: auto !important;
+  font-size: 18px !important;
+  text-align: center !important;
+}
+body.sidebar-collapsed #sidebar nav a.active {
+  background: rgba(255,255,255,.15) !important;
+}
+body.sidebar-collapsed #sidebar nav a:hover {
+  background: rgba(255,255,255,.1) !important;
+}
 
 /* Inventario móvil drawer */
 @media (max-width: 900px) {
@@ -2969,16 +2991,53 @@ try{
 const CAJA_DENOMS=[100000,50000,20000,10000,5000,2000,1000,500,100];
 const cajaFmtDenom=n=>n>=1000?(n/1000)+' mil':String(n);
 function cajaInputRows(prefix,vals={}){
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px">
-    ${CAJA_DENOMS.map(d=>`<div class="form-group"><label>${cajaFmtDenom(d)}</label><input id="${prefix}-${d}" type="number" min="0" value="${vals[d]||0}" oninput="actualizarTotalConteo('${prefix}')" style="text-align:center"></div>`).join('')}
-  </div><div style="margin-top:10px;font-weight:700;color:var(--accent2)">Total contado: <span id="${prefix}-total">Gs. 0</span></div>`;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-top:8px">
+    ${CAJA_DENOMS.map((d,i)=>`
+      <div class="form-group">
+        <label style="font-weight:700;font-size:13px">${cajaFmtDenom(d)}</label>
+        <input id="${prefix}-${d}" type="number" inputmode="numeric" min="0" value="${vals[d]||0}"
+          oninput="actualizarTotalConteo('${prefix}')"
+          onkeydown="cajaDenomEnter(event,'${prefix}',${i})"
+          onfocus="this.select()"
+          style="text-align:center;font-size:16px;font-weight:700">
+        <span id="${prefix}-sub-${d}" style="font-size:11px;color:var(--text2);text-align:center;display:block;min-height:16px"></span>
+      </div>`).join('')}
+  </div>
+  <div style="margin-top:12px;padding:10px 14px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-weight:600;color:var(--text2)">Total contado:</span>
+    <span id="${prefix}-total" style="font-size:20px;font-weight:800;color:var(--accent)">Gs. 0</span>
+  </div>`;
 }
 function leerConteo(prefix){
   const denoms={};let total=0;
   CAJA_DENOMS.forEach(d=>{const cant=parseInt(gs(`${prefix}-${d}`)?.value)||0;denoms[d]=cant;total+=cant*d;});
   return {denoms,total};
 }
-function actualizarTotalConteo(prefix){const r=leerConteo(prefix);const el=gs(`${prefix}-total`);if(el)el.textContent=fmtGs(r.total);}
+function actualizarTotalConteo(prefix){
+  let total=0;
+  CAJA_DENOMS.forEach(d=>{
+    const cant=parseInt(gs(`${prefix}-${d}`)?.value)||0;
+    total+=cant*d;
+    const sub=gs(`${prefix}-sub-${d}`);
+    if(sub) sub.textContent=cant>0?fmtGs(cant*d):'';
+  });
+  const el=gs(`${prefix}-total`);
+  if(el) el.textContent=fmtGs(total);
+}
+// Enter navega al siguiente campo de denominación
+window.cajaDenomEnter=function(e,prefix,idx){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const next=CAJA_DENOMS[idx+1];
+  if(next){
+    const inp=gs(`${prefix}-${next}`);
+    if(inp){inp.focus();inp.select();}
+  } else {
+    // Último campo — mover al textarea de notas o al botón
+    const notas=gs(`${prefix}-notas`)||document.querySelector(`button.btn-primary`);
+    if(notas) notas.focus();
+  }
+};
 async function obtenerCajaFecha(fecha){const {data}=await sb.from('bodega_caja').select('*').eq('fecha',fecha).maybeSingle();return data||null;}
 async function resumenVentasDia(fecha){
   const {data}=await sb.from('bodega_ventas').select('*').eq('fecha',fecha);
@@ -4497,9 +4556,11 @@ initMobileShell();
 
   async function resumenVentasCaja(caja){
     if(!caja) return {efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,cantidad:0};
-    let q=sb.from('bodega_ventas').select('*').eq('fecha',caja.fecha);
+    // Filtrar SOLO por timestamp — no por fecha, porque la caja puede abarcar varios días
+    let q=sb.from('bodega_ventas').select('*');
     if(caja.opened_at) q=q.gte('created_at',caja.opened_at);
     if(caja.closed_at) q=q.lte('created_at',caja.closed_at);
+    else q=q.lte('created_at',new Date().toISOString());
     const {data,error}=await q;
     if(error){
       console.warn('No se pudo filtrar ventas por turno, usando resumen por día:', error.message);
@@ -4560,6 +4621,40 @@ initMobileShell();
       </div>
     </div>`;
   }
+
+  function cajaEditAperturaHTML(caja){
+    const vals=caja.denominaciones_apertura||{};
+    return `<div class="card" style="margin-bottom:16px">
+      <div class="card-header" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <h3>✏️ Editar importe inicial de apertura</h3>
+        <span class="badge">Apertura: ${fmtGs(caja.apertura_efectivo||0)}</span>
+        <span style="color:var(--text2);font-size:18px;margin-left:auto">⌄</span>
+      </div>
+      <div style="display:none;padding:16px">
+        <div class="alert alert-warning">Corregí el conteo de apertura si cometiste un error. Esto actualiza el importe inicial de esta caja.</div>
+        ${cajaInputRows('edit-ap', vals)}
+        <div class="form-group" style="margin-top:12px">
+          <label>Notas de apertura</label>
+          <textarea id="edit-ap-notas" rows="2">${escapeHtml2(caja.notas_apertura||'')}</textarea>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">💾 Guardar importe inicial</button>
+      </div>
+    </div>`;
+  }
+
+  window.guardarAperturaEditada = async function(cajaId){
+    const c=leerConteo('edit-ap');
+    const notas=gs('edit-ap-notas')?.value||null;
+    const {error}=await sb.from('bodega_caja').update({
+      apertura_efectivo:c.total,
+      denominaciones_apertura:c.denoms,
+      notas_apertura:notas,
+      updated_at:new Date().toISOString()
+    }).eq('id',cajaId);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Importe inicial actualizado');
+    renderCaja();
+  };
 
   function cajaGastosTurnoHTML(caja, gastos){
     const cerrado=caja.estado==='cerrada';
@@ -4655,6 +4750,7 @@ initMobileShell();
         </tbody></table></div>
       </div>
       ${cajaGastosTurnoHTML(caja,gastos)}
+      ${cajaEditAperturaHTML(caja)}
       ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total)}`;
     setTimeout(()=>{actualizarTotalConteo('ci');},50);
   };
