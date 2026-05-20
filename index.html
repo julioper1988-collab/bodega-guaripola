@@ -717,7 +717,10 @@
     }
   `;
   document.head.appendChild(invCss);
-  setTimeout(initInventarioNav,500);
+  setTimeout(function(){
+    if(typeof gs === 'function') initInventarioNav();
+    else setTimeout(initInventarioNav, 800);
+  },600);
 })();
 </script>
 <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -5751,7 +5754,6 @@ initMobileShell();
           ${page<totalPags?`<button class="btn btn-secondary btn-sm" onclick="renderHistorialVentas(${page+1})">Sig. →</button>`:''}
         </div>
       </div>`;
-  };
   };
 
   function histVentasTabla(ventas){
