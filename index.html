@@ -4904,9 +4904,31 @@ initMobileShell();
 
   window.cerrarCajaTurno = async function(id,esperadoFinal){
     const c=leerConteo('ci');
-    const diferencia=c.total-esperadoFinal;
+    const qrContado=moneyVal2('ci-qr');
+    const transfContado=moneyVal2('ci-transferencia');
+    const debitoContado=moneyVal2('ci-debito');
+    const creditoContado=moneyVal2('ci-credito');
+    // Total contado = efectivo + todos los métodos que ingresaste
+    const totalContado=c.total+qrContado+transfContado+debitoContado+creditoContado;
+    // Diferencia = total contado vs total esperado (apertura + cobrado - gastos)
+    const diferencia=totalContado-(window.__cajaEsperadoTotal||esperadoFinal);
     const gastos=await obtenerGastosCaja('',id);
-    const obj={estado:'cerrada',denominaciones_cierre:c.denoms,efectivo_contado:c.total,transferencia_contado:moneyVal2('ci-transferencia'),qr_contado:moneyVal2('ci-qr'),debito_contado:moneyVal2('ci-debito'),credito_contado:moneyVal2('ci-credito'),gastos_caja:gastos.total||0,diferencia,notas_cierre:gs('ci-notas')?.value||null,usuario_cierre:gs('ci-usuario')?.value||null,closed_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+    const obj={
+      estado:'cerrada',
+      denominaciones_cierre:c.denoms,
+      efectivo_contado:c.total,
+      transferencia_contado:transfContado,
+      qr_contado:qrContado,
+      debito_contado:debitoContado,
+      credito_contado:creditoContado,
+      total_contado:totalContado,
+      gastos_caja:gastos.total||0,
+      diferencia,
+      notas_cierre:gs('ci-notas')?.value||null,
+      usuario_cierre:gs('ci-usuario')?.value||null,
+      closed_at:new Date().toISOString(),
+      updated_at:new Date().toISOString()
+    };
     const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
     if(error){toast('Error al guardar cierre: '+error.message,'err');return;}
     toast('Cierre guardado. Diferencia: '+fmtGs(diferencia));
@@ -4929,13 +4951,28 @@ initMobileShell();
     cajaHistFecha=hasta;
     const desde=gs('hist-desde')?.value || new Date(new Date(hasta+'T00:00:00').getTime()-1000*60*60*24*30).toISOString().split('T')[0];
     const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('opened_at',{ascending:false}).limit(200);
-    const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml2(error.message)}</td></tr>`:(data||[]).map(c=>`<tr>
-      <td>${fmtDate(c.fecha)}</td><td>${cajaTurnoTitulo(c)}</td><td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
-      <td>${c.opened_at?new Date(c.opened_at).toLocaleString('es-PY'):'-'}</td><td>${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
-      <td>${fmtGs(c.apertura_efectivo)}</td><td>${fmtGs(c.gastos_caja)}</td><td>${fmtGs(c.efectivo_contado)}</td>
-      <td style="font-weight:700;color:${Number(c.diferencia||0)===0?'var(--green)':Number(c.diferencia||0)>0?'var(--amber)':'var(--red)'}">${fmtGs(c.diferencia)}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editarCierreTurno('${c.id}')">Editar cierre</button><button class="btn btn-secondary btn-sm" onclick="imprimirArqueo('${c.id}')">PDF</button></td>
-    </tr>`).join('')||`<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
+    const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml2(error.message)}</td></tr>`:(data||[]).map(c=>{
+      const totalContado=c.total_contado||(Number(c.efectivo_contado||0)+Number(c.qr_contado||0)+Number(c.transferencia_contado||0)+Number(c.debito_contado||0)+Number(c.credito_contado||0));
+      return `<tr>
+        <td>${fmtDate(c.fecha)}</td>
+        <td>${cajaTurnoTitulo(c)}</td>
+        <td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
+        <td style="font-size:12px">${c.opened_at?new Date(c.opened_at).toLocaleString('es-PY'):'-'}</td>
+        <td style="font-size:12px">${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
+        <td>${fmtGs(c.apertura_efectivo)}</td>
+        <td style="font-size:12px;color:var(--text2)">
+          ${fmtGs(c.efectivo_contado)} ef.
+          ${c.qr_contado?`<br>${fmtGs(c.qr_contado)} QR`:''}
+          ${c.transferencia_contado?`<br>${fmtGs(c.transferencia_contado)} transf.`:''}
+        </td>
+        <td style="font-weight:700">${fmtGs(totalContado)}</td>
+        <td style="font-weight:700;color:${Number(c.diferencia||0)===0?'var(--green)':Number(c.diferencia||0)>0?'var(--amber)':'var(--red)'}">${Number(c.diferencia||0)>0?'+':''}${fmtGs(c.diferencia)}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="editarCierreTurno('${c.id}')">Editar</button>
+          <button class="btn btn-secondary btn-sm" onclick="imprimirArqueo('${c.id}')">PDF</button>
+        </td>
+      </tr>`;
+    }).join('')||`<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('historial')}
       <div class="search-bar" style="align-items:end;flex-wrap:wrap">
         <div class="form-group" style="max-width:240px"><label>Desde</label>
@@ -4953,7 +4990,7 @@ initMobileShell();
         <button class="btn btn-primary" onclick="renderCaja()">Filtrar</button>
       </div>
       <div class="card"><div class="card-header"><h3>Historial de arqueos</h3><span class="badge">Cada apertura queda guardada por separado</span></div>
-        <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Caja/Turno</th><th>Estado</th><th>Apertura hora</th><th>Cierre hora</th><th>Apertura</th><th>Gastos</th><th>Contado</th><th>Diferencia</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Caja/Turno</th><th>Estado</th><th>Apertura hora</th><th>Cierre hora</th><th>Apertura</th><th>Detalle contado</th><th>Total contado</th><th>Diferencia</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
       </div>`;
   }
 
