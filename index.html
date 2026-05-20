@@ -3030,24 +3030,30 @@ function actualizarTotalConteo(prefix){
     const descuadreEl=gs('ci-descuadre-live');
     const descuadreTxt=gs('ci-descuadre-txt');
     if(!contadoEl||!descuadreEl) return;
-    const btn=document.querySelector('[onclick^="cerrarCajaTurno"]');
-    if(!btn) return;
-    const match=btn.getAttribute('onclick').match(/cerrarCajaTurno\('[^']+',(\d+(?:\.\d+)?)\)/);
-    const esperadoEfectivo=match?Number(match[1]):0;
 
-    // Total contado = efectivo contado + otros métodos ingresados
+    // Lo que contaste en total (efectivo + lo que dice cada cuenta/banco)
     const transferencia=parseFloat(gs('ci-transferencia')?.value)||0;
-    const qr=parseFloat(gs('ci-qr')?.value)||0;
+    const qrPos=parseFloat(gs('ci-qr')?.value)||0;
     const debito=parseFloat(gs('ci-debito')?.value)||0;
     const credito=parseFloat(gs('ci-credito')?.value)||0;
-    const totalContado=total+transferencia+qr+debito+credito;
+    const totalContado=total+transferencia+qrPos+debito+credito;
 
-    // Esperado total = efectivo esperado + otros métodos del sistema
-    const totalEsperado=window.__cajaEsperadoTotal||esperadoEfectivo;
+    // Lo que debería haber = apertura + total cobrado real (sin fiado) - gastos
+    const totalEsperado=window.__cajaEsperadoTotal||0;
 
     const dif=totalContado-totalEsperado;
-    contadoEl.innerHTML=`<div style="font-size:14px">${fmtGs(total)} efectivo</div><div style="font-size:12px;color:var(--text2)">${fmtGs(transferencia)} transf · ${fmtGs(qr)} QR · ${fmtGs(debito)} déb · ${fmtGs(credito)} créd</div><div style="font-size:18px;font-weight:800;margin-top:4px">${fmtGs(totalContado)} total</div>`;
     const color=dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)';
+
+    contadoEl.innerHTML=`
+      <div style="font-size:15px;color:var(--text2)">
+        ${fmtGs(total)} efect.
+        ${transferencia?` + ${fmtGs(transferencia)} transf.`:''}
+        ${qrPos?` + ${fmtGs(qrPos)} QR`:''}
+        ${debito?` + ${fmtGs(debito)} déb.`:''}
+        ${credito?` + ${fmtGs(credito)} créd.`:''}
+      </div>
+      <div style="font-size:20px;font-weight:800;margin-top:4px">${fmtGs(totalContado)}</div>`;
+
     descuadreEl.innerHTML=`<span style="color:${color}">${dif>0?'+':''}${fmtGs(dif)}</span>`;
     if(descuadreTxt){
       descuadreTxt.style.color=color;
@@ -4742,7 +4748,7 @@ initMobileShell();
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
           <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Total esperado</div>
             <div style="font-size:18px;font-weight:800;color:var(--accent)">${fmtGs(totalEsperado)}</div>
-            <div style="font-size:11px;color:var(--text2)">apertura + ventas − gastos</div></div>
+            <div style="font-size:11px;color:var(--text2)">apertura + ventas cobradas − gastos</div></div>
           <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Efectivo contado</div>
             <div style="font-size:18px;font-weight:800;color:var(--text)" id="ci-contado-live">${cerrado?fmtGs(caja.efectivo_contado||0):'Gs. 0'}</div></div>
           <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Descuadre</div>
@@ -4754,10 +4760,22 @@ initMobileShell();
 
       ${cajaInputRows('ci',vals)}
       <div class="form-grid" style="margin-top:12px">
-        <div class="form-group"><label>Transferencia contada</label><input id="ci-transferencia" type="number" value="${caja.transferferencia_contado||caja.transferencia_contado||ventas.transferencia}" oninput="actualizarTotalConteo('ci')"></div>
-        <div class="form-group"><label>QR contado</label><input id="ci-qr" type="number" value="${caja.qr_contado||ventas.qr}" oninput="actualizarTotalConteo('ci')"></div>
-        <div class="form-group"><label>Débito contado</label><input id="ci-debito" type="number" value="${caja.debito_contado||ventas.debito}" oninput="actualizarTotalConteo('ci')"></div>
-        <div class="form-group"><label>Crédito contado</label><input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}" oninput="actualizarTotalConteo('ci')"></div>
+        <div class="form-group">
+          <label>QR <span style="font-size:11px;color:var(--text2)">según reporte del POS/banco</span></label>
+          <input id="ci-qr" type="number" value="${caja.qr_contado||ventas.qr}" oninput="actualizarTotalConteo('ci')">
+        </div>
+        <div class="form-group">
+          <label>Transferencia contada</label>
+          <input id="ci-transferencia" type="number" value="${caja.transferferencia_contado||caja.transferencia_contado||ventas.transferencia}" oninput="actualizarTotalConteo('ci')">
+        </div>
+        <div class="form-group">
+          <label>Débito contado</label>
+          <input id="ci-debito" type="number" value="${caja.debito_contado||ventas.debito}" oninput="actualizarTotalConteo('ci')">
+        </div>
+        <div class="form-group">
+          <label>Crédito contado</label>
+          <input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}" oninput="actualizarTotalConteo('ci')">
+        </div>
         <div class="form-group"><label>Gastos varios</label><input type="number" value="${gastosTotal}" disabled></div>
         <div class="form-group"><label>Usuario cierre</label><input id="ci-usuario" value="${escapeHtml2(caja.usuario_cierre||'')}" placeholder="Ej: Julio, cajera"></div>
       </div>
