@@ -4560,7 +4560,16 @@ initMobileShell();
 (function(){
   const escapeHtml2 = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const moneyVal2 = id => Number(gs(id)?.value || 0) || 0;
-  let cajaTabTurno = 'actual';
+  // Exponer como window para que los onclick del HTML puedan acceder
+  if(window.cajaTabTurno===undefined) window.cajaTabTurno='actual';
+  if(window.cajaEditId===undefined) window.cajaEditId=null;
+  // Getters/setters que sincronizan local ↔ window
+  const getTab=()=>window.cajaTabTurno;
+  const setTab=v=>{ window.cajaTabTurno=v; };
+  const getEditId=()=>window.cajaEditId;
+  const setEditId=v=>{ window.cajaEditId=v; };
+  // Proxy para que el código interno use la misma referencia
+  let cajaTabTurno='actual'; // solo se usa en closures; leer siempre via window
   let cajaHistFecha = new Date().toISOString().split('T')[0];
   let cajaEditId = null;
 
@@ -4763,6 +4772,9 @@ initMobileShell();
 
   window.renderCaja = async function(){
     const hoy=new Date().toISOString().split('T')[0];
+    // Leer siempre desde window para que los onclick del HTML funcionen
+    cajaTabTurno=window.cajaTabTurno||'actual';
+    cajaEditId=window.cajaEditId||null;
     if(cajaTabTurno==='historial') return renderHistorialArqueosTurno();
     // Busca caja abierta primero, si no hay busca la última del día
     let caja = cajaEditId ? await obtenerCajaPorId(cajaEditId) : await obtenerCajaAbierta();
@@ -4794,7 +4806,7 @@ initMobileShell();
         <span>⚠️ La última caja del día está <b>cerrada</b>. Podés reabrirla para corregir o abrir una nueva caja.</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">🔓 Reabrir esta caja</button>
-          <button class="btn btn-primary btn-sm" onclick="cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
+          <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
         </div>
       </div>`:''}
       <div class="stats-grid">
@@ -4833,7 +4845,7 @@ initMobileShell();
   };
 
   window.renderCajaNueva = function(){
-    cajaTabTurno='actual'; cajaEditId=null;
+    window.cajaTabTurno='actual'; window.cajaEditId=null;
     const hoy=new Date().toISOString().split('T')[0];
     gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}${cajaAperturaTurnoHTML(hoy)}`;
     setTimeout(()=>actualizarTotalConteo('ap'),50);
@@ -4848,7 +4860,7 @@ initMobileShell();
     const obj={fecha,estado:'abierta',numero_caja:numero,nombre_turno:gs('ap-turno')?.value||null,usuario_apertura:gs('ap-usuario')?.value||null,apertura_efectivo:c.total,denominaciones_apertura:c.denoms,notas_apertura:gs('ap-notas')?.value||null,opened_at:new Date().toISOString(),updated_at:new Date().toISOString()};
     const {error}=await sb.from('bodega_caja').insert(obj);
     if(error){toast('Error al abrir caja: '+error.message,'err');return;}
-    cajaEditId=null;cajaTabTurno='actual';toast('Caja abierta');renderCaja();
+    window.cajaEditId=null;window.cajaTabTurno='actual';toast('Caja abierta');renderCaja();
   };
 
   window.agregarGastoCajaTurno = async function(cajaId,fecha){
@@ -4880,7 +4892,7 @@ initMobileShell();
     const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
     if(error){toast('Error al guardar cierre: '+error.message,'err');return;}
     toast('Cierre guardado. Diferencia: '+fmtGs(diferencia));
-    cajaEditId=null;cajaTabTurno='actual';renderCaja();
+    window.cajaEditId=null;window.cajaTabTurno='actual';renderCaja();
   };
 
   async function recalcularCajaTurno(id){
@@ -4927,7 +4939,7 @@ initMobileShell();
       </div>`;
   }
 
-  window.editarCierreTurno=function(id){cajaEditId=id;cajaTabTurno='actual';renderCaja();};
+  window.editarCierreTurno=function(id){window.cajaEditId=id;window.cajaTabTurno='actual';renderCaja();};
 
   window.imprimirArqueo = async function(id){
     const caja=await obtenerCajaPorId(id);
