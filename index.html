@@ -1619,12 +1619,7 @@ async function renderDashboard(){
 
   const [vH,vM,cM,sB,vCajaRaw]=await Promise.all([ventasHoyQ,ventasMesQ,comprasQ,stockQ,ventasCajaQ||Promise.resolve({data:[]})]);
 
-  console.log('today (PY):', today);
-  console.log('cajaActiva:', cajaActiva);
-  console.log('cajaActiva.opened_at:', cajaActiva?.opened_at);
-  console.log('ventas hoy (fecha=today):', vH.data?.length, vH.data?.map(v=>({id:v.id,created_at:v.created_at,total:v.total_final})));
-  console.log('ventas caja (por timestamp):', vCajaRaw.data?.length, vCajaRaw.error?.message);
-  console.log('ventas mes:', vM.data?.length);
+  const ventasHoy=vH.data||[];
   const tH=ventasHoy.reduce((s,v)=>s+(v.total_final||0),0);
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
