@@ -1047,7 +1047,26 @@ body.mobile-menu-open .mobile-backdrop { display: block; }
 #inv-panel-inner { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 #inv-drawer-bar { display: none; }
 
-/* ── DESKTOP: drawer móvil oculto ── */
+/* ── VISIBILIDAD MEJORADA ── */
+body { font-size: 14px; }
+tbody td { font-size: 14px; color: #111827; }
+thead th { font-size: 12px; color: #374151; background: #f1f3f5; }
+.stat-card .value { font-size: 24px; font-weight: 900; color: #111827; }
+.stat-card .label { font-size: 11px; color: #4b5563; font-weight: 700; }
+.stat-card .sub   { font-size: 12px; color: #6b7280; }
+.card-header h3   { font-size: 15px; font-weight: 800; color: #111827; }
+.form-group label { font-size: 13px; font-weight: 700; color: #374151; }
+input, select, textarea { font-size: 14px; color: #111827; background: #fff; }
+.badge { font-size: 12px; font-weight: 700; color: #374151; background: #f1f3f5; border-color: #d1d5db; }
+.alert-warning { font-size: 13px; font-weight: 600; }
+/* Valores monetarios en tablas más grandes */
+td[style*="color:var(--green)"],
+td[style*="color:var(--red)"],
+td[style*="color:var(--amber)"] { font-size: 14px !important; font-weight: 800 !important; }
+/* Sidebar más legible */
+#sidebar nav a { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.8); }
+#sidebar nav a.active { color: #fff; font-weight: 700; }
+#topbar h2 { font-size: 16px; font-weight: 800; }
 @media (min-width: 901px) {
   #vr-cobro-bar { display: none !important; }
   #vr-detail { display: block !important; }
@@ -2990,22 +3009,51 @@ try{
 // ─── CAJA / ARQUEO DIARIO ─────────────────────────────────────
 const CAJA_DENOMS=[100000,50000,20000,10000,5000,2000,1000,500,100];
 const cajaFmtDenom=n=>n>=1000?(n/1000)+' mil':String(n);
+
+const DENOM_META={
+  100000:{color:'#1a3a6b',bg:'#dce8fb',label:'100 mil',tipo:'billete'},
+  50000: {color:'#5b2d8e',bg:'#ede0f7',label:'50 mil', tipo:'billete'},
+  20000: {color:'#1a6b3a',bg:'#d6f0e0',label:'20 mil', tipo:'billete'},
+  10000: {color:'#b84a00',bg:'#fde8d4',label:'10 mil', tipo:'billete'},
+  5000:  {color:'#9b1c1c',bg:'#fde0e0',label:'5 mil',  tipo:'billete'},
+  2000:  {color:'#2d6e2d',bg:'#d6f0d6',label:'2 mil',  tipo:'billete'},
+  1000:  {color:'#6b4a1a',bg:'#f0e6d6',label:'1 mil',  tipo:'billete'},
+  500:   {color:'#555',   bg:'#ececec',label:'500',     tipo:'moneda'},
+  100:   {color:'#888',   bg:'#f5f5f5',label:'100',     tipo:'moneda'},
+};
+
+function cajaBilleteSVG(d){
+  const m=DENOM_META[d]||{color:'#333',bg:'#eee',tipo:'billete'};
+  if(m.tipo==='moneda'){
+    return `<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="${m.bg}" stroke="${m.color}" stroke-width="2"/><circle cx="16" cy="16" r="9" fill="none" stroke="${m.color}" stroke-width="1" opacity=".35"/><text x="16" y="20" text-anchor="middle" font-size="8.5" font-weight="800" fill="${m.color}" font-family="sans-serif">${d>=1000?(d/1000)+'K':d}</text></svg>`;
+  }
+  return `<svg width="52" height="26" viewBox="0 0 52 26"><rect width="52" height="26" rx="3" fill="${m.bg}" stroke="${m.color}" stroke-width="1.5"/><rect x="2" y="2" width="48" height="22" rx="2" fill="none" stroke="${m.color}" stroke-width=".5" opacity=".25"/><circle cx="26" cy="13" r="6" fill="none" stroke="${m.color}" stroke-width=".8" opacity=".2"/><text x="26" y="17" text-anchor="middle" font-size="${d>=10000?'8':'9'}" font-weight="900" fill="${m.color}" font-family="sans-serif">${d>=1000?(d/1000)+'K':d}</text><rect x="3" y="3" width="7" height="5" rx="1" fill="${m.color}" opacity=".12"/><rect x="42" y="18" width="7" height="5" rx="1" fill="${m.color}" opacity=".12"/></svg>`;
+}
+
 function cajaInputRows(prefix,vals={}){
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-top:8px">
-    ${CAJA_DENOMS.map((d,i)=>`
-      <div class="form-group">
-        <label style="font-weight:700;font-size:13px">${cajaFmtDenom(d)}</label>
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-top:8px">
+    ${CAJA_DENOMS.map((d,i)=>{
+      const m=DENOM_META[d]||{color:'#333',bg:'#eee'};
+      return `
+      <div style="background:${m.bg};border:2px solid ${m.color}40;border-radius:10px;padding:10px 8px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:6px">
+          ${cajaBilleteSVG(d)}
+          <span style="font-size:13px;font-weight:900;color:${m.color};line-height:1">${cajaFmtDenom(d)}</span>
+        </div>
         <input id="${prefix}-${d}" type="number" inputmode="numeric" min="0" value="${vals[d]||0}"
           oninput="actualizarTotalConteo('${prefix}')"
           onkeydown="cajaDenomEnter(event,'${prefix}',${i})"
           onfocus="this.select()"
-          style="text-align:center;font-size:16px;font-weight:700">
-        <span id="${prefix}-sub-${d}" style="font-size:11px;color:var(--text2);text-align:center;display:block;min-height:16px"></span>
-      </div>`).join('')}
+          style="text-align:center;font-size:20px;font-weight:900;background:#fff;border:2px solid ${m.color}60;border-radius:6px;padding:6px 4px;width:100%;color:${m.color};outline:none"
+          onfocus="this.select();this.style.borderColor='${m.color}'"
+        >
+        <span id="${prefix}-sub-${d}" style="font-size:11px;font-weight:700;color:${m.color};text-align:center;min-height:15px;opacity:.85"></span>
+      </div>`;
+    }).join('')}
   </div>
-  <div style="margin-top:12px;padding:10px 14px;background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between">
-    <span style="font-weight:600;color:var(--text2)">Total contado:</span>
-    <span id="${prefix}-total" style="font-size:20px;font-weight:800;color:var(--accent)">Gs. 0</span>
+  <div style="margin-top:14px;padding:14px 18px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+    <span style="font-weight:700;color:var(--text);font-size:14px">Total contado:</span>
+    <span id="${prefix}-total" style="font-size:24px;font-weight:900;color:var(--accent)">Gs. 0</span>
   </div>`;
 }
 function leerConteo(prefix){
