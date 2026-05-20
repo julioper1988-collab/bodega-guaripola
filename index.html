@@ -4713,6 +4713,8 @@ initMobileShell();
     const cerrado=caja.estado==='cerrada';
     const vals=cerrado?(caja.denominaciones_cierre||{}):{};
     const difGuardada=cerrado?Number(caja.diferencia||0):null;
+    // Total esperado = apertura + total ventas - gastos (guardado al renderizar)
+    const totalEsperado=window.__cajaEsperadoTotal||esperado;
     return `<div class="card"><div class="card-header"><h3>${cerrado?'Editar cierre guardado':'Cerrar caja / arqueo'}</h3><span class="badge">${cajaTurnoTitulo(caja)}</span></div><div style="padding:16px">
       ${cerrado?`<div class="alert alert-warning">Esta caja ya fue cerrada. Desde acá solo editás el cierre guardado; no se reabre la caja.</div>`:''}
 
@@ -4720,7 +4722,7 @@ initMobileShell();
       <div id="caja-descuadre-panel" style="margin-bottom:16px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius)">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
           <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Total esperado</div>
-            <div style="font-size:18px;font-weight:800;color:var(--accent)">${fmtGs(Math.round(apertura+ventas.total-gastosTotal))}</div>
+            <div style="font-size:18px;font-weight:800;color:var(--accent)">${fmtGs(totalEsperado)}</div>
             <div style="font-size:11px;color:var(--text2)">apertura + ventas − gastos</div></div>
           <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Efectivo contado</div>
             <div style="font-size:18px;font-weight:800;color:var(--text)" id="ci-contado-live">${cerrado?fmtGs(caja.efectivo_contado||0):'Gs. 0'}</div></div>
