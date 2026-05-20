@@ -1620,7 +1620,7 @@ async function renderDashboard(){
   const [vH,vM,cM,sB,vCajaRaw]=await Promise.all([ventasHoyQ,ventasMesQ,comprasQ,stockQ,ventasCajaQ||Promise.resolve({data:[]})]);
 
   const ventasHoy=vH.data||[];
-  const tH=ventasHoy.reduce((s,v)=>s+(v.total_final||0),0);
+  const tH=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0); // usa ventas del turno
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
   const bc=(sB.data||[]).length;
@@ -1632,31 +1632,84 @@ async function renderDashboard(){
   // Ultimas ventas (8)
   const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago,created_at').order('created_at',{ascending:false}).limit(8);
 
+  // Traer detalle de productos vendidos en este turno
+  const ventaIds=(ventasCaja||[]).map(v=>v.id);
+  let detallesCaja=[];
+  if(ventaIds.length){
+    const {data:det}=await sb.from('bodega_ventas_detalle')
+      .select('producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,stock,precio_costo)')
+      .in('venta_id',ventaIds);
+    detallesCaja=det||[];
+  }
+  // Agrupar por producto
+  const porProd={};
+  detallesCaja.forEach(d=>{
+    const pid=d.producto_id; if(!pid) return;
+    const nombre=d.bodega_productos?.nombre||'Desconocido';
+    const stock=d.bodega_productos?.stock??'-';
+    const costo=Number(d.bodega_productos?.precio_costo)||0;
+    const cant=Number(d.cantidad)||0;
+    const subtotal=Number(d.subtotal||(d.precio_unitario*cant))||0;
+    if(!porProd[pid]) porProd[pid]={nombre,stock,costo,cant:0,venta:0,ganancia:0};
+    porProd[pid].cant+=cant;
+    porProd[pid].venta+=subtotal;
+    porProd[pid].ganancia+=subtotal-(costo*cant);
+  });
+  const prodRows=Object.values(porProd).sort((a,b)=>b.venta-a.venta);
+  const totalVentaProd=prodRows.reduce((s,r)=>s+r.venta,0);
+  const totalGanancia=prodRows.reduce((s,r)=>s+r.ganancia,0);
+
   gs('content').innerHTML=`
   <div class="stats-grid">
-    <div class="stat-card"><div class="label">Ventas hoy</div><div class="value" style="color:var(--green)">${fmtGs(tH)}</div><div class="sub">${ventasHoy.length} transacciones</div></div>
-    <div class="stat-card"><div class="label">Caja ${cajaAbierta?'🟢 abierta':'🔴 cerrada'}</div><div class="value" style="color:var(--accent2)">${fmtGs(tCaja)}</div><div class="sub">${cajaAbierta?`Desde ${horaApertura||'--:--'}`:cajaActiva?`Cerrada · ${horaApertura||'--:--'}`:'Sin caja hoy'} · ${ventasCaja.length} ventas</div></div>
+    <div class="stat-card"><div class="label">Ventas del turno</div><div class="value" style="color:var(--green)">${fmtGs(tH)}</div><div class="sub">${cajaAbierta?`🟢 Desde ${horaApertura||'--:--'}`:cajaActiva?`🔴 Cerrada · ${horaApertura||'--:--'}`:'Sin caja'} · ${ventasCaja.length} ventas</div></div>
+    <div class="stat-card"><div class="label">Ganancia del turno</div><div class="value" style="color:var(--teal)">${fmtGs(totalGanancia)}</div><div class="sub">${prodRows.length} productos distintos</div></div>
     <div class="stat-card"><div class="label">Ventas mes</div><div class="value" style="color:var(--accent2)">${fmtGs(tM)}</div><div class="sub">${(vM.data||[]).length} transacciones</div></div>
     <div class="stat-card"><div class="label">Compras mes</div><div class="value" style="color:var(--amber)">${fmtGs(tC)}</div></div>
     <div class="stat-card"><div class="label">Stock bajo</div><div class="value" style="color:${bc>0?'var(--red)':'var(--green)'}">${bc}</div><div class="sub">menos de 5 unidades</div></div>
   </div>
   ${bc>0?`<div class="alert alert-warning">⚠️ ${bc} productos con stock bajo.</div>`:''}
 
-  <!-- Ventas de la caja activa con filtro de horas -->
+  <!-- Reporte productos del turno -->
   <div class="card" style="margin-bottom:14px">
-    <div class="card-header" style="flex-wrap:wrap;gap:8px">
-      <h3>Ventas de esta caja</h3>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:12px;color:var(--text2)">Desde</label>
-        <input type="time" id="dash-desde" value="${cajaActiva?.opened_at?new Date(cajaActiva.opened_at).toTimeString().slice(0,5):'00:00'}" style="width:100px;font-size:13px;min-height:34px" onchange="dashFiltrarHoras()">
-        <label style="font-size:12px;color:var(--text2)">Hasta</label>
-        <input type="time" id="dash-hasta" value="${cajaActiva?.closed_at?new Date(cajaActiva.closed_at).toTimeString().slice(0,5):new Date().toTimeString().slice(0,5)}" style="width:100px;font-size:13px;min-height:34px" onchange="dashFiltrarHoras()">
-        <button class="btn btn-secondary btn-sm" onclick="dashFiltrarHoras()">Filtrar</button>
-      </div>
-      <span class="badge" id="dash-caja-badge">${ventasCaja.length} ventas · ${fmtGs(tCaja)}</span>
+    <div class="card-header" style="flex-wrap:wrap;gap:8px;cursor:pointer" onclick="dashToggleReporte()">
+      <h3>Productos vendidos en este turno</h3>
+      <span class="badge" id="dash-caja-badge">${ventasCaja.length} ventas · ${prodRows.length} productos · ${fmtGs(totalVentaProd)}</span>
+      <span id="dash-reporte-ico" style="margin-left:auto;font-size:18px;color:var(--text2)">⌄</span>
     </div>
-    <div id="dash-caja-ventas">
-      ${dashRenderVentasTabla(ventasCaja)}
+    <div id="dash-reporte-body" style="display:none">
+    ${prodRows.length?`
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>Producto</th>
+        <th style="text-align:center">Uds.</th>
+        <th style="text-align:center">Stock</th>
+        <th style="text-align:right">Total venta</th>
+        <th style="text-align:right">Ganancia</th>
+      </tr></thead>
+      <tbody>
+        ${prodRows.map(r=>{
+          const stockColor=r.stock==='-'?'var(--text2)':r.stock<=0?'var(--red)':r.stock<5?'var(--amber)':'var(--green)';
+          const ganColor=r.ganancia>=0?'var(--teal)':'var(--red)';
+          return `<tr>
+            <td style="font-weight:600">${r.nombre}</td>
+            <td style="text-align:center;font-weight:800;color:var(--accent2)">${r.cant}</td>
+            <td style="text-align:center;font-weight:700;color:${stockColor}">${r.stock}</td>
+            <td style="text-align:right;color:var(--green);font-weight:600">${fmtGs(r.venta)}</td>
+            <td style="text-align:right;color:${ganColor};font-weight:700">${fmtGs(r.ganancia)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border);background:var(--bg3)">
+          <td colspan="3" style="font-weight:800;padding:10px 12px">TOTAL DEL TURNO</td>
+          <td style="text-align:right;font-weight:900;color:var(--green);font-size:16px;padding:10px 12px">${fmtGs(totalVentaProd)}</td>
+          <td style="text-align:right;font-weight:900;color:var(--teal);font-size:16px;padding:10px 12px">${fmtGs(totalGanancia)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>`
+    :`<div style="padding:24px;text-align:center;color:var(--text2)">Sin ventas en este turno todavía</div>`}
     </div>
   </div>
 
@@ -1670,7 +1723,6 @@ async function renderDashboard(){
     </tbody></table>
   </div>`;
 
-  // Guardar ventas hoy para el filtro
   window.__dashVentasCaja=ventasCaja;
   window.__dashVentasHoy=ventasHoy;
 }
@@ -1699,6 +1751,15 @@ window.dashFiltrarHoras=function(){
   const badge=gs('dash-caja-badge');
   if(el) el.innerHTML=dashRenderVentasTabla(ventas);
   if(badge){ const t=ventas.reduce((s,v)=>s+(v.total_final||0),0); badge.textContent=`${ventas.length} ventas · ${fmtGs(t)}`; }
+};
+
+window.dashToggleReporte=function(){
+  const body=gs('dash-reporte-body');
+  const ico=gs('dash-reporte-ico');
+  if(!body) return;
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  if(ico) ico.textContent=open?'⌃':'⌄';
 };
 
 // ─── PRODUCTOS ────────────────────────────────────────────────
