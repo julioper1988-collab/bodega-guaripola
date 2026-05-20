@@ -1640,14 +1640,13 @@ async function renderDashboard(){
   const [vH,vM,cM,sB,vCajaRaw]=await Promise.all([ventasHoyQ,ventasMesQ,comprasQ,stockQ,ventasCajaQ||Promise.resolve({data:[]})]);
 
   const ventasHoy=vH.data||[];
-  const tH=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0); // usa ventas del turno
+  // Ventas de la caja: usar query directa si hay caja, si no usar las de hoy
+  const ventasCaja=cajaActiva ? (vCajaRaw.data||[]) : ventasHoy;
+  const tH=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0);
+  const tCaja=tH;
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
   const bc=(sB.data||[]).length;
-
-  // Ventas de la caja: usar query directa si hay caja, si no usar las de hoy
-  const ventasCaja=cajaActiva ? (vCajaRaw.data||[]) : ventasHoy;
-  const tCaja=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0);
 
   // Ultimas ventas (8)
   const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago,created_at').order('created_at',{ascending:false}).limit(8);
