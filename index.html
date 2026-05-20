@@ -1604,7 +1604,7 @@ async function renderDashboard(){
   const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
 
   // Ventas: traer las de hoy Y las de la caja activa por timestamp
-  const ventasHoyQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').eq('fecha',today).order('created_at',{ascending:false});
+  const ventasHoyQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at').eq('fecha',today).order('created_at',{ascending:false});
   const ventasMesQ=sb.from('bodega_ventas').select('total_final').gte('fecha',first);
   const comprasQ=sb.from('bodega_compras').select('total').gte('fecha',first).eq('estado','finalizado');
   const stockQ=sb.from('bodega_productos').select('id').lt('stock',5).eq('activo',true);
@@ -1614,12 +1614,17 @@ async function renderDashboard(){
   if(cajaActiva?.opened_at){
     const desde=cajaActiva.opened_at;
     const hasta=cajaActiva.closed_at||new Date().toISOString();
-    ventasCajaQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at,hora').gte('created_at',desde).lte('created_at',hasta).order('created_at',{ascending:false});
+    ventasCajaQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at').gte('created_at',desde).lte('created_at',hasta).order('created_at',{ascending:false});
   }
 
   const [vH,vM,cM,sB,vCajaRaw]=await Promise.all([ventasHoyQ,ventasMesQ,comprasQ,stockQ,ventasCajaQ||Promise.resolve({data:[]})]);
 
-  const ventasHoy=vH.data||[];
+  console.log('today (PY):', today);
+  console.log('cajaActiva:', cajaActiva);
+  console.log('cajaActiva.opened_at:', cajaActiva?.opened_at);
+  console.log('ventas hoy (fecha=today):', vH.data?.length, vH.data?.map(v=>({id:v.id,created_at:v.created_at,total:v.total_final})));
+  console.log('ventas caja (por timestamp):', vCajaRaw.data?.length, vCajaRaw.error?.message);
+  console.log('ventas mes:', vM.data?.length);
   const tH=ventasHoy.reduce((s,v)=>s+(v.total_final||0),0);
   const tM=(vM.data||[]).reduce((s,v)=>s+(v.total_final||0),0);
   const tC=(cM.data||[]).reduce((s,v)=>s+(v.total||0),0);
@@ -1630,7 +1635,7 @@ async function renderDashboard(){
   const tCaja=ventasCaja.reduce((s,v)=>s+(v.total_final||0),0);
 
   // Ultimas ventas (8)
-  const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago,created_at,hora').order('created_at',{ascending:false}).limit(8);
+  const uv=await sb.from('bodega_ventas').select('id,fecha,tipo,total_final,metodo_pago,created_at').order('created_at',{ascending:false}).limit(8);
 
   gs('content').innerHTML=`
   <div class="stats-grid">
@@ -1664,7 +1669,7 @@ async function renderDashboard(){
     <div class="card-header"><h3>Últimas ventas</h3><button class="btn btn-secondary btn-sm" onclick="goTo('historial-ventas')">Ver todo</button></div>
     <table><thead><tr><th>Hora</th><th>Fecha</th><th>Método</th><th>Total</th></tr></thead><tbody>
       ${(uv.data||[]).map(v=>{
-        const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+        const hora=fmtHoraVenta(v);
         return `<tr><td style="color:var(--text2);font-size:13px">${hora}</td><td>${fmtDate(v.fecha)}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
       }).join('')}
     </tbody></table>
@@ -1680,7 +1685,7 @@ function dashRenderVentasTabla(ventas){
   const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
   return `<table><thead><tr><th>Hora</th><th>Método</th><th>Total</th></tr></thead><tbody>
     ${ventas.map(v=>{
-      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      const hora=fmtHoraVenta(v);
       return `<tr><td style="color:var(--text2);font-size:13px">${hora}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
     }).join('')}
     <tr style="border-top:2px solid var(--border)"><td colspan="2" style="font-weight:800;padding:10px 12px">TOTAL</td><td style="font-weight:900;color:var(--green);font-size:16px">${fmtGs(total)}</td></tr>
@@ -1691,7 +1696,7 @@ window.dashFiltrarHoras=function(){
   const desde=gs('dash-desde')?.value||'00:00';
   const hasta=gs('dash-hasta')?.value||'23:59';
   const ventas=(window.__dashVentasCaja||window.__dashVentasHoy||[]).filter(v=>{
-    const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'');
+    const hora=fmtHoraVenta(v);
     if(!hora) return true;
     return hora>=desde && hora<=hasta;
   });
@@ -1742,6 +1747,14 @@ async function renderProductos(){
     </div>
   </div>`;
 }
+// ── HORA DE VENTA: siempre desde created_at (la col 'hora' no existe en BD) ──
+window.fmtHoraVenta=function(v){
+  if(!v) return '--:--';
+  const ts=v.created_at||v.updated_at;
+  if(!ts) return '--:--';
+  return new Date(ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+};
+
 // ── RELOJ EN VIVO ─────────────────────────────────────────────
 (function(){
   function tickClock(){
@@ -2223,7 +2236,6 @@ async function finalizarVenta(){
   const hora=ahora.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
   const venta={
     fecha:ahora.toISOString().split('T')[0],tipo:ventaTipo,
-    hora,
     cliente_nombre:gs('v-cliente').value||null,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
@@ -2746,7 +2758,6 @@ finalizarVenta = async function(){
   const venta={
     fecha:ahora2.toISOString().split('T')[0],
     tipo:ventaTipo,
-    hora:hora2,
     cliente_nombre:cli.nombre,
     total,descuento:desc,total_final:totalFinal,
     metodo_pago:selectedPay,
@@ -2787,7 +2798,7 @@ renderHistorialVentas = async function(){
     <div class="card-header"><h3>Historial de ventas</h3></div>
     <table><thead><tr><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
     ${(data||[]).map(v=>{
-      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      const hora=fmtHoraVenta(v);
       return `<tr>
         <td style="color:var(--accent2);font-weight:700;font-size:13px">${hora}</td>
         <td>${fmtDate(v.fecha)}</td>
@@ -3263,7 +3274,7 @@ function cajaRenderVentasTabla(ventas){
   const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
   return `<table><thead><tr><th>Hora</th><th>Cliente</th><th>Método</th><th>Total</th></tr></thead><tbody>
     ${ventas.map(v=>{
-      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      const hora=fmtHoraVenta(v);
       return `<tr><td style="color:var(--accent2);font-weight:700;font-size:13px">${hora}</td><td style="color:var(--text2);font-size:13px">${v.cliente||'Ocasional'}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
     }).join('')}
     <tr style="border-top:2px solid var(--border)"><td colspan="3" style="font-weight:800;padding:10px 12px">TOTAL</td><td style="font-weight:900;color:var(--green);font-size:16px">${fmtGs(total)}</td></tr>
@@ -5652,7 +5663,7 @@ initMobileShell();
       <th>ACCIONES</th>
     </tr></thead><tbody>
     ${ventas.map(v=>{
-      const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--');
+      const hora=fmtHoraVenta(v);
       return `<tr>
         <td><input class="venta-check" type="checkbox" value="${v.id}" onchange="actualizarContadorVentasSeleccionadas()"></td>
         <td style="font-weight:800;color:var(--accent2);font-size:14px;white-space:nowrap">${hora}</td>
@@ -5693,7 +5704,7 @@ initMobileShell();
       if(fHasta && v.fecha>fHasta) return false;
       if(metodo && (v.metodo_pago||'')!==metodo) return false;
       if(hDesde||hHasta){
-        const hora=v.hora||(v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'');
+        const hora=fmtHoraVenta(v);
         if(hora){
           if(hDesde && hora<hDesde) return false;
           if(hHasta && hora>hHasta) return false;
