@@ -2109,31 +2109,42 @@ function cancelarVenta(){
 async function finalizarVenta(){
   if(!cart.length){toast('No hay productos','err');return;}
   const desc=parseFloat(gs('v-desc').value)||0;
-  const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0),totalFinal=Math.max(0,total-desc);
+  const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
+  const totalFinal=Math.max(0,total-desc);
   const importe=parseFloat(gs('v-importe').value)||0;
-  const ahora=new Date();
-  const hora=ahora.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
-  const venta={
-    fecha:fechaHoyPY(),tipo:ventaTipo,
-    cliente_nombre:gs('v-cliente').value||null,
-    total,descuento:desc,total_final:totalFinal,
-    metodo_pago:selectedPay,
-    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
-    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
-    monto_otro:selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
-  };
-  const {data:vD,error:vE}=await sb.from('bodega_ventas').insert(venta).select().single();
-  if(vE){toast('Error: '+vE.message,'err');return;}
-  await sb.from('bodega_ventas_detalle').insert(cart.map(c=>({venta_id:vD.id,producto_id:c.producto_id,cantidad:c.cantidad*c.uds,precio_unitario:c.precio})));
-  for(const c of cart){
-    const p=prodCache.find(x=>x.id===c.producto_id);if(!p)continue;
-    const totalUds=c.cantidad*c.uds,ns=(p.stock||0)-totalUds;
-    await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({producto_id:c.producto_id,tipo:'salida',cantidad:totalUds,motivo:'Venta',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:vD.id,referencia_tipo:'venta'});
+
+  const productos=cart.map(c=>({
+    producto_id:     c.producto_id,
+    cantidad:        c.cantidad,
+    precio_unitario: c.precio,
+    subtotal:        Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
+    es_embalaje:     c.uds>1,
+    uds_por_embalaje:c.uds||1
+  }));
+
+  const {data,error}=await sb.rpc('registrar_venta_atomica',{
+    p_fecha:          fechaHoyPY(),
+    p_tipo:           ventaTipo,
+    p_cliente_nombre: gs('v-cliente')?.value||null,
+    p_total:          Math.round(total),
+    p_descuento:      Math.round(desc),
+    p_total_final:    Math.round(totalFinal),
+    p_metodo_pago:    selectedPay,
+    p_productos:      productos,
+    p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+    p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+    p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
+  });
+
+  if(error||!data?.ok){
+    toast('Error: '+(data?.error||error?.message||'Error desconocido'),'err');
+    return;
   }
   toast(`✓ Cobrado: ${fmtGs(totalFinal)}`);
   _dashCache=null;
-  await loadCaches(true);cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;renderVentas();
+  await loadCaches(true);
+  cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;
+  renderVentas();
 }
 
 // ─── HISTORIAL VENTAS ─────────────────────────────────────────
@@ -2635,36 +2646,42 @@ finalizarVenta = async function(){
 
   const ahora2=new Date();
   const hora2=ahora2.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
-  const venta={
-    fecha:fechaHoyPY(),
-    tipo:ventaTipo,
-    cliente_nombre:cli.nombre,
-    total,descuento:desc,total_final:totalFinal,
-    metodo_pago:selectedPay,
-    monto_efectivo:selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
-    monto_transferencia:selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
-    monto_otro:selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
-  };
 
-  const {data:vD,error:vE}=await sb.from('bodega_ventas').insert(venta).select().single();
-  if(vE){toast('Error: '+vE.message,'err');return;}
+  const {data:rpcData,error:rpcError}=await sb.rpc('registrar_venta_atomica',{
+    p_fecha:          fechaHoyPY(),
+    p_tipo:           ventaTipo,
+    p_cliente_nombre: cli.nombre,
+    p_total:          Math.round(total),
+    p_descuento:      Math.round(desc),
+    p_total_final:    Math.round(totalFinal),
+    p_metodo_pago:    selectedPay,
+    p_productos:      cart.map(c=>({
+      producto_id:     c.producto_id,
+      cantidad:        c.cantidad,
+      precio_unitario: c.precio,
+      subtotal:        Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
+      es_embalaje:     c.uds>1,
+      uds_por_embalaje:c.uds||1
+    })),
+    p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+    p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+    p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
+  });
 
-  const {error:dE}=await sb.from('bodega_ventas_detalle').insert(cart.map(c=>({venta_id:vD.id,producto_id:c.producto_id,cantidad:c.cantidad*c.uds,precio_unitario:c.precio})));
-  if(dE){toast('Error detalle: '+dE.message,'err');return;}
-
-  if(selectedPay==='fiado'){
-    const {error:fE}=await sb.from('bodega_fiados').insert({
-      venta_id:vD.id,cliente_id:cli.id,cliente_nombre:cli.nombre,
-      monto_total:totalFinal,monto_pagado:0,saldo:totalFinal,estado:'pendiente',fecha:venta.fecha
-    });
-    if(fE){toast('Venta guardada, pero falló fiado: '+fE.message,'err');}
+  if(rpcError||!rpcData?.ok){
+    toast('Error: '+(rpcData?.error||rpcError?.message||'Error desconocido'),'err');
+    return;
   }
+  const ventaId=rpcData.venta_id;
 
-  for(const c of cart){
-    const p=prodCache.find(x=>x.id===c.producto_id); if(!p) continue;
-    const totalUds=c.cantidad*c.uds, ns=(p.stock||0)-totalUds;
-    await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({producto_id:c.producto_id,tipo:'salida',cantidad:totalUds,motivo:selectedPay==='fiado'?'Venta fiada':'Venta',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:vD.id,referencia_tipo:'venta'});
+  // Fiado: registrar la deuda (esto es extra, no afecta el stock)
+  if(selectedPay==='fiado' && cli.id){
+    const {error:fE}=await sb.from('bodega_fiados').insert({
+      venta_id:ventaId, cliente_id:cli.id, cliente_nombre:cli.nombre,
+      monto_total:totalFinal, monto_pagado:0, saldo:totalFinal,
+      estado:'pendiente', fecha:fechaHoyPY()
+    });
+    if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
   }
 
   toast(selectedPay==='fiado'?`✓ Fiado registrado: ${fmtGs(totalFinal)}`:`✓ Cobrado: ${fmtGs(totalFinal)}`);
