@@ -5287,10 +5287,22 @@ initMobileShell();
     return `<span style="color:${gan>=0?'var(--green)':'var(--red)'};font-weight:700">${pct.toFixed(1)}%</span><br><span class="rep-mini">${repMoney(gan)}</span>`;
   }
   async function repFetchVentas(desde,hasta,clienteQ,productoQ){
-    const ventasRes=await sb.from('bodega_ventas')
+    // Leer horas si están definidas
+    const hDesde=document.getElementById('rep-hora-desde')?.value||'';
+    const hHasta=document.getElementById('rep-hora-hasta')?.value||'';
+    const tieneHora=!!(hDesde||hHasta);
+    let ventasQ=sb.from('bodega_ventas')
       .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
-      .gte('fecha',desde).lte('fecha',hasta)
-      .order('fecha',{ascending:false}).limit(5000);
+      .order('created_at',{ascending:false}).limit(5000);
+    if(tieneHora){
+      // Filtrar por created_at con timestamp exacto (PY = UTC-3)
+      const desdeTsUTC=new Date(`${desde}T${hDesde||'00:00'}:00-03:00`).toISOString();
+      const hastaTsUTC=new Date(`${hasta}T${hHasta||'23:59'}:59-03:00`).toISOString();
+      ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
+    } else {
+      ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
+    }
+    const ventasRes=await ventasQ;
     if(ventasRes.error) throw ventasRes.error;
     const ventasTodas=ventasRes.data||[];
     const ventasCliente=ventasTodas.filter(v=>repMatch(v.cliente_nombre || 'Ocasional', clienteQ));
@@ -5310,6 +5322,23 @@ initMobileShell();
     return {ventasTodas,ventasCliente,ventasFiltradas,ventasMap,detalles};
   }
   window.repSetTab=repSetTab;
+  window.repCargarTurno=function(val){
+    if(!val) return;
+    const [openedAt,closedAt]=val.split('||');
+    const apertura=new Date(openedAt);
+    const cierre=closedAt?new Date(closedAt):new Date();
+    const toFecha=d=>d.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
+    const toHora=d=>d.toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
+    const dDesde=document.getElementById('rep-desde');
+    const dHasta=document.getElementById('rep-hasta');
+    const hDesde=document.getElementById('rep-hora-desde');
+    const hHasta=document.getElementById('rep-hora-hasta');
+    if(dDesde) dDesde.value=toFecha(apertura);
+    if(dHasta) dHasta.value=toFecha(cierre);
+    if(hDesde) hDesde.value=toHora(apertura);
+    if(hHasta) hHasta.value=toHora(cierre);
+    generarReportes();
+  };
   window.repSetFechas=function(tipo){
     const hoy=new Date();
     const iso=d=>d.toISOString().split('T')[0];
@@ -5359,6 +5388,9 @@ initMobileShell();
           </div>
           <div class="rep-actions" style="margin-top:12px">
             <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar reporte</button>
+            <select id="rep-turno-sel" onchange="repCargarTurno(this.value)" style="font-size:13px;min-height:36px;border-color:var(--green);color:var(--green);font-weight:700;max-width:220px;border-radius:var(--radius);padding:0 8px">
+              <option value="">📋 Seleccionar turno...</option>
+            </select>
             <button class="btn btn-secondary" onclick="repSetFechas('hoy')">Hoy</button>
             <button class="btn btn-secondary" onclick="repSetFechas('7d')">7 días</button>
             <button class="btn btn-secondary" onclick="repSetFechas('mes')">Mes</button>
@@ -5387,6 +5419,22 @@ initMobileShell();
       <div id="rep-panel-arqueos" data-rep-panel style="display:none"></div>
     `;
     await generarReportes();
+    // Cargar turnos en el selector
+    (async()=>{
+      const sel=document.getElementById('rep-turno-sel'); if(!sel) return;
+      const {data:cajas}=await sb.from('bodega_caja').select('id,fecha,estado,opened_at,closed_at,nombre_turno').order('opened_at',{ascending:false}).limit(60);
+      if(!cajas||!cajas.length) return;
+      const fmtTs=ts=>{
+        if(!ts) return '--';
+        return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+      };
+      sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+        cajas.map(c=>{
+          const estado=c.estado==='abierta'?'🟢':'🔴';
+          const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
+          return `<option value="${c.opened_at}||${c.closed_at||''}">${estado} ${fmtTs(c.opened_at)}${c.closed_at?' → '+fmtTs(c.closed_at):''}${nombre}</option>`;
+        }).join('');
+    })();
   };
   window.generarReportes=async function generarReportes(){
     const loading=document.getElementById('rep-loading');
