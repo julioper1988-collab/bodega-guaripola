@@ -2121,6 +2121,8 @@ async function finalizarVenta(){
     es_embalaje:     c.uds>1,
     uds_por_embalaje:c.uds||1
   }));
+  console.log('RPC productos:', JSON.stringify(productos, null, 2));
+  console.log('cart sample:', cart[0]);
 
   const {data,error}=await sb.rpc('registrar_venta_atomica',{
     p_fecha:          fechaHoyPY(),
