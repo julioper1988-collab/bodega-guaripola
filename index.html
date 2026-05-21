@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
-<!-- FIX FECHA/HORA PY 2026-05-21: America/Asuncion, venta usa fecha de caja abierta -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ─── FIX FINAL: EDITAR VENTA REAL + VER VENTA DETALLADO + MAYÚSCULAS ─── */
@@ -16,7 +15,7 @@
   function bgFmtHora(row){
     const raw = row?.created_at || row?.updated_at || row?.fecha;
     if(!raw) return '-';
-    try{return new Date(raw).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'});}catch(e){return '-';}
+    try{return new Date(raw).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});}catch(e){return '-';}
   }
   function bgPayName(m){
     const map={efectivo:'EFECTIVO',transferencia:'TRANSFERENCIA',credito:'CRÉDITO',debito:'DÉBITO',qr:'QR',mixto:'MIXTO',fiado:'FIADO'};
@@ -1318,7 +1317,7 @@ async function renderDashboard(){
     cajaActiva=cajasHoy&&cajasHoy[0]||null;
   }
   const cajaAbierta=cajaActiva&&cajaActiva.estado==='abierta';
-  const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'}) : null;
+  const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
 
   // Ventas: traer las de hoy Y las de la caja activa por timestamp
   const ventasHoyQ=sb.from('bodega_ventas').select('id,total_final,metodo_pago,created_at').eq('fecha',today).order('created_at',{ascending:false});
@@ -1599,7 +1598,7 @@ window.fmtHoraVenta=function(v){
   if(!v) return '--:--';
   const ts=v.created_at||v.updated_at;
   if(!ts) return '--:--';
-  return new Date(ts).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'});
+  return new Date(ts).toLocaleTimeString('es-PY',{timeZone:TZ_PARAGUAY,hour:'2-digit',minute:'2-digit'});
 };
 
 // ── FILTRO FECHA+HORA GLOBAL ───────────────────────────────────
@@ -1628,14 +1627,14 @@ window.getDateTimeValEnd=function(fechaId, horaId){
   return h ? `${f}T${h}:59` : `${f}T23:59:59`;
 };
 
-// ── FECHA Y HORA OFICIAL DEL NEGOCIO: PARAGUAY ─────────────────
-// IMPORTANTE: no usar toISOString().split('T')[0] para fecha comercial.
-// toISOString() queda solo para timestamps técnicos UTC (created_at, opened_at, closed_at).
-const BG_TIMEZONE_PY = 'America/Asuncion';
+// ── FECHA Y HORA DEL NEGOCIO: PARAGUAY ─────────────────────
+// REGLA: nunca usar toISOString() para decidir la fecha comercial.
+// toISOString() queda solo como timestamp técnico UTC.
+const TZ_PARAGUAY = 'America/Asuncion';
 
 function fechaLocalParaguay(date = new Date()){
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: BG_TIMEZONE_PY,
+    timeZone: TZ_PARAGUAY,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
@@ -1644,7 +1643,7 @@ function fechaLocalParaguay(date = new Date()){
 
 function horaLocalParaguay(date = new Date()){
   return new Intl.DateTimeFormat('es-PY', {
-    timeZone: BG_TIMEZONE_PY,
+    timeZone: TZ_PARAGUAY,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -1652,82 +1651,58 @@ function horaLocalParaguay(date = new Date()){
   }).format(date);
 }
 
-// Compatibilidad con todo el sistema viejo.
-function fechaHoyPY(date = new Date()){
-  return fechaLocalParaguay(date);
-}
-
-function desplazarFechaLocal(fechaYYYYMMDD, dias){
-  const [y,m,d] = String(fechaYYYYMMDD || fechaLocalParaguay()).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
-  dt.setUTCDate(dt.getUTCDate() + Number(dias || 0));
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getUTCDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-// Convierte una fecha/hora de Paraguay a ISO UTC para comparar con created_at.
-function paraguayDateTimeToUTCISO(fechaYYYYMMDD, horaHHMM = '00:00', segundos = '00'){
-  const [y,m,d] = String(fechaYYYYMMDD).split('-').map(Number);
-  const [hh,mi] = String(horaHHMM || '00:00').split(':').map(Number);
-  const ss = Number(segundos || 0);
-  const objetivoUTC = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mi || 0, ss || 0);
-  let guess = objetivoUTC;
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: BG_TIMEZONE_PY,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+function horaMinutoParaguay(date = new Date()){
+  return new Intl.DateTimeFormat('es-PY', {
+    timeZone: TZ_PARAGUAY,
+    hour: '2-digit',
+    minute: '2-digit',
     hour12: false
-  });
-  for(let i=0;i<4;i++){
-    const parts = Object.fromEntries(fmt.formatToParts(new Date(guess)).map(p => [p.type, p.value]));
-    let ph = Number(parts.hour || 0);
-    if(ph === 24) ph = 0;
-    const localComoUTC = Date.UTC(Number(parts.year), Number(parts.month)-1, Number(parts.day), ph, Number(parts.minute), Number(parts.second));
-    guess -= (localComoUTC - objetivoUTC);
-  }
-  return new Date(guess).toISOString();
+  }).format(date);
 }
 
-async function obtenerCajaAbiertaActual(){
-  try{
-    if(!sb) return null;
-    const {data,error} = await sb.from('bodega_caja')
-      .select('id,fecha,numero_caja,nombre_turno,opened_at,estado')
-      .eq('estado','abierta')
-      .order('opened_at',{ascending:false})
-      .limit(1);
-    if(error) return null;
-    return Array.isArray(data) && data.length ? data[0] : null;
-  }catch(e){
-    return null;
-  }
-}
-
-async function obtenerFechaVenta(){
-  // Preferencia del negocio: si hay caja abierta, la venta pertenece a la fecha de esa caja.
-  try{
-    const caja = await obtenerCajaAbiertaActual();
-    if(caja && caja.fecha) return caja.fecha;
-  }catch(e){}
+// Alias usado por el sistema viejo. Debe quedar apuntando a Paraguay real.
+function fechaHoyPY(){
   return fechaLocalParaguay();
 }
 
-window.fechaLocalParaguay = fechaLocalParaguay;
-window.horaLocalParaguay = horaLocalParaguay;
-window.fechaHoyPY = fechaHoyPY;
-window.desplazarFechaLocal = desplazarFechaLocal;
-window.paraguayDateTimeToUTCISO = paraguayDateTimeToUTCISO;
-window.obtenerCajaAbiertaActual = obtenerCajaAbiertaActual;
-window.obtenerFechaVenta = obtenerFechaVenta;
+// Convierte una fecha/hora escrita como Paraguay a UTC ISO para filtrar created_at.
+// Esto evita usar -03:00 o -04:00 fijo.
+function getTimeZoneOffsetMs(date, timeZone = TZ_PARAGUAY){
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone, hour12: false,
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(date).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  return asUTC - date.getTime();
+}
+
+function paraguayDateTimeToUTCISO(fecha, hora = '00:00:00'){
+  const h = String(hora || '00:00:00');
+  const hhmmss = h.length === 5 ? `${h}:00` : h;
+  const [y,m,d] = String(fecha).split('-').map(Number);
+  const [hh,mm,ss] = hhmmss.split(':').map(Number);
+  const pretendUTC = new Date(Date.UTC(y, m-1, d, hh||0, mm||0, ss||0));
+  let offset = getTimeZoneOffsetMs(pretendUTC, TZ_PARAGUAY);
+  let realUTC = new Date(pretendUTC.getTime() - offset);
+  const offset2 = getTimeZoneOffsetMs(realUTC, TZ_PARAGUAY);
+  if(offset2 !== offset) realUTC = new Date(pretendUTC.getTime() - offset2);
+  return realUTC.toISOString();
+}
+
+function fechaDiasAtrasParaguay(dias){
+  const base = new Date(paraguayDateTimeToUTCISO(fechaLocalParaguay(), '12:00:00'));
+  base.setUTCDate(base.getUTCDate() - Number(dias||0));
+  return fechaLocalParaguay(base);
+}
 
 // ── RELOJ EN VIVO ─────────────────────────────────────────────
 (function(){
   function tickClock(){
     const el=document.getElementById('live-clock'); if(!el) return;
     const now=new Date();
-    const fecha=now.toLocaleDateString('es-PY',{timeZone:BG_TIMEZONE_PY,day:'2-digit',month:'2-digit',year:'2-digit'});
+    const fecha=new Intl.DateTimeFormat('es-PY',{timeZone:TZ_PARAGUAY,day:'2-digit',month:'2-digit',year:'2-digit'}).format(now);
     const hora=horaLocalParaguay(now);
     el.innerHTML=`<span style="font-weight:700;color:var(--text);font-size:13px">${hora}</span><br><span style="font-size:10px">${fecha}</span>`;
   }
@@ -2211,7 +2186,7 @@ async function finalizarVenta(){
   }));
 
   const {data,error}=await sb.rpc('registrar_venta_atomica',{
-    p_fecha:          await obtenerFechaVenta(),
+    p_fecha:          fechaHoyPY(),
     p_tipo:           ventaTipo,
     p_cliente_nombre: gs('v-cliente')?.value||null,
     p_total:          Math.round(total),
@@ -2487,7 +2462,7 @@ async function renderAjustes(){
   <div class="card">
     <table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Stock ant.</th><th>Stock nuevo</th><th>Motivo</th></tr></thead><tbody>
       ${(data||[]).map(a=>`<tr>
-        <td style="font-size:11px">${new Date(a.created_at).toLocaleDateString('es-PY',{timeZone:'America/Asuncion'})}</td>
+        <td style="font-size:11px">${new Date(a.created_at).toLocaleDateString('es-PY',{timeZone:TZ_PARAGUAY})}</td>
         <td>${a.bodega_productos?.nombre||'-'}</td>
         <td><span class="badge-cat" style="background:${a.tipo==='entrada'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${a.tipo==='entrada'?'var(--green)':'var(--red)'}">${a.tipo}</span></td>
         <td style="font-weight:600">${a.tipo==='entrada'?'+':'-'}${a.cantidad}</td>
@@ -2734,10 +2709,10 @@ finalizarVenta = async function(){
   }
 
   const ahora2=new Date();
-  const hora2=horaLocalParaguay(ahora2).slice(0,5);
+  const hora2=ahora2.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
 
   const {data:rpcData,error:rpcError}=await sb.rpc('registrar_venta_atomica',{
-    p_fecha:          await obtenerFechaVenta(),
+    p_fecha:          fechaHoyPY(),
     p_tipo:           ventaTipo,
     p_cliente_nombre: cli.nombre,
     p_total:          Math.round(total),
@@ -2768,7 +2743,7 @@ finalizarVenta = async function(){
     const {error:fE}=await sb.from('bodega_fiados').insert({
       venta_id:ventaId, cliente_id:cli.id, cliente_nombre:cli.nombre,
       monto_total:totalFinal, monto_pagado:0, saldo:totalFinal,
-      estado:'pendiente', fecha:await obtenerFechaVenta()
+      estado:'pendiente', fecha:fechaHoyPY()
     });
     if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
   }
@@ -3356,7 +3331,7 @@ async function renderCaja(){
   const apertura=Number(caja.apertura_efectivo)||0;
   const esperado=apertura+ventas.efectivo-(Number(caja.gastos_caja)||0);
   const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
-  const fmtHora=ts=>ts?new Date(ts).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'}):'--:--';
+  const fmtHora=ts=>ts?new Date(ts).toLocaleTimeString('es-PY',{timeZone:TZ_PARAGUAY,hour:'2-digit',minute:'2-digit'}):'--:--';
   gs('content').innerHTML=`<p>Redirigiendo a módulo de caja...</p>`;
   // Delegar al módulo de turnos si existe
   if(window.cajaTabTurno!==undefined){ window.cajaTabTurno='actual'; }
@@ -4394,12 +4369,11 @@ initMobileShell();
     generarReportes();
   };
   window.rptSetFechas=function(tipo){
-    const hoy=new Date();
-    const iso=d=>fechaLocalParaguay(d);
-    let desde=iso(hoy), hasta=iso(hoy);
+    const hasta=fechaLocalParaguay();
+    let desde=hasta;
     if(tipo==='mes') desde=hasta.slice(0,7)+'-01';
-    if(tipo==='7d'){const d=new Date(hoy);d.setDate(d.getDate()-6);desde=iso(d);}
-    if(tipo==='30d'){const d=new Date(hoy);d.setDate(d.getDate()-29);desde=iso(d);}
+    if(tipo==='7d') desde=fechaDiasAtrasParaguay(6);
+    if(tipo==='30d') desde=fechaDiasAtrasParaguay(29);
     gs('rpt-desde').value=desde; gs('rpt-hasta').value=hasta; generarReportes();
   };
   window.rptLimpiarFiltros=function(){
@@ -4469,9 +4443,9 @@ initMobileShell();
       // Si no hay hora, filtrar por fecha (campo de texto)
       let ventasQ=sb.from('bodega_ventas').select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at').order('fecha',{ascending:false}).limit(2000);
       if(tieneHora){
-        // Convertir hora local de Paraguay a UTC para comparar con created_at
-        const desdeTsUTC=paraguayDateTimeToUTCISO(desde, hDesde||'00:00', '00');
-        const hastaTsUTC=paraguayDateTimeToUTCISO(hasta, hHasta||'23:59', '59');
+        // Convertir a UTC para comparar con created_at (PY = UTC-3)
+        const desdeTsUTC=paraguayDateTimeToUTCISO(desde, hDesde || '00:00:00');
+        const hastaTsUTC=paraguayDateTimeToUTCISO(hasta, hHasta || '23:59:59');
         ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
       } else {
         ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
@@ -4637,7 +4611,7 @@ initMobileShell();
     const rows=(gastos.items||[]).map(g=>`<tr>
       <td>${escapeHtml(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
-      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
+      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY})}</td>
       <td><button class="btn btn-danger btn-sm" onclick="borrarGastoCaja('${g.id}')">🗑</button></td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
@@ -4719,13 +4693,13 @@ initMobileShell();
 
   async function renderHistorialArqueosOptimizado(fechaRef){
     const hasta=fechaRef || fechaHoyPY();
-    const desde=desplazarFechaLocal(hasta,-60);
+    const desde=fechaDiasAtrasParaguay(60);
     const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(90);
     const rows=error?`<tr><td colspan="9" class="alert-error">Error: ${escapeHtml(error.message)}</td></tr>`:(data||[]).map(c=>`<tr>
       <td>${fmtDate(c.fecha)}</td><td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
       <td>${fmtGs(c.apertura_efectivo)}</td><td>${fmtGs(c.gastos_caja)}</td><td>${fmtGs(c.efectivo_contado)}</td>
       <td style="font-weight:700;color:${Number(c.diferencia||0)===0?'var(--green)':Number(c.diferencia||0)>0?'var(--amber)':'var(--red)'}">${fmtGs(c.diferencia)}</td>
-      <td>${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'-'}</td>
+      <td>${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="irCajaFecha('${c.fecha}')">Editar cierre</button><button class="btn btn-secondary btn-sm" onclick="imprimirArqueo('${c.id}')">PDF</button></td>
     </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:18px">No hay arqueos guardados.</td></tr>`;
     gs('content').innerHTML=`${cajaTabsHTML('historial',hasta)}
@@ -5008,7 +4982,7 @@ initMobileShell();
     const rows=(gastos.items||[]).map(g=>`<tr>
       <td>${escapeHtml2(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
-      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
+      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY})}</td>
       <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
@@ -5120,7 +5094,7 @@ initMobileShell();
       </div>`:''}
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja.estado==='abierta'?'var(--green)':'var(--amber)'}">${caja.estado}</div><div class="sub">${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}</div></div>
-        <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
+        <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY}):'-'}</div></div>
         <div class="stat-card"><div class="label">Ventas efectivo del turno</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas</div></div>
         <div class="stat-card"><div class="label">Gastos varios</div><div class="value" style="color:var(--red)">${fmtGs(gastos.total)}</div></div>
         <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
@@ -5240,7 +5214,7 @@ initMobileShell();
   async function renderHistorialArqueosTurno(){
     const hasta=gs('hist-hasta')?.value || cajaHistFecha || fechaHoyPY();
     cajaHistFecha=hasta;
-    const desde=gs('hist-desde')?.value || desplazarFechaLocal(hasta,-30);
+    const desde=gs('hist-desde')?.value || fechaDiasAtrasParaguay(30);
     const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('opened_at',{ascending:false}).limit(200);
     const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml2(error.message)}</td></tr>`:(data||[]).map(c=>{
       const totalContado=c.total_contado||(Number(c.efectivo_contado||0)+Number(c.qr_contado||0)+Number(c.transferencia_contado||0)+Number(c.debito_contado||0)+Number(c.credito_contado||0));
@@ -5248,8 +5222,8 @@ initMobileShell();
         <td>${fmtDate(c.fecha)}</td>
         <td>${cajaTurnoTitulo(c)}</td>
         <td><span class="estado-badge estado-${c.estado==='cerrada'?'finalizado':'proceso'}">${c.estado}</span></td>
-        <td style="font-size:12px">${c.opened_at?new Date(c.opened_at).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'-'}</td>
-        <td style="font-size:12px">${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'-'}</td>
+        <td style="font-size:12px">${c.opened_at?new Date(c.opened_at).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY}):'-'}</td>
+        <td style="font-size:12px">${c.closed_at?new Date(c.closed_at).toLocaleString('es-PY'):'-'}</td>
         <td>${fmtGs(c.apertura_efectivo)}</td>
         <td style="font-size:12px;color:var(--text2)">
           ${fmtGs(c.efectivo_contado)} ef.
@@ -5296,7 +5270,7 @@ initMobileShell();
     const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
     const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml2(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml2(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY}):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY}):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml2(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
   };
 
@@ -5344,7 +5318,7 @@ initMobileShell();
   function repDateTime(v){
     try{
       if(!v) return '-';
-      return new Date(v).toLocaleString('es-PY');
+      return new Date(v).toLocaleString('es-PY',{timeZone:TZ_PARAGUAY});
     }catch(e){return v || '-';}
   }
   function repDateInputValue(id,fallback){
@@ -5401,9 +5375,9 @@ initMobileShell();
       .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
       .order('created_at',{ascending:false}).limit(5000);
     if(tieneHora){
-      // Filtrar por created_at con timestamp exacto convertido desde America/Asuncion
-      const desdeTsUTC=paraguayDateTimeToUTCISO(desde, hDesde||'00:00', '00');
-      const hastaTsUTC=paraguayDateTimeToUTCISO(hasta, hHasta||'23:59', '59');
+      // Filtrar por created_at con timestamp exacto (PY = UTC-3)
+      const desdeTsUTC=paraguayDateTimeToUTCISO(desde, hDesde || '00:00:00');
+      const hastaTsUTC=paraguayDateTimeToUTCISO(hasta, hHasta || '23:59:59');
       ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
     } else {
       ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
@@ -5446,12 +5420,11 @@ initMobileShell();
     generarReportes();
   };
   window.repSetFechas=function(tipo){
-    const hoy=new Date();
-    const iso=d=>fechaLocalParaguay(d);
-    let desde=iso(hoy), hasta=iso(hoy);
+    const hasta=fechaLocalParaguay();
+    let desde=hasta;
     if(tipo==='mes') desde=hasta.slice(0,7)+'-01';
-    if(tipo==='7d'){const d=new Date(hoy); d.setDate(d.getDate()-6); desde=iso(d);}
-    if(tipo==='30d'){const d=new Date(hoy); d.setDate(d.getDate()-29); desde=iso(d);}
+    if(tipo==='7d') desde=fechaDiasAtrasParaguay(6);
+    if(tipo==='30d') desde=fechaDiasAtrasParaguay(29);
     const dEl=document.getElementById('rep-desde'), hEl=document.getElementById('rep-hasta');
     if(dEl) dEl.value=desde;
     if(hEl) hEl.value=hasta;
@@ -5614,7 +5587,7 @@ initMobileShell();
       const detailRows=detalles.map(d=>{
         const v=ventasMap[d.venta_id]||{};
         const total=repLineTotal(d), cst=(Number(d.cantidad)||0)*repProductCost(d);
-        const hora=v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'}):'--:--';
+        const hora=v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--';
         return `<tr><td style="color:var(--accent);font-weight:700;white-space:nowrap">${hora}</td><td>${repDate(v.fecha)}</td><td>${repEsc(v.cliente_nombre||'Ocasional')}</td><td>${repEsc(repProductName(d))}</td><td>${repNum(d.cantidad)}</td><td>${repMoney(d.precio_unitario)}</td><td>${repMoney(total)}</td><td>${repEsc(v.metodo_pago||'-')}</td><td>${repMarginHTML(total,cst)}</td></tr>`;
       }).join('');
       const cpRows=Object.values(byCP).sort((a,b)=>a.cliente.localeCompare(b.cliente)||b.cantidad-a.cantidad).map(x=>`<tr><td style="font-weight:600">${repEsc(x.cliente)}</td><td>${repEsc(x.producto)}</td><td class="rep-kpi">${repNum(x.cantidad)}</td><td>${repMoney(x.total)}</td><td>${repMoney(x.fiado)}</td><td>${repMarginHTML(x.total,x.costo)}</td><td>${x.ventas.size}</td><td>${repDate(x.primera)} → ${repDate(x.ultima)}</td></tr>`).join('');
@@ -5984,7 +5957,7 @@ initMobileShell();
 
   window.renderHistorialVentas = renderHistorialVentas = async function(page=1){
     const hoy=fechaLocalParaguay();
-    const defDesde=fechaLocalParaguay(new Date(Date.now()-7*24*60*60*1000));
+    const defDesde=fechaDiasAtrasParaguay(7);
     const desde=gs('hv-fecha-desde')?.value||window.__hvDesde||defDesde;
     const hasta=gs('hv-fecha-hasta')?.value||window.__hvHasta||hoy;
     const metodo=gs('hv-metodo')?.value||window.__hvMetodo||'';
