@@ -1241,6 +1241,21 @@ function invalidarCache(){ _cacheTs=0; }
 
 const gs=id=>document.getElementById(id);
 const fmtGs=n=>'Gs. '+Math.round(n||0).toLocaleString('es-PY');
+
+// ── FECHA/HORA LOCAL DEL DISPOSITIVO ─────────────────────────
+// IMPORTANTE: no usamos America/Asuncion fijo para calcular la fecha del día,
+// porque en algunos navegadores la zona horaria queda 1 hora corrida y cambia
+// de fecha recién a la 01:00 a. m. Usamos la fecha local del equipo/celular.
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fechaLocalYMD(d=new Date()){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function horaLocalHM(d=new Date()){
+  return d.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+}
+function fechaInputLocal(d=new Date()){
+  return fechaLocalYMD(d);
+}
 const fmtDate=d=>{
   if(!d) return '-';
   // Parsear directamente los componentes para evitar conversión de zona horaria
@@ -1302,8 +1317,7 @@ async function renderDashboard(){
     // Reconectar evento toggle
     return;
   }
-  // Fecha en zona horaria de Paraguay (UTC-4)
-  const nowPY=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Asuncion'}));
+  // Fecha local del dispositivo
   const today=fechaHoyPY();
   const first=today.slice(0,7)+'-01';
 
@@ -1598,7 +1612,7 @@ window.fmtHoraVenta=function(v){
   if(!v) return '--:--';
   const ts=v.created_at||v.updated_at;
   if(!ts) return '--:--';
-  return new Date(ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+  return horaLocalHM(new Date(ts));
 };
 
 // ── FILTRO FECHA+HORA GLOBAL ───────────────────────────────────
@@ -1627,11 +1641,11 @@ window.getDateTimeValEnd=function(fechaId, horaId){
   return h ? `${f}T${h}:59` : `${f}T23:59:59`;
 };
 
-// ── FECHA EN ZONA HORARIA PARAGUAY (UTC-4) ───────────────────
-// Evita el bug donde ventas de las 23:xx aparecen con fecha del día siguiente
+// ── FECHA ACTUAL PARA VENTAS/CAJA ───────────────────────────
+// Usa la fecha LOCAL del dispositivo. Esto corrige el bug donde la fecha
+// cambiaba recién a la 01:00 a. m. por desfase de zona horaria.
 function fechaHoyPY(){
-  return new Date().toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
-  // en-CA devuelve formato YYYY-MM-DD directamente
+  return fechaLocalYMD(new Date());
 }
 
 // ── RELOJ EN VIVO ─────────────────────────────────────────────
@@ -4279,7 +4293,7 @@ initMobileShell();
     if(!cajas||!cajas.length){ sel.innerHTML='<option value="">Sin turnos</option>'; return; }
     const fmtTs=ts=>{
       if(!ts) return '--';
-      return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+      return new Date(ts).toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
     };
     sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
       cajas.map(c=>{
@@ -4296,8 +4310,8 @@ initMobileShell();
     const caja=cajas&&cajas[0]; if(!caja) return;
     const apertura=new Date(caja.opened_at);
     const cierre=caja.closed_at?new Date(caja.closed_at):new Date();
-    const toFecha=d=>d.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
-    const toHora=d=>d.toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
+    const toFecha=d=>fechaInputLocal(d);
+    const toHora=d=>d.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit',hour12:false});
     if(gs('rpt-desde'))     gs('rpt-desde').value=toFecha(apertura);
     if(gs('rpt-hasta'))     gs('rpt-hasta').value=toFecha(cierre);
     if(gs('rpt-hora-desde')) gs('rpt-hora-desde').value=toHora(apertura);
@@ -5345,8 +5359,8 @@ initMobileShell();
     const [openedAt,closedAt]=val.split('||');
     const apertura=new Date(openedAt);
     const cierre=closedAt?new Date(closedAt):new Date();
-    const toFecha=d=>d.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
-    const toHora=d=>d.toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
+    const toFecha=d=>fechaInputLocal(d);
+    const toHora=d=>d.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit',hour12:false});
     const dDesde=document.getElementById('rep-desde');
     const dHasta=document.getElementById('rep-hasta');
     const hDesde=document.getElementById('rep-hora-desde');
@@ -5444,7 +5458,7 @@ initMobileShell();
       if(!cajas||!cajas.length) return;
       const fmtTs=ts=>{
         if(!ts) return '--';
-        return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+        return new Date(ts).toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       };
       sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
         cajas.map(c=>{
@@ -5895,7 +5909,7 @@ initMobileShell();
   };
 
   window.renderHistorialVentas = renderHistorialVentas = async function(page=1){
-    const hoy=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Asuncion'})).toISOString().split('T')[0];
+    const hoy=fechaHoyPY();
     const defDesde=new Date(new Date().getTime()-7*24*60*60*1000).toISOString().split('T')[0];
     const desde=gs('hv-fecha-desde')?.value||window.__hvDesde||defDesde;
     const hasta=gs('hv-fecha-hasta')?.value||window.__hvHasta||hoy;
