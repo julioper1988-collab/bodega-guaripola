@@ -4251,6 +4251,42 @@ initMobileShell();
     const panel=gs('rpt-panel-'+tab); if(panel) panel.style.display='block';
   }
   window.rptSetTab=rptSetTab;
+  // Cargar turnos en el selector al abrir reportes
+  window.rptCargarTurnos=async function rptCargarTurnos(){
+    const sel=gs('rpt-turno-sel'); if(!sel) return;
+    const {data:cajas}=await sb.from('bodega_caja')
+      .select('id,fecha,estado,opened_at,closed_at,nombre_turno,numero_caja')
+      .order('opened_at',{ascending:false})
+      .limit(60);
+    if(!cajas||!cajas.length){ sel.innerHTML='<option value="">Sin turnos</option>'; return; }
+    const fmtTs=ts=>{
+      if(!ts) return '--';
+      return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+    };
+    sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+      cajas.map(c=>{
+        const estado=c.estado==='abierta'?'🟢':'🔴';
+        const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
+        const label=`${estado} ${fmtTs(c.opened_at)}${c.closed_at?' → '+fmtTs(c.closed_at):''}${nombre}`;
+        return `<option value="${c.id}">${label}</option>`;
+      }).join('');
+  }
+
+  window.rptCargarTurno=async function(cajaId){
+    if(!cajaId) return;
+    const {data:cajas}=await sb.from('bodega_caja').select('*').eq('id',cajaId).limit(1);
+    const caja=cajas&&cajas[0]; if(!caja) return;
+    const apertura=new Date(caja.opened_at);
+    const cierre=caja.closed_at?new Date(caja.closed_at):new Date();
+    const toFecha=d=>d.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
+    const toHora=d=>d.toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
+    if(gs('rpt-desde'))     gs('rpt-desde').value=toFecha(apertura);
+    if(gs('rpt-hasta'))     gs('rpt-hasta').value=toFecha(cierre);
+    if(gs('rpt-hora-desde')) gs('rpt-hora-desde').value=toHora(apertura);
+    if(gs('rpt-hora-hasta')) gs('rpt-hora-hasta').value=toHora(cierre);
+    toast(`Turno cargado: ${gs('rpt-turno-sel').selectedOptions[0]?.text||''}`);
+    generarReportes();
+  };
   window.rptSetFechas=function(tipo){
     const hoy=new Date();
     const iso=d=>d.toISOString().split('T')[0];
@@ -4287,6 +4323,9 @@ initMobileShell();
             <div class="form-group"><label>Producto</label><input id="rpt-producto" placeholder="Ej: coca 1,5" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="rpt-actions">
               <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar</button>
+              <select id="rpt-turno-sel" onchange="rptCargarTurno(this.value)" style="font-size:13px;min-height:36px;border-color:var(--green);color:var(--green);font-weight:700;max-width:200px">
+                <option value="">📋 Seleccionar turno...</option>
+              </select>
               <button class="btn btn-secondary" onclick="rptSetFechas('hoy')">Hoy</button>
               <button class="btn btn-secondary" onclick="rptSetFechas('7d')">7 días</button>
               <button class="btn btn-secondary" onclick="rptSetFechas('mes')">Mes</button>
@@ -4312,6 +4351,7 @@ initMobileShell();
       <div id="rpt-panel-arqueos" data-rpt-panel style="display:none"></div>
     `;
     await generarReportes();
+    rptCargarTurnos();
   };
   window.generarReportes=async function generarReportes(){
     const loading=gs('rpt-loading'); if(loading) loading.style.display='block';
