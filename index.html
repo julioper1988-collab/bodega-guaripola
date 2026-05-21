@@ -2121,8 +2121,6 @@ async function finalizarVenta(){
     es_embalaje:     c.uds>1,
     uds_por_embalaje:c.uds||1
   }));
-  console.log('RPC productos:', JSON.stringify(productos, null, 2));
-  console.log('cart sample:', cart[0]);
 
   const {data,error}=await sb.rpc('registrar_venta_atomica',{
     p_fecha:          fechaHoyPY(),
@@ -2133,6 +2131,7 @@ async function finalizarVenta(){
     p_total_final:    Math.round(totalFinal),
     p_metodo_pago:    selectedPay,
     p_productos:      productos,
+    p_notas:          gs('v-notas')?.value||null,
     p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
     p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
     p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
