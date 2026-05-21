@@ -1241,7 +1241,14 @@ function invalidarCache(){ _cacheTs=0; }
 
 const gs=id=>document.getElementById(id);
 const fmtGs=n=>'Gs. '+Math.round(n||0).toLocaleString('es-PY');
-const fmtDate=d=>d?new Date(d+'T00:00:00').toLocaleDateString('es-PY'):'-';
+const fmtDate=d=>{
+  if(!d) return '-';
+  // Parsear directamente los componentes para evitar conversión de zona horaria
+  const s=String(d).split('T')[0]; // tomar solo la parte de fecha si viene con timestamp
+  const [y,m,day]=s.split('-');
+  if(!y||!m||!day) return d;
+  return `${parseInt(day)}/${parseInt(m)}/${String(y).slice(-2)}`;
+};
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>'"]/g, function(ch){
     return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]);
@@ -1389,19 +1396,35 @@ async function renderDashboard(){
       <span id="dash-reporte-ico" style="margin-left:auto;font-size:18px;color:var(--text2)">⌄</span>
     </div>
     <div id="dash-reporte-body" style="display:none">
-      <!-- Filtros -->
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--bg3)">
-        <input id="dash-filtro-prod" placeholder="🔍 Filtrar por producto..." 
-          style="flex:1;min-width:160px;font-size:13px;padding:7px 10px"
-          oninput="dashFiltrarReporte()">
-        <input id="dash-filtro-cli" placeholder="👤 Filtrar por cliente..."
-          style="flex:1;min-width:160px;font-size:13px;padding:7px 10px"
-          oninput="dashFiltrarReporte()">
-        <button class="btn btn-secondary btn-sm" onclick="gs('dash-filtro-prod').value='';gs('dash-filtro-cli').value='';dashFiltrarReporte()">Limpiar</button>
-      </div>
-      <div id="dash-reporte-tabla">
-        ${dashReporteTabla(prodRows,totalVentaProd,totalGanancia)}
-      </div>
+    ${prodRows.length?`
+    <div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th>Producto</th>
+        <th style="text-align:center">Uds.</th>
+        <th style="text-align:center">Stock</th>
+        <th style="text-align:right">Total venta</th>
+        <th style="text-align:right">Ganancia</th>
+      </tr></thead>
+      <tbody>
+        ${prodRows.map(r=>{
+          const sc=r.stock==='-'?'var(--text2)':r.stock<=0?'var(--red)':r.stock<5?'var(--amber)':'var(--green)';
+          const gc=r.ganancia>=0?'var(--teal)':'var(--red)';
+          return `<tr>
+            <td style="font-weight:600">${r.nombre}</td>
+            <td style="text-align:center;font-weight:800;color:var(--accent2)">${r.cant}</td>
+            <td style="text-align:center;font-weight:700;color:${sc}">${r.stock}</td>
+            <td style="text-align:right;color:var(--green);font-weight:600">${fmtGs(r.venta)}</td>
+            <td style="text-align:right;color:${gc};font-weight:700">${fmtGs(r.ganancia)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot><tr style="border-top:2px solid var(--border);background:var(--bg3)">
+        <td colspan="3" style="font-weight:800;padding:10px 12px">TOTAL DEL TURNO</td>
+        <td style="text-align:right;font-weight:900;color:var(--green);font-size:16px;padding:10px 12px">${fmtGs(totalVentaProd)}</td>
+        <td style="text-align:right;font-weight:900;color:var(--teal);font-size:16px;padding:10px 12px">${fmtGs(totalGanancia)}</td>
+      </tr></tfoot>
+    </table></div>`
+    :`<div style="padding:24px;text-align:center;color:var(--text2)">Sin ventas en este turno todavía</div>`}
     </div>
   </div>
 
