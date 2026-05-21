@@ -7387,5 +7387,427 @@ try{
 })();
 </script>
 
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   MEJORA 1 — MARCAR ÍTEMS CONTROLADOS / FACTURADOS EN VISTA DE VENTA
+   ───────────────────────────────────────────────────────────────────────
+   • Agrega un checkbox por línea de producto en el modal verVenta.
+   • Al marcar/desmarcar actualiza la columna `controlado` en
+     bodega_ventas_detalle (booleano). Si la columna no existe todavía,
+     el update falla silenciosamente y muestra un aviso de migración.
+   • El estado controlado se muestra con tachado + color grisado.
+   • No afecta cantidades ni totales.
+
+   SQL necesario en Supabase (ejecutar una sola vez):
+     ALTER TABLE bodega_ventas_detalle ADD COLUMN IF NOT EXISTS controlado BOOLEAN DEFAULT FALSE;
+═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const ESC = s => String(s ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  /* Toggle controlado en BD y actualiza visual */
+  window.bgToggleControlado = async function(detalleId, checked, rowEl){
+    const {error} = await sb
+      .from('bodega_ventas_detalle')
+      .update({controlado: checked})
+      .eq('id', detalleId);
+
+    if(error){
+      // Puede fallar si la columna aún no existe → avisar al usuario
+      if(error.message && error.message.toLowerCase().includes('column')){
+        toast('⚠️ Ejecutá el SQL de migración en Supabase para activar esta función.', 'err');
+      } else {
+        toast('Error guardando estado: ' + error.message, 'err');
+      }
+      // Revertir visualmente
+      if(rowEl){
+        const cb = rowEl.querySelector('.ctrl-check');
+        if(cb) cb.checked = !checked;
+      }
+      return;
+    }
+    // Actualizar estilo de la fila
+    if(rowEl) bgEstiloControlado(rowEl, checked);
+  };
+
+  function bgEstiloControlado(rowEl, controlado){
+    if(controlado){
+      rowEl.style.opacity = '0.45';
+      rowEl.style.textDecoration = 'line-through';
+      rowEl.style.color = 'var(--text2)';
+    } else {
+      rowEl.style.opacity = '';
+      rowEl.style.textDecoration = '';
+      rowEl.style.color = '';
+    }
+  }
+
+  /* Sobrescribir verVenta para incluir checkboxes de control */
+  const _verVentaOrig = window.verVenta;
+  window.verVenta = async function(id){
+    try{
+      const [{data:v,error:vErr},{data:det,error:dErr}] = await Promise.all([
+        sb.from('bodega_ventas').select('*').eq('id',id).single(),
+        sb.from('bodega_ventas_detalle')
+          .select('*,bodega_productos(nombre,codigo_barra)')
+          .eq('venta_id',id)
+      ]);
+      if(vErr) throw vErr;
+      if(dErr) throw dErr;
+
+      const detalles = (det||[]).map(d => {
+        const cant   = Number(d.cantidad)||0;
+        const precio = Number(d.precio_unitario)||0;
+        const sub    = Number(d.subtotal ?? (cant*precio));
+        const ctrl   = !!d.controlado;
+        /* Nombre de visualización: si tiene uds_por_embalaje > 1, mostrar pack */
+        const uds    = Number(d.uds_por_embalaje)||1;
+        const nomPack = uds > 1 ? ` <span style="color:var(--teal);font-size:11px">(x${uds})</span>` : '';
+        return `<tr id="ctrl-row-${d.id}" style="${ctrl?'opacity:.45;text-decoration:line-through;color:var(--text2)':''}">
+          <td style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+            <input type="checkbox" class="ctrl-check" ${ctrl?'checked':''}
+              onchange="bgToggleControlado('${d.id}', this.checked, document.getElementById('ctrl-row-${d.id}'))"
+              title="Marcar como controlado/facturado"
+              style="width:17px;height:17px;cursor:pointer;accent-color:var(--green);flex-shrink:0">
+            <span>${ESC(d.bodega_productos?.nombre||'PRODUCTO')}${nomPack}</span>
+          </td>
+          <td style="text-align:center;font-weight:800">${cant.toLocaleString('es-PY')}</td>
+          <td style="text-align:right">${fmtGs(precio)}</td>
+          <td style="text-align:right;font-weight:800;color:var(--accent2)">${fmtGs(sub)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:16px">SIN DETALLE</td></tr>';
+
+      /* Leyenda de progreso */
+      const totalItems = (det||[]).length;
+      const ctrlCount  = (det||[]).filter(d=>d.controlado).length;
+      const progresso  = totalItems > 0
+        ? `<div style="font-size:12px;color:var(--text2);padding:8px 12px;border-top:1px solid var(--border)">
+             ✅ ${ctrlCount} de ${totalItems} ítems controlados
+           </div>`
+        : '';
+
+      /* Construir secciones de stats igual que el original */
+      const body=`
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
+          <div class="stat-card"><div class="label">FECHA</div><div class="value" style="font-size:18px">${fmtDate(fechaVentaPY(v))}</div></div>
+          <div class="stat-card"><div class="label">HORA</div><div class="value" style="font-size:18px">${(typeof bgFmtHora==='function'?bgFmtHora(v):(typeof fmtHoraVenta==='function'?fmtHoraVenta(v):'--:--'))}</div></div>
+          <div class="stat-card"><div class="label">CLIENTE</div><div class="value" style="font-size:18px">${ESC(v.cliente_nombre||'OCASIONAL')}</div></div>
+          <div class="stat-card"><div class="label">TOTAL</div><div class="value" style="font-size:20px;color:var(--green)">${fmtGs(v.total_final)}</div></div>
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header"><h3>DETALLE DE PAGO</h3></div>
+          <table><tbody>${(typeof bgPaymentRows==='function'?bgPaymentRows(v):'')}</tbody></table>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>PRODUCTOS VENDIDOS</h3>
+            <span style="font-size:12px;color:var(--text2);margin-left:auto">Marcá ✓ los ítems controlados/facturados</span>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr>
+                <th style="width:36px"></th>
+                <th>PRODUCTO</th>
+                <th style="text-align:center">CANT.</th>
+                <th style="text-align:right">PRECIO UNIT.</th>
+                <th style="text-align:right">SUBTOTAL</th>
+              </tr></thead>
+              <tbody>${detalles}</tbody>
+            </table>
+          </div>
+          ${progresso}
+        </div>`;
+
+      openModal('DETALLE DE VENTA', body, null, '');
+    }catch(e){
+      console.error(e);
+      toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
+    }
+  };
+
+  // Patch: también actualizar verVenta en window si se registró antes
+  if(typeof pages === 'object') try{ /* no toca pages */ }catch(e){}
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MEJORA 2 — PRESERVAR EMBALAJES AL EDITAR PEDIDOS/VENTAS
+   ───────────────────────────────────────────────────────────────────────
+   • Al guardar un detalle de venta, se persiste: embalaje_id,
+     uds_por_embalaje (factor), y cantidad_embalajes (cuántos packs).
+   • Al editar, se reconstruye el ítem del carrito con los datos del
+     pack original (cantidad en packs, uds como factor).
+   • Si no hay embalaje guardado, se comporta igual que antes.
+
+   SQL necesario en Supabase (ejecutar una sola vez):
+     ALTER TABLE bodega_ventas_detalle
+       ADD COLUMN IF NOT EXISTS embalaje_id UUID REFERENCES bodega_embalajes(id),
+       ADD COLUMN IF NOT EXISTS uds_por_embalaje INTEGER DEFAULT 1,
+       ADD COLUMN IF NOT EXISTS cantidad_embalajes INTEGER DEFAULT NULL;
+═══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  /* ── 1. PATCH guardarVentaEditada: persistir embalaje_id y uds ──────── */
+  /* Localizar la función interna y reemplazar la construcción de detalles */
+  const _guardarOrig = window.guardarVentaEditada;
+
+  /* Patch del insert de detalles dentro de guardarVentaEditada.
+     Como guardarVentaEditada es una función interna en una IIFE,
+     la sobreescribimos a nivel de finalizarVenta igual que el código
+     existente lo hace, pero interceptando la construcción de detalles. */
+
+  /* ── 2. PATCH finalizarVenta: incluir embalaje_id en nuevos detalles ── */
+  const _finalizarOrig = window.finalizarVenta || finalizarVenta;
+  finalizarVenta = window.finalizarVenta = async function(){
+    /* Si estamos editando, delegar al patch de guardar */
+    if(window.__ventaEditandoId){
+      return await bgGuardarVentaEditadaConEmbalaje();
+    }
+    /* Venta nueva: guardar con embalaje si corresponde */
+    return await bgFinalizarVentaConEmbalaje();
+  };
+
+  async function bgFinalizarVentaConEmbalaje(){
+    if(!cart.length){toast('No hay productos','err');return;}
+    const desc       = parseFloat(gs('v-desc')?.value)||0;
+    const total      = cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
+    const totalFinal = Math.max(0,total-desc);
+    const importe    = parseFloat(gs('v-importe')?.value)||0;
+
+    const productos = cart.map(c=>({
+      producto_id:       c.producto_id,
+      cantidad:          c.cantidad * (c.uds||1),   // en unidades para stock
+      precio_unitario:   c.precio,
+      subtotal:          Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
+      es_embalaje:       (c.uds||1) > 1,
+      uds_por_embalaje:  c.uds||1,
+      embalaje_id:       c.embalaje_id||null,
+      cantidad_embalajes: (c.uds||1) > 1 ? c.cantidad : null
+    }));
+
+    const {data,error}=await sb.rpc('registrar_venta_atomica',{
+      p_fecha:          fechaHoyPY(),
+      p_tipo:           ventaTipo,
+      p_cliente_nombre: gs('v-cliente')?.value||null,
+      p_total:          Math.round(total),
+      p_descuento:      Math.round(desc),
+      p_total_final:    Math.round(totalFinal),
+      p_metodo_pago:    selectedPay,
+      p_productos:      productos,
+      p_notas:          gs('v-notas')?.value||null,
+      p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+      p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+      p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
+    });
+
+    if(error||!data?.ok){
+      toast('Error: '+(data?.error||error?.message||'Error desconocido'),'err');
+      return;
+    }
+    toast(`✓ Cobrado: ${fmtGs(totalFinal)}`);
+    _dashCache=null;
+    await loadCaches(true);
+    cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;
+    renderVentas();
+  }
+
+  async function bgGuardarVentaEditadaConEmbalaje(){
+    const ventaId = window.__ventaEditandoId;
+    if(!ventaId || !cart.length){toast('No hay productos','err');return;}
+
+    try{
+      const desc       = parseFloat(gs('v-desc')?.value)||0;
+      const total      = cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
+      const totalFinal = Math.max(0,total-desc);
+      const importe    = parseFloat(gs('v-importe')?.value)||0;
+
+      /* Detectar cliente */
+      let cli={nombre:null,id:null};
+      try{
+        const clientes = (typeof clienteCache!=='undefined'&&clienteCache)||[];
+        const cId = gs('v-cliente-id')?.value;
+        if(cId){
+          const c=clientes.find(x=>String(x.id)===String(cId));
+          if(c){cli={nombre:c.nombre,id:c.id};}
+        }
+        if(!cli.nombre && gs('v-cliente')?.value) cli.nombre=gs('v-cliente').value;
+      }catch(e){}
+
+      const ventaUpdate={
+        tipo:       ventaTipo,
+        metodo_pago:selectedPay,
+        total:      Math.round(total),
+        descuento:  Math.round(desc),
+        total_final:Math.round(totalFinal),
+        cliente_nombre: cli.nombre||null,
+        cliente_id:     cli.id||null,
+        fecha:          fechaHoyPY(),
+        monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+        monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+      };
+
+      const {error:vErr}=await sb.from('bodega_ventas').update(ventaUpdate).eq('id',ventaId);
+      if(vErr) throw vErr;
+
+      /* Reconstruir stock: revertir detalle anterior */
+      const {data:detAnt}=await sb.from('bodega_ventas_detalle').select('*').eq('venta_id',ventaId);
+      for(const d of detAnt||[]){
+        const p=prodCache.find(x=>String(x.id)===String(d.producto_id));
+        if(p){
+          const ns=(p.stock||0)+(Number(d.cantidad)||0);
+          await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
+          p.stock=ns; // actualizar caché local
+        }
+      }
+
+      await sb.from('bodega_ventas_detalle').delete().eq('venta_id',ventaId);
+
+      /* Insertar nuevos detalles con datos de embalaje */
+      const detallesNuevos = cart.map(c=>{
+        const cantUds = (Number(c.cantidad)||0) * (Number(c.uds)||1);
+        const sub = c.subtotalCalculado ?? (c.precio * c.cantidad);
+        return {
+          venta_id:          ventaId,
+          producto_id:       c.producto_id,
+          cantidad:          cantUds,               // total en unidades
+          precio_unitario:   cantUds>0 ? sub/cantUds : 0,
+          subtotal:          Math.round(sub),
+          es_embalaje:       (c.uds||1) > 1,
+          uds_por_embalaje:  c.uds||1,
+          embalaje_id:       c.embalaje_id||null,
+          cantidad_embalajes: (c.uds||1) > 1 ? c.cantidad : null
+        };
+      });
+      const {error:dErr}=await sb.from('bodega_ventas_detalle').insert(detallesNuevos);
+      if(dErr) throw dErr;
+
+      /* Descontar nuevo stock */
+      for(const c of cart){
+        const cantUds=(Number(c.cantidad)||0)*(Number(c.uds)||1);
+        const p=prodCache.find(x=>String(x.id)===String(c.producto_id));
+        if(p){
+          const ns=Math.max(0,(p.stock||0)-cantUds);
+          await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
+          p.stock=ns;
+        }
+      }
+
+      await loadCaches(true);
+      window.__ventaEditandoId=null;
+      window.__ventaEditandoOriginal=null;
+      cart=[];
+      toast('Venta actualizada correctamente');
+      goTo('historial-ventas');
+    }catch(e){
+      console.error(e);
+      toast('Error guardando venta editada: '+(e.message||e),'err');
+      await loadCaches(true);
+    }
+  }
+
+  /* ── 3. PATCH editarVenta: reconstruir cart con datos de embalaje ────── */
+  window.editarVenta = editarVenta = async function(id){
+    function bgSleep(ms){return new Promise(r=>setTimeout(r,ms));}
+    async function bgWaitVentaReady(){
+      for(let i=0;i<100;i++){
+        if(gs('venta-tbody')&&gs('v-total')&&gs('v-desc')) return true;
+        await bgSleep(30);
+      }
+      return false;
+    }
+    try{
+      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
+      if(vErr) throw vErr;
+      if(!v){toast('NO SE ENCONTRÓ LA VENTA','err');return;}
+
+      /* Incluir embalaje_id y cantidad_embalajes en el select */
+      const {data:det,error:dErr}=await sb
+        .from('bodega_ventas_detalle')
+        .select('*,bodega_productos(nombre,precio_venta,precio_mayorista,precio_costo)')
+        .eq('venta_id',id);
+      if(dErr) throw dErr;
+
+      window.__ventaEditandoId=id;
+      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
+      ventaTipo=v.tipo||'minorista';
+
+      await loadCaches(true);
+      try{if(typeof cargarClientes==='function') await cargarClientes();}catch(e){}
+
+      await goTo('ventas');
+      await bgWaitVentaReady();
+      await bgSleep(80);
+
+      /* Reconstruir cart preservando estructura de embalaje */
+      cart = (det||[]).map((d,idx)=>{
+        const embId   = d.embalaje_id||null;
+        const udsFact = Number(d.uds_por_embalaje)||1;
+        const cantEmb = d.cantidad_embalajes != null
+                          ? Number(d.cantidad_embalajes)
+                          : Math.round((Number(d.cantidad)||0) / udsFact) || 1;
+        const sub     = Number(d.subtotal ?? ((Number(d.cantidad)||0)*(Number(d.precio_unitario)||0)));
+
+        /* Recuperar info del pack desde caché para nombre visual */
+        let nombre = d.bodega_productos?.nombre || 'PRODUCTO';
+        let embInfo = null;
+        if(embId){
+          embInfo = Object.values(embCache||{}).flat().find(e=>String(e.id)===String(embId));
+          if(embInfo) nombre = `${nombre} (x${embInfo.cantidad||udsFact})`;
+          else if(udsFact>1) nombre = `${nombre} (x${udsFact})`;
+        }
+
+        return {
+          key:        String(d.producto_id||'prod')+'_edit_'+idx+'_'+Date.now(),
+          producto_id:d.producto_id,
+          embalaje_id:embId,
+          nombre:     nombre,
+          precio:     cantEmb>0 ? sub/cantEmb : (Number(d.precio_unitario)||0)*udsFact,
+          cantidad:   cantEmb,
+          uds:        udsFact,
+          precioManual: true,
+          packInfo:   embId ? `Pack guardado (x${udsFact})` : 'PRECIO GUARDADO',
+          subtotalCalculado: sub
+        };
+      });
+
+      /* Rellenar campos de cabecera */
+      const bgSet=(id,val)=>{const el=gs(id);if(el)el.value=val??'';};
+      bgSet('v-desc',    Number(v.descuento)||0);
+      bgSet('v-importe', v.metodo_pago==='efectivo'?(Number(v.monto_efectivo)||Number(v.total_final)||0):0);
+      bgSet('v-efec',    Number(v.monto_efectivo)||0);
+      bgSet('v-transf',  Number(v.monto_transferencia)||0);
+      bgSet('v-qr',      0); bgSet('v-debito',0); bgSet('v-credito-mix',0);
+
+      const clientes=(typeof clienteCache!=='undefined'&&Array.isArray(clienteCache))?clienteCache:[];
+      const cli=clientes.find(c=>String(c.id||'')===String(v.cliente_id||'')||String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
+      if(gs('v-cliente-id')&&cli) gs('v-cliente-id').value=cli.id;
+      if(gs('v-cliente')&&(v.cliente_nombre||cli?.nombre)) gs('v-cliente').value=v.cliente_nombre||cli?.nombre||'';
+
+      selectPay(v.metodo_pago||'efectivo');
+      renderVentaTable();
+
+      /* Botón y alerta */
+      const cobrar=document.querySelector('.cobrar-btn');
+      if(cobrar){cobrar.textContent='GUARDAR CAMBIOS DE VENTA';cobrar.style.background='var(--amber)';cobrar.style.color='#111827';}
+      const header=gs('venta-header');
+      if(header&&!gs('venta-edit-alert')){
+        const av=document.createElement('div');
+        av.id='venta-edit-alert'; av.className='alert alert-warning'; av.style.margin='10px 0 0';
+        av.innerHTML='✏️ <b>EDITANDO VENTA</b>. LOS CAMBIOS SE GUARDAN RECIÉN AL TOCAR <b>GUARDAR CAMBIOS DE VENTA</b>.';
+        header.appendChild(av);
+      }
+      toast(cart.length ? 'VENTA CARGADA PARA EDITAR (embalajes preservados)' : 'VENTA ABIERTA — SIN PRODUCTOS EN DETALLE');
+    }catch(e){
+      console.error('Editar venta:', e);
+      toast('NO SE PUDO CARGAR LA VENTA: '+(e.message||e),'err');
+      try{goTo('historial-ventas');}catch(_){}
+    }
+  };
+
+  /* Registrar en pages si está disponible */
+  try{if(typeof pages==='object'&&pages.ventas) pages.ventas=window.renderVentas;}catch(e){}
+})();
+</script>
+
 </body>
 </html>
