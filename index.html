@@ -4315,12 +4315,23 @@ initMobileShell();
   };
   window.generarReportes=async function generarReportes(){
     const loading=gs('rpt-loading'); if(loading) loading.style.display='block';
-    const {desde,hasta}=rptDateRange();
+    const {desde,hasta,desdeTs,hastaTs,tieneHora}=rptDateRange();
     const fCliente=rptNorm(gs('rpt-cliente')?.value||'');
     const fProducto=rptNorm(gs('rpt-producto')?.value||'');
     try{
+      // Si hay hora definida, filtrar por created_at (timestamp exacto)
+      // Si no hay hora, filtrar por fecha (campo de texto)
+      let ventasQ=sb.from('bodega_ventas').select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at').order('fecha',{ascending:false}).limit(2000);
+      if(tieneHora){
+        // Convertir a UTC para comparar con created_at (PY = UTC-3)
+        const desdeTsUTC=new Date(desdeTs+'-03:00').toISOString();
+        const hastaTsUTC=new Date(hastaTs+'-03:00').toISOString();
+        ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
+      } else {
+        ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
+      }
       const [ventasRes, comprasRes] = await Promise.all([
-        sb.from('bodega_ventas').select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(2000),
+        ventasQ,
         sb.from('bodega_compras').select('id,fecha,total,estado,proveedor_id,bodega_proveedores(nombre)').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(2000)
       ]);
       if(ventasRes.error) throw ventasRes.error;
@@ -5409,12 +5420,13 @@ initMobileShell();
       const detailRows=detalles.map(d=>{
         const v=ventasMap[d.venta_id]||{};
         const total=repLineTotal(d), cst=(Number(d.cantidad)||0)*repProductCost(d);
-        return `<tr><td>${repDate(v.fecha)}</td><td>${repEsc(v.cliente_nombre||'Ocasional')}</td><td>${repEsc(repProductName(d))}</td><td>${repNum(d.cantidad)}</td><td>${repMoney(d.precio_unitario)}</td><td>${repMoney(total)}</td><td>${repEsc(v.metodo_pago||'-')}</td><td>${repMarginHTML(total,cst)}</td></tr>`;
+        const hora=v.created_at?new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):'--:--';
+        return `<tr><td style="color:var(--accent);font-weight:700;white-space:nowrap">${hora}</td><td>${repDate(v.fecha)}</td><td>${repEsc(v.cliente_nombre||'Ocasional')}</td><td>${repEsc(repProductName(d))}</td><td>${repNum(d.cantidad)}</td><td>${repMoney(d.precio_unitario)}</td><td>${repMoney(total)}</td><td>${repEsc(v.metodo_pago||'-')}</td><td>${repMarginHTML(total,cst)}</td></tr>`;
       }).join('');
       const cpRows=Object.values(byCP).sort((a,b)=>a.cliente.localeCompare(b.cliente)||b.cantidad-a.cantidad).map(x=>`<tr><td style="font-weight:600">${repEsc(x.cliente)}</td><td>${repEsc(x.producto)}</td><td class="rep-kpi">${repNum(x.cantidad)}</td><td>${repMoney(x.total)}</td><td>${repMoney(x.fiado)}</td><td>${repMarginHTML(x.total,x.costo)}</td><td>${x.ventas.size}</td><td>${repDate(x.primera)} → ${repDate(x.ultima)}</td></tr>`).join('');
       const prodRows=Object.values(byProd).sort((a,b)=>b.cantidad-a.cantidad).map(p=>`<tr><td style="font-weight:600">${repEsc(p.producto)}</td><td class="rep-kpi">${repNum(p.cantidad)}</td><td>${repMoney(p.total)}</td><td>${repMoney(p.costo)}</td><td>${repMarginHTML(p.total,p.costo)}</td><td>${p.ventas.size}</td><td>${p.clientes.size}</td></tr>`).join('');
       const cliRows=Object.values(byCli).sort((a,b)=>b.total-a.total).map(c=>`<tr><td style="font-weight:600">${repEsc(c.cliente)}</td><td>${c.ventas.size}</td><td class="rep-kpi">${repNum(c.cantidad)}</td><td>${repMoney(c.total)}</td><td>${repMoney(c.fiado)}</td><td>${repMarginHTML(c.total,c.costo)}</td></tr>`).join('');
-      document.getElementById('rep-panel-detalle').innerHTML=repCard('Detalle de ventas filtradas','<tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th><th>Pago</th><th>Margen</th></tr>',detailRows,'Sin ventas con esos filtros.');
+      document.getElementById('rep-panel-detalle').innerHTML=repCard('Detalle de ventas filtradas','<tr><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th><th>Pago</th><th>Margen</th></tr>',detailRows,'Sin ventas con esos filtros.');
       document.getElementById('rep-panel-cliente-producto').innerHTML=repCard('Cantidad total por cliente y producto','<tr><th>Cliente</th><th>Producto</th><th>Cantidad total</th><th>Total comprado</th><th>Fiado</th><th>Margen</th><th>Ventas</th><th>Periodo</th></tr>',cpRows,'Sin resultados para cliente/producto.');
       document.getElementById('rep-panel-productos').innerHTML=repCard('Productos vendidos','<tr><th>Producto</th><th>Cantidad total</th><th>Total vendido</th><th>Costo estimado</th><th>Margen</th><th>Ventas</th><th>Clientes</th></tr>',prodRows,'Sin productos vendidos.');
       document.getElementById('rep-panel-clientes').innerHTML=repCard('Clientes','<tr><th>Cliente</th><th>Ventas</th><th>Cant. productos</th><th>Total comprado</th><th>Fiado</th><th>Margen</th></tr>',cliRows,'Sin clientes.');
