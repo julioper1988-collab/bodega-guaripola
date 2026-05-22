@@ -6158,6 +6158,7 @@ initMobileShell();
     const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
     return `<table><thead><tr>
       <th><input type="checkbox" onchange="toggleVentasSeleccionadas(this)"></th>
+      <th style="color:var(--accent2)">N°</th>
       <th style="color:var(--accent2)">HORA</th>
       <th>FECHA</th>
       <th>TIPO</th>
@@ -6172,6 +6173,7 @@ initMobileShell();
       const hora=fmtHoraVenta(v);
       return `<tr>
         <td><input class="venta-check" type="checkbox" value="${v.id}" onchange="actualizarContadorVentasSeleccionadas()"></td>
+        <td style="font-weight:900;color:var(--accent2);font-size:13px;white-space:nowrap">${v.numero_venta?'#'+v.numero_venta:'-'}</td>
         <td style="font-weight:800;color:var(--accent2);font-size:14px;white-space:nowrap">${hora}</td>
         <td style="white-space:nowrap">${fmtDate(fechaVentaPY(v))}</td>
         <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${h(v.tipo)}</span></td>
@@ -6187,10 +6189,10 @@ initMobileShell();
         </td>
       </tr>`;
     }).join('')}
-    ${!ventas.length?'<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:18px">No hay ventas con ese filtro.</td></tr>':''}
+    ${!ventas.length?'<tr><td colspan="11" style="text-align:center;color:var(--text2);padding:18px">No hay ventas con ese filtro.</td></tr>':''}
     </tbody>
     ${ventas.length?`<tfoot><tr style="border-top:2px solid var(--border)">
-      <td colspan="7" style="font-weight:800;padding:10px 12px;text-align:right">TOTAL:</td>
+      <td colspan="8" style="font-weight:800;padding:10px 12px;text-align:right">TOTAL:</td>
       <td style="font-weight:900;color:var(--green);font-size:16px;padding:10px 12px">${fmtGs(total)}</td>
       <td colspan="2"></td>
     </tr></tfoot>`:''}
@@ -7597,7 +7599,12 @@ async function revertirStockCompraReal(compraId, detalles){
     cart=[];
     // Siguiente número de comprobante = numero_venta + 1 (secuencial real)
     if(numVenta) ventaNum = numVenta + 1;
-    renderVentas();
+    await renderVentas();
+    // Forzar actualización del span con el número correcto (el fetch en renderVentas puede pisar con el valor anterior)
+    if(numVenta){
+      const span = document.getElementById('v-num-comp');
+      if(span) span.textContent = '#' + (numVenta + 1);
+    }
   };
 
   // bgFinalizarVentaConEmbalaje ya no se usa directamente — la lógica está en finalizarVenta
