@@ -2674,10 +2674,11 @@ renderHistorialVentas = async function(){
   const {data}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
   gs('content').innerHTML=`<div class="card">
     <div class="card-header"><h3>Historial de ventas</h3></div>
-    <table><thead><tr><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
+    <table><thead><tr><th>N°</th><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
     ${(data||[]).map(v=>{
       const hora=fmtHoraVenta(v);
       return `<tr>
+        <td style="font-weight:900;color:var(--accent2);font-size:13px">${v.numero_venta?'#'+v.numero_venta:'-'}</td>
         <td style="color:var(--accent2);font-weight:700;font-size:13px">${hora}</td>
         <td>${fmtDate(fechaVentaPY(v))}</td>
         <td>${v.cliente_nombre||'-'}</td>
@@ -7388,6 +7389,7 @@ async function revertirStockCompraReal(compraId, detalles){
       /* Construir secciones de stats igual que el original */
       const body=`
         <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
+          ${v.numero_venta?`<div class="stat-card"><div class="label">N° COMPROBANTE</div><div class="value" style="font-size:22px;color:var(--accent2);font-weight:900">#${v.numero_venta}</div></div>`:''}
           <div class="stat-card"><div class="label">FECHA</div><div class="value" style="font-size:18px">${fmtDate(fechaVentaPY(v))}</div></div>
           <div class="stat-card"><div class="label">HORA</div><div class="value" style="font-size:18px">${(typeof bgFmtHora==='function'?bgFmtHora(v):(typeof fmtHoraVenta==='function'?fmtHoraVenta(v):'--:--'))}</div></div>
           <div class="stat-card"><div class="label">CLIENTE</div><div class="value" style="font-size:18px">${ESC(v.cliente_nombre||'OCASIONAL')}</div></div>
@@ -7417,7 +7419,7 @@ async function revertirStockCompraReal(compraId, detalles){
           ${progresso}
         </div>`;
 
-      openModal('DETALLE DE VENTA', body, null, '');
+      openModal('DETALLE DE VENTA'+(v.numero_venta?' — N° '+v.numero_venta:''), body, null, '');
     }catch(e){
       console.error(e);
       toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
@@ -7544,7 +7546,8 @@ async function revertirStockCompraReal(compraId, detalles){
       return;
     }
 
-    const ventaId = data.venta_id;
+    const ventaId    = data.venta_id;
+    const numVenta   = data.numero_venta || null;
 
     // Registrar fiado en bodega_fiados si aplica
     if(selectedPay==='fiado'){
@@ -7561,9 +7564,10 @@ async function revertirStockCompraReal(compraId, detalles){
       if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
     }
 
+    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : '';
     toast(selectedPay==='fiado'
-      ? `✓ Fiado registrado: ${fmtGs(totalFinal)}`
-      : `✓ Cobrado: ${fmtGs(totalFinal)}`);
+      ? `✓ Fiado registrado: ${fmtGs(totalFinal)}${nTag}`
+      : `✓ Cobrado: ${fmtGs(totalFinal)}${nTag}`);
     _dashCache=null;
     await loadCaches(true);
 
@@ -7577,7 +7581,8 @@ async function revertirStockCompraReal(compraId, detalles){
     if(bajos.length) toast('⚠️ Stock bajo: '+bajos.join(', '),'err');
 
     cart=[];
-    ventaNum=Math.floor(Math.random()*90000)+10000;
+    // Siguiente número de comprobante = numero_venta + 1 si lo tenemos, sino random
+    ventaNum = numVenta ? numVenta + 1 : Math.floor(Math.random()*90000)+10000;
     renderVentas();
   };
 
