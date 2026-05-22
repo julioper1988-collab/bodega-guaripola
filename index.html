@@ -6,181 +6,7 @@
 <title>Bodega Guaripola</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ─── FIX FINAL: EDITAR VENTA REAL + VER VENTA DETALLADO + MAYÚSCULAS ─── */
-(function(){
-  function bgEsc(v){
-    return String(v ?? '').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]));
-  }
-  window.escapeHtml = window.escapeHtml || bgEsc;
-  function bgFmtHora(row){
-    const raw = row?.created_at || row?.updated_at || row?.fecha;
-    if(!raw) return '-';
-    try{return new Date(raw).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});}catch(e){return '-';}
-  }
-  function bgPayName(m){
-    const map={efectivo:'EFECTIVO',transferencia:'TRANSFERENCIA',credito:'CRÉDITO',debito:'DÉBITO',qr:'QR',mixto:'MIXTO',fiado:'FIADO'};
-    return map[m] || String(m||'-').toUpperCase();
-  }
-  function bgPaymentRows(v){
-    const total=Number(v?.total_final)||0;
-    const ef=Number(v?.monto_efectivo)||0;
-    const tr=Number(v?.monto_transferencia)||0;
-    const ot=Number(v?.monto_otro)||0;
-    const metodo=v?.metodo_pago||'-';
-    let rows=[];
-    rows.push(['MÉTODO', bgPayName(metodo)]);
-    if(metodo==='efectivo'){
-      rows.push(['TOTAL A PAGAR', fmtGs(total)]);
-      if(ef>0){
-        rows.push(['IMPORTE RECIBIDO', fmtGs(ef)]);
-        rows.push(['VUELTO', fmtGs(Math.max(0, ef-total))]);
-      }else{
-        rows.push(['IMPORTE RECIBIDO', 'NO REGISTRADO']);
-      }
-    }else if(metodo==='mixto'){
-      rows.push(['EFECTIVO', fmtGs(ef)]);
-      rows.push(['TRANSFERENCIA', fmtGs(tr)]);
-      rows.push(['QR / DÉBITO / CRÉDITO', fmtGs(ot)]);
-      rows.push(['TOTAL PAGOS REGISTRADOS', fmtGs(ef+tr+ot)]);
-      rows.push(['TOTAL VENTA', fmtGs(total)]);
-      const dif=(ef+tr+ot)-total;
-      rows.push(['DIFERENCIA / VUELTO', fmtGs(dif)]);
-    }else if(metodo==='transferencia'){
-      rows.push(['TRANSFERENCIA', fmtGs(tr || total)]);
-    }else if(['qr','debito','credito'].includes(metodo)){
-      rows.push([bgPayName(metodo), fmtGs(ot || total)]);
-    }else if(metodo==='fiado'){
-      rows.push(['TOTAL FIADO', fmtGs(total)]);
-      rows.push(['ESTADO', 'PENDIENTE / VER CLIENTES-DEUDAS']);
-    }else{
-      rows.push(['TOTAL', fmtGs(total)]);
-    }
-    return rows.map(r=>`<tr><td style="color:var(--text2);font-weight:700">${bgEsc(r[0])}</td><td style="font-weight:800">${bgEsc(r[1])}</td></tr>`).join('');
-  }
-
-  window.verVenta = verVenta = async function(id){
-    try{
-      const [{data:v,error:vErr},{data:det,error:dErr}] = await Promise.all([
-        sb.from('bodega_ventas').select('*').eq('id',id).single(),
-        sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('venta_id',id)
-      ]);
-      if(vErr) throw vErr;
-      if(dErr) throw dErr;
-      const detalles=(det||[]).map(d=>{
-        const cant=Number(d.cantidad)||0;
-        const precio=Number(d.precio_unitario)||0;
-        const sub=Number(d.subtotal ?? (cant*precio));
-        return `<tr>
-          <td>${bgEsc(d.bodega_productos?.nombre||'PRODUCTO')}</td>
-          <td style="text-align:center;font-weight:800">${cant.toLocaleString('es-PY')}</td>
-          <td style="text-align:right">${fmtGs(precio)}</td>
-          <td style="text-align:right;font-weight:800;color:var(--accent2)">${fmtGs(sub)}</td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:16px">SIN DETALLE</td></tr>';
-      const body=`
-        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
-          <div class="stat-card"><div class="label">FECHA</div><div class="value" style="font-size:18px">${fmtDate(fechaVentaPY(v))}</div></div>
-          <div class="stat-card"><div class="label">HORA</div><div class="value" style="font-size:18px">${bgFmtHora(v)}</div></div>
-          <div class="stat-card"><div class="label">CLIENTE</div><div class="value" style="font-size:18px">${bgEsc(v.cliente_nombre||'OCASIONAL')}</div></div>
-          <div class="stat-card"><div class="label">TOTAL</div><div class="value" style="font-size:20px;color:var(--green)">${fmtGs(v.total_final)}</div></div>
-        </div>
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-header"><h3>DETALLE DE PAGO</h3></div>
-          <table><tbody>${bgPaymentRows(v)}</tbody></table>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3>PRODUCTOS VENDIDOS</h3></div>
-          <table><thead><tr><th>PRODUCTO</th><th style="text-align:center">CANT.</th><th style="text-align:right">PRECIO UNIT.</th><th style="text-align:right">SUBTOTAL</th></tr></thead><tbody>${detalles}</tbody></table>
-        </div>`;
-      openModal('DETALLE DE VENTA', body, null, '');
-    }catch(e){
-      console.error(e);
-      toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
-    }
-  };
-
-  async function bgEsperarVentaDOM(){
-    for(let i=0;i<80;i++){
-      if(gs('venta-tbody') && gs('v-total')) return true;
-      await new Promise(r=>setTimeout(r,25));
-    }
-    return false;
-  }
-  function bgSetClienteVenta(v){
-    try{
-      const lista=(typeof clienteCache!=='undefined' && clienteCache) ? clienteCache : [];
-      const cliente=lista.find(c=>String(c.id||'')===String(v.cliente_id||'') || String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
-      if(gs('v-cliente-id') && cliente){gs('v-cliente-id').value=cliente.id;return;}
-      if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
-    }catch(e){
-      if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
-    }
-  }
-  window.editarVenta = editarVenta = async function(id){
-    try{
-      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
-      if(vErr) throw vErr;
-      const {data:det,error:dErr}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
-      if(dErr) throw dErr;
-      if(!v){toast('NO SE PUDO ABRIR LA VENTA','err');return;}
-
-      window.__ventaEditandoId=id;
-      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
-      ventaTipo=v.tipo||'minorista';
-
-      await loadCaches(true);
-      try{ await cargarClientes(); }catch(e){}
-      const r = window.renderVentas ? window.renderVentas() : renderVentas();
-      if(r && typeof r.then==='function') await r;
-      await bgEsperarVentaDOM();
-      await new Promise(r=>setTimeout(r,80));
-
-      cart=(det||[]).map((d,idx)=>{
-        const cant=Number(d.cantidad)||1;
-        const precio=Number(d.precio_unitario)||0;
-        const sub=Number(d.subtotal ?? (cant*precio));
-        return {
-          key:String(d.producto_id)+'_edit_'+idx,
-          producto_id:d.producto_id,
-          embalaje_id:null,
-          nombre:(d.bodega_productos?.nombre||'PRODUCTO').toUpperCase(),
-          precio:precio,
-          cantidad:cant,
-          uds:1,
-          precioManual:true,
-          packInfo:'PRECIO GUARDADO',
-          subtotalCalculado:sub
-        };
-      });
-
-      if(gs('v-desc')) gs('v-desc').value=Number(v.descuento)||0;
-      if(gs('v-importe')) gs('v-importe').value=v.metodo_pago==='efectivo' ? (Number(v.monto_efectivo)||Number(v.total_final)||0) : 0;
-      bgSetClienteVenta(v);
-
-      selectPay(v.metodo_pago || 'efectivo');
-      renderVentaTable();
-      updateVTotals();
-
-      const cobrar=document.querySelector('.cobrar-btn');
-      if(cobrar){cobrar.textContent='GUARDAR CAMBIOS DE VENTA';cobrar.style.background='var(--amber)';}
-      const header=gs('venta-header');
-      if(header && !gs('venta-edit-alert')){
-        const aviso=document.createElement('div');
-        aviso.id='venta-edit-alert';
-        aviso.className='alert alert-warning';
-        aviso.style.margin='10px 0 0';
-        aviso.innerHTML='✏️ <b>EDITANDO VENTA</b>. LA VENTA ORIGINAL NO SE BORRA. LOS CAMBIOS SE APLICAN AL TOCAR <b>GUARDAR CAMBIOS DE VENTA</b>.';
-        header.appendChild(aviso);
-      }
-      toast('VENTA CARGADA PARA EDITAR. NO SE BORRÓ NADA.');
-    }catch(e){
-      console.error(e);
-      toast('NO SE PUDO ABRIR LA VENTA: '+(e.message||e),'err');
-    }
-  };
-})();
-
-
+/* ─── editarVenta y finalizarVenta unificadas más abajo ─── */
 
 // ─── INVENTARIO Y BLOQUEO DE STOCK PARA USUARIO NO ADMIN ───
 (function(){
@@ -201,20 +27,20 @@
   }
   function isAdminLocalCached(){
     try{
-      const raw=localStorage.getItem('bg_usuario_full');
+      const raw=lsGet('bg_usuario_full');
       if(raw){const u=JSON.parse(raw); return !u || u.rol==='admin';}
     }catch(e){}
     return true;
   }
   async function usuarioAdminActual(){
     try{
-      const saved=localStorage.getItem('bg_usuario_actual');
+      const saved=lsGet('bg_usuario_actual');
       if(!saved) return true;
       const obj=JSON.parse(saved);
       if(!obj?.id) return true;
       const {data,error}=await sb.from('bodega_usuarios').select('id,nombre,rol').eq('id',obj.id).maybeSingle();
       if(error || !data) return true;
-      localStorage.setItem('bg_usuario_full',JSON.stringify(data));
+      lsSet('bg_usuario_full',JSON.stringify(data));
       return data.rol==='admin';
     }catch(e){return true;}
   }
@@ -516,10 +342,10 @@
     const dif=total-(Number(it.stock_sistema)||0);
     // No re-renderizamos para no perder el foco; actualizarResumenInventario ya actualiza el resumen
   };
-  window.invRemoveDep=function(i,di){
+  window.invRemoveDep=async function(i,di){
     if(!invItems[i]) return;
     if(invItems[i].depositos.length<=1){
-      if(!confirm('¿Quitar este producto del conteo?')) return;
+      if(!(await bgConfirm('¿Quitar este producto del conteo?',{ title:'Quitar del conteo', confirmText:'Quitar', variant:'warning' }))) return;
       invItems.splice(i,1);
     } else {
       invItems[i].depositos.splice(di,1);
@@ -549,9 +375,9 @@
     actualizarResumenInventario();
   };
 
-  window.removeInvItem=function(i){invItems.splice(i,1);renderInvItems();};
-  window.limpiarInventarioActual=function(){
-    if(invItems.length&&!confirm('¿Limpiar el conteo actual?')) return;
+  window.removeInvItem=async function(i){invItems.splice(i,1);renderInvItems();};
+  window.limpiarInventarioActual=async function(){
+    if(invItems.length&&!(await bgConfirm('¿Limpiar el conteo actual?',{ title:'Limpiar conteo', confirmText:'Limpiar', variant:'warning' }))) return;
     invItems=[]; renderInvItems();
   };
 
@@ -568,7 +394,21 @@
       difTotal+=dif;
       difMontoTotal+=dif*(Number(it.precio_costo)||0);
     });
-    if(estado==='finalizado'&&!confirm('Esto ajustará el stock real (suma de todos los depósitos). ¿Guardar inventario?')) return;
+    if(estado==='finalizado'){
+      // Advertencia si algún producto tiene diferencia mayor al 30%
+      const grandes=invItems.filter(it=>{
+        const contado=invTotalContado(it);
+        const sistema=Number(it.stock_sistema)||0;
+        if(sistema===0) return false;
+        return Math.abs(contado-sistema)/sistema > 0.30;
+      });
+      if(grandes.length>0){
+        const nombres=grandes.slice(0,3).map(it=>htmlInv(it.nombre)).join(', ')+(grandes.length>3?' y '+(grandes.length-3)+' más':'');
+        if(!(await bgConfirm('Hay productos con diferencia mayor al 30% respecto al stock del sistema:<br><br><strong style="color:var(--red)">' + nombres + '</strong><br><br>¿Confirmás el ajuste de stock?', { title:'Diferencia grande detectada', confirmText:'Sí, ajustar igual', cancelText:'Revisar primero', variant:'danger' }))) return;
+      } else {
+        if(!(await bgConfirm('Esto ajustará el stock de cada producto con los valores contados.<br><span style="font-size:12px;color:var(--text2)">Suma de todos los depósitos como stock real.</span>', { title:'Guardar inventario', confirmText:'Guardar y ajustar stock', variant:'primary' }))) return;
+      }
+    }
     const cab={fecha,estado,responsable,total_productos:invItems.length,diferencia_total:difTotal,diferencia_monto:difMontoTotal,created_at:new Date().toISOString()};
     const {data:inv,error:e1}=await sb.from('bodega_inventarios').insert(cab).select().single();
     if(e1){toast('Error inventario: '+e1.message,'err');return;}
@@ -592,7 +432,7 @@
         await sb.from('bodega_productos').update({stock:ns}).eq('id',it.producto_id);
         await sb.from('bodega_ajustes_stock').insert({producto_id:it.producto_id,
           tipo:dif>0?'ajuste_positivo':'ajuste_negativo',cantidad:Math.abs(dif),
-          motivo:'Inventario',stock_anterior:old,stock_nuevo:ns,
+          motivo:'Inventario físico'+(responsable?' — '+responsable:'')+' ('+fmtDate(fecha)+')',stock_anterior:old,stock_nuevo:ns,
           referencia_id:inv.id,referencia_tipo:'inventario'});
       }
     }
@@ -719,7 +559,7 @@
   document.head.appendChild(invCss);
   setTimeout(function(){
     if(typeof gs === 'function') initInventarioNav();
-    else setTimeout(initInventarioNav, 800);
+    else setTimeout(function(){ if(typeof gs === 'function') initInventarioNav(); }, 800);
   },600);
 })();
 </script>
@@ -1196,9 +1036,9 @@ let acSelected=-1;
 function saveConfig(){
   const url=document.getElementById('cfg-url').value.trim(),key=document.getElementById('cfg-key').value.trim();
   if(!url||!key){showCfgErr('Completá ambos campos.');return;}
-  localStorage.setItem('bg_url',url);localStorage.setItem('bg_key',key);initSB(url,key);
+  lsSet('bg_url',url);lsSet('bg_key',key);initSB(url,key);
 }
-function resetConfig(){localStorage.removeItem('bg_url');localStorage.removeItem('bg_key');location.reload();}
+function resetConfig(){lsRemove('bg_url');lsRemove('bg_key');location.reload();}
 function showCfgErr(m){const e=document.getElementById('cfg-error');e.textContent=m;e.style.display='block';}
 
 async function initSB(url,key){
@@ -1278,6 +1118,101 @@ function openModal(title,body,confirmFn,confirmText='Guardar'){
   gs('modal-overlay').classList.add('show');
 }
 function closeModal(){gs('modal-overlay').classList.remove('show');gs('modal-confirm').style.display='';}
+
+/* ══ bgToggleHistPrecios — alterna entre resumen y historial completo en modal producto ══ */
+function bgToggleHistPrecios(btn){
+  const rowsEl = document.getElementById('p-hist-rows');
+  if(!rowsEl || !window.__bgHistPreciosBuilder) return;
+  const expanded = btn.dataset.expanded === '1';
+  rowsEl.innerHTML = window.__bgHistPreciosBuilder(!expanded);
+  btn.dataset.expanded = expanded ? '0' : '1';
+  btn.textContent = expanded ? 'Mostrar todo el historial ▾' : 'Ver solo últimos por proveedor ▴';
+}
+
+/* ══ localStorage helpers — seguros en modo privado y storage lleno ══
+   lsGet(key, fallback)  → valor parseado o fallback
+   lsSet(key, value)     → guarda (silencioso si falla)
+   lsRemove(key)         → elimina (silencioso si falla)
+══════════════════════════════════════════════════════════════════════ */
+function lsGet(key, fallback = null){
+  try{ const v = localStorage.getItem(key); return v !== null ? v : fallback; }
+  catch(e){ return fallback; }
+}
+function lsSet(key, value){
+  try{ localStorage.setItem(key, value); }catch(e){}
+}
+function lsRemove(key){
+  try{ localStorage.removeItem(key); }catch(e){}
+}
+
+/* ══ bgConfirm — modal de confirmación que reemplaza confirm() del browser ══
+   Uso:  if(!(await bgConfirm('¿Eliminar este producto?'))) return;
+   Opciones:
+     { title, confirmText, cancelText, variant }
+     variant: 'danger' | 'warning' | 'info' (default)
+   Devuelve Promise<boolean>.
+══════════════════════════════════════════════════════════════════════════════ */
+function bgConfirm(mensaje, opts = {}){
+  return new Promise(resolve => {
+    const {
+      title       = '¿Confirmar acción?',
+      confirmText = 'Confirmar',
+      cancelText  = 'Cancelar',
+      variant     = 'primary'   // 'primary' | 'danger' | 'warning'
+    } = opts;
+
+    // Icono según variante
+    const iconos = { danger:'⚠️', warning:'🔔', primary:'❓' };
+    const icono  = iconos[variant] || '❓';
+
+    // Colores del botón confirmar según variante
+    const btnClases = {
+      danger:  'btn btn-danger',
+      warning: 'btn btn-primary',
+      primary: 'btn btn-primary'
+    };
+    const btnClass = btnClases[variant] || 'btn btn-primary';
+
+    // Inyectar contenido en el modal existente
+    gs('modal-title').innerHTML = `${icono} ${title}`;
+    gs('modal-body').innerHTML  = `
+      <p style="font-size:14px;color:var(--text);line-height:1.6;margin:0 0 20px">${mensaje}</p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="bgconfirm-cancel"  class="btn btn-secondary" style="min-width:90px">${cancelText}</button>
+        <button id="bgconfirm-ok"      class="${btnClass}"       style="min-width:90px">${confirmText}</button>
+      </div>`;
+
+    // Ocultar el footer nativo (no lo necesitamos)
+    gs('modal-confirm').style.display = 'none';
+
+    // Mostrar modal
+    gs('modal-overlay').classList.add('show');
+
+    function cleanup(result){
+      gs('modal-overlay').classList.remove('show');
+      gs('modal-confirm').style.display = '';
+      resolve(result);
+    }
+
+    // Listeners de los botones del modal
+    gs('bgconfirm-ok').onclick     = () => cleanup(true);
+    gs('bgconfirm-cancel').onclick = () => cleanup(false);
+
+    // Click fuera del modal = cancelar
+    const overlay = gs('modal-overlay');
+    function onOverlayClick(e){
+      if(e.target === overlay){ overlay.removeEventListener('click', onOverlayClick); cleanup(false); }
+    }
+    overlay.addEventListener('click', onOverlayClick);
+
+    // Teclado: Enter = confirmar, Escape = cancelar
+    function onKey(e){
+      if(e.key === 'Enter')  { document.removeEventListener('keydown', onKey); cleanup(true);  }
+      if(e.key === 'Escape') { document.removeEventListener('keydown', onKey); cleanup(false); }
+    }
+    document.addEventListener('keydown', onKey);
+  });
+}
 
 const titles={dashboard:'Dashboard',productos:'Productos',ventas:'Nueva venta','historial-ventas':'Historial ventas',compras:'Nueva compra','historial-compras':'Historial compras',proveedores:'Proveedores',ajustes:'Ajuste de stock',reportes:'Reportes',categorias:'Categorías'};
 const pages={dashboard:renderDashboard,productos:renderProductos,ventas:renderVentas,'historial-ventas':renderHistorialVentas,compras:renderCompras,'historial-compras':renderHistorialCompras,proveedores:renderProveedores,ajustes:renderAjustes,reportes:renderReportes,categorias:renderCategorias};
@@ -1461,8 +1396,8 @@ window.dashFiltrarHoras=function(){
   const desde=gs('dash-desde')?.value||'00:00';
   const hasta=gs('dash-hasta')?.value||'23:59';
   const ventas=(window.__dashVentasCaja||window.__dashVentasHoy||[]).filter(v=>{
-    const hora=fmtHoraVenta(v);
-    if(!hora) return true;
+    const hora=fmtHoraVenta(v); // fmtHoraVenta ya usa horaLocalParaguay (UTC-3)
+    if(!hora||hora==='--:--') return true;
     return hora>=desde && hora<=hasta;
   });
   const el=gs('dash-caja-ventas');
@@ -1789,7 +1724,7 @@ async function saveProd(id=null){
   _dashCache=null;toast(id?'Actualizado':'Creado');closeModal();await loadCaches(true);renderProductos();
 }
 async function deleteProd(id,nombre){
-  if(!confirm(`¿Eliminar "${nombre}"?`))return;
+  if(!(await bgConfirm(`¿Eliminar el producto <strong>${nombre}</strong>?`+ '<br><span style="font-size:12px;color:var(--text2)">Esta acción no se puede deshacer.</span>',{ title:'Eliminar producto', confirmText:'Eliminar', variant:'danger' })))return;
   await sb.from('bodega_productos').update({activo:false}).eq('id',id);
   _dashCache=null;toast('Eliminado');await loadCaches(true);renderProductos();
 }
@@ -1840,7 +1775,7 @@ async function saveEmb(prodId,prodNombre){
   toast('Presentación agregada');await loadCaches(true);openEmbModal(prodId,prodNombre);
 }
 async function deleteEmb(embId,prodId,prodNombre){
-  if(!confirm('¿Eliminar?'))return;
+  if(!(await bgConfirm('¿Eliminar este embalaje?',{ title:'Eliminar embalaje', confirmText:'Eliminar', variant:'danger' })))return;
   await sb.from('bodega_embalajes').update({activo:false}).eq('id',embId);
   toast('Eliminada');await loadCaches(true);openEmbModal(prodId,prodNombre);
 }
@@ -2119,8 +2054,8 @@ function updateVTotals(){
   }
 }
 
-function cancelarVenta(){
-  if(cart.length&&!confirm('¿Cancelar la venta actual?'))return;
+async function cancelarVenta(){
+  if(cart.length&&!(await bgConfirm('¿Cancelar la venta actual?<br><span style="font-size:12px;color:var(--text2)">Se perderán los productos del carrito.</span>',{ title:'Cancelar venta', confirmText:'Cancelar venta', cancelText:'Seguir', variant:'warning' })))return;
   cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;renderVentas();
 }
 
@@ -2322,19 +2257,57 @@ async function finalizarCompra(){
   await loadCaches(true);compraItems=[];renderCompras();
 }
 async function impactarStock(compraId,items){
+  // Leer proveedor_id de la compra una sola vez
+  let proveedorId = null;
+  try{
+    const {data:comp} = await sb.from('bodega_compras').select('proveedor_id').eq('id',compraId).single();
+    proveedorId = comp?.proveedor_id || null;
+  }catch(e){}
+
   for(const c of items){
     const p=prodCache.find(x=>x.id===c.producto_id);if(!p)continue;
-    const totalUds=c.cantidad*c.uds,ns=(p.stock||0)+totalUds;
-    await sb.from('bodega_productos').update({stock:ns,precio_costo:c.costo}).eq('id',c.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({producto_id:c.producto_id,tipo:'entrada',cantidad:totalUds,motivo:'Compra',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:compraId,referencia_tipo:'compra'});
+    const uds=Math.max(1,parseInt(c.uds)||1);
+    const totalUds=(parseInt(c.cantidad)||0)*uds;
+    const ns=(p.stock||0)+totalUds;
+    // Costo por UNIDAD: si es pack (uds > 1), dividir el precio del pack entre las unidades
+    const costoUnitario=Math.round((parseFloat(c.costo)||0)/uds);
+    const costoPack=Math.round(parseFloat(c.costo)||0);
+
+    await sb.from('bodega_productos').update({stock:ns,precio_costo:costoUnitario}).eq('id',c.producto_id);
+
+    // Registrar movimiento en ajustes_stock
+    const motivoCompra='Compra'+((uds>1)?' (pack x'+uds+', costo pack: '+fmtGs(costoPack)+')':'');
+    await sb.from('bodega_ajustes_stock').insert({
+      producto_id:c.producto_id,tipo:'entrada',cantidad:totalUds,
+      motivo:motivoCompra,stock_anterior:p.stock,stock_nuevo:ns,
+      referencia_id:compraId,referencia_tipo:'compra'
+    });
+
+    // Registrar en historial de precios por proveedor
+    await sb.from('bodega_historial_precios').insert({
+      producto_id:       c.producto_id,
+      proveedor_id:      proveedorId,
+      compra_id:         compraId,
+      precio_costo_pack: costoPack,
+      precio_costo_unitario: costoUnitario,
+      cantidad_uds_pack: uds,
+      fecha:             fechaHoyPY()
+    }).then(({error})=>{ if(error) console.warn('historial_precios insert error:',error.message); });
+
+    p.stock=ns; p.precio_costo=costoUnitario;
   }
 }
 
 // ─── HISTORIAL COMPRAS ────────────────────────────────────────
-async function renderHistorialCompras(){
-  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+let histCompraPage=1;
+const HIST_COMPRA_LIM=50;
+async function renderHistorialCompras(page){
+  if(page) histCompraPage=page;
+  const from=(histCompraPage-1)*HIST_COMPRA_LIM, to=from+HIST_COMPRA_LIM-1;
+  const {data,count}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)',{count:'exact'}).order('created_at',{ascending:false}).range(from,to);
+  const total=(count||0);
   gs('content').innerHTML=`<div class="card">
-    <div class="card-header"><h3>Historial de compras</h3></div>
+    <div class="card-header"><h3>Historial de compras</h3><button class="btn btn-primary btn-sm" onclick="renderCompras()">+ Nueva compra</button></div>
     <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>
       ${(data||[]).map(c=>`<tr>
         <td>${fmtDate(c.fecha)}</td><td>${c.bodega_proveedores?.nombre||'-'}</td>
@@ -2343,19 +2316,29 @@ async function renderHistorialCompras(){
         <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">👁</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')">✏️</button>
           ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
         </td>
       </tr>`).join('')}
     </tbody></table>
+    <div class="paginator">
+      <span>Pág. ${histCompraPage} · ${total} registros</span>
+      ${histCompraPage>1?`<button class="btn btn-secondary btn-sm" onclick="renderHistorialCompras(${histCompraPage-1})">← Ant.</button>`:''}
+      ${total>histCompraPage*HIST_COMPRA_LIM?`<button class="btn btn-secondary btn-sm" onclick="renderHistorialCompras(${histCompraPage+1})">Sig. →</button>`:''}
+    </div>
   </div>`;
 }
 async function confirmarFinalizar(compraId){
-  if(!confirm('¿Finalizar esta compra? Se actualizará el stock.'))return;
-  const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(stock)').eq('compra_id',compraId);
+  if(!(await bgConfirm('¿Finalizar esta compra?<br><span style="font-size:12px;color:var(--text2)">Se actualizará el stock de todos los productos incluidos.</span>', { title:'Finalizar compra', confirmText:'Finalizar', variant:'primary' })))return;
+  const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(stock,precio_costo)').eq('compra_id',compraId);
   await sb.from('bodega_compras').update({estado:'finalizado'}).eq('id',compraId);
   for(const d of(det||[])){
-    const sa=d.bodega_productos?.stock||0,ns=sa+d.cantidad;
-    await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
+    const sa=d.bodega_productos?.stock||0;
+    const ns=sa+d.cantidad; // d.cantidad ya está en unidades
+    // Costo unitario: si uds_por_embalaje > 1, dividir entre las unidades del pack
+    const uds=Math.max(1,parseInt(d.uds_por_embalaje)||1);
+    const costoUnitario=Math.round((parseFloat(d.costo_unitario)||0)/uds);
+    await sb.from('bodega_productos').update({stock:ns,precio_costo:costoUnitario}).eq('id',d.producto_id);
     await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'entrada',cantidad:d.cantidad,motivo:'Compra finalizada',stock_anterior:sa,stock_nuevo:ns,referencia_id:compraId,referencia_tipo:'compra'});
   }
   _dashCache=null;toast('✓ Compra finalizada — stock actualizado');await loadCaches(true);renderHistorialCompras();
@@ -2401,7 +2384,7 @@ async function saveProv(id=null){
   _dashCache=null;toast('Guardado');closeModal();await loadCaches(true);renderProveedores();
 }
 async function deleteProv(id,nombre){
-  if(!confirm(`¿Eliminar "${nombre}"?`))return;
+  if(!(await bgConfirm(`¿Eliminar el proveedor <strong>${nombre}</strong>?`,{ title:'Eliminar proveedor', confirmText:'Eliminar', variant:'danger' })))return;
   await sb.from('bodega_proveedores').update({activo:false}).eq('id',id);
   _dashCache=null;toast('Eliminado');await loadCaches(true);renderProveedores();
 }
@@ -2417,7 +2400,7 @@ async function renderAjustes(){
   <div class="card">
     <table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Stock ant.</th><th>Stock nuevo</th><th>Motivo</th></tr></thead><tbody>
       ${(data||[]).map(a=>`<tr>
-        <td style="font-size:11px">${new Date(a.created_at).toLocaleDateString('es-PY')}</td>
+        <td style="font-size:11px">${fmtDate(fechaLocalParaguay(new Date(a.created_at)))}</td>
         <td>${a.bodega_productos?.nombre||'-'}</td>
         <td><span class="badge-cat" style="background:${a.tipo==='entrada'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${a.tipo==='entrada'?'var(--green)':'var(--red)'}">${a.tipo}</span></td>
         <td style="font-weight:600">${a.tipo==='entrada'?'+':'-'}${a.cantidad}</td>
@@ -2650,63 +2633,7 @@ selectPay = function(p){
   updateVTotals();
 };
 
-// Reemplaza finalizarVenta para crear deuda cuando el pago sea FIADO.
-finalizarVenta = async function(){
-  if(!cart.length){toast('No hay productos','err');return;}
-  const desc=parseFloat(gs('v-desc').value)||0;
-  const total=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0), totalFinal=Math.max(0,total-desc);
-  const importe=parseFloat(gs('v-importe').value)||0;
-  const cli=getClienteVenta();
-
-  if(selectedPay==='fiado' && !cli.id && !cli.nombre){
-    toast('Para vender fiado elegí o creá un cliente','err');
-    return;
-  }
-
-  const ahora2=new Date();
-  const hora2=ahora2.toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
-
-  const {data:rpcData,error:rpcError}=await sb.rpc('registrar_venta_atomica',{
-    p_fecha:          fechaHoyPY(),
-    p_tipo:           ventaTipo,
-    p_cliente_nombre: cli.nombre,
-    p_total:          Math.round(total),
-    p_descuento:      Math.round(desc),
-    p_total_final:    Math.round(totalFinal),
-    p_metodo_pago:    selectedPay,
-    p_productos:      cart.map(c=>({
-      producto_id:     c.producto_id,
-      cantidad:        c.cantidad,
-      precio_unitario: c.precio,
-      subtotal:        Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
-      es_embalaje:     c.uds>1,
-      uds_por_embalaje:c.uds||1
-    })),
-    p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
-    p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
-    p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
-  });
-
-  if(rpcError||!rpcData?.ok){
-    toast('Error: '+(rpcData?.error||rpcError?.message||'Error desconocido'),'err');
-    return;
-  }
-  const ventaId=rpcData.venta_id;
-
-  // Fiado: registrar la deuda (esto es extra, no afecta el stock)
-  if(selectedPay==='fiado' && cli.id){
-    const {error:fE}=await sb.from('bodega_fiados').insert({
-      venta_id:ventaId, cliente_id:cli.id, cliente_nombre:cli.nombre,
-      monto_total:totalFinal, monto_pagado:0, saldo:totalFinal,
-      estado:'pendiente', fecha:fechaHoyPY()
-    });
-    if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
-  }
-
-  toast(selectedPay==='fiado'?`✓ Fiado registrado: ${fmtGs(totalFinal)}`:`✓ Cobrado: ${fmtGs(totalFinal)}`);
-  _dashCache=null;
-  await loadCaches(true);cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;renderVentas();
-};
+// finalizarVenta → versión unificada al final del archivo
 
 // Historial de ventas con Ver / Editar / Borrar.
 renderHistorialVentas = async function(){
@@ -2735,7 +2662,7 @@ renderHistorialVentas = async function(){
 };
 
 async function borrarVenta(id, silencioso=false){
-  if(!silencioso && !confirm('¿Borrar esta venta? Se devolverá el stock y se borrará el fiado si corresponde.')) return false;
+  if(!silencioso && !(await bgConfirm('¿Borrar esta venta?<br><span style="font-size:12px;color:var(--text2)">Se devolverá el stock y se eliminará el fiado si corresponde.</span>',{ title:'Borrar venta', confirmText:'Borrar', variant:'danger' }))) return false;
   const {data:detalles,error:dErr}=await sb.from('bodega_ventas_detalle').select('*').eq('venta_id',id);
   if(dErr){toast('Error: '+dErr.message,'err');return false;}
 
@@ -2756,7 +2683,7 @@ async function borrarVenta(id, silencioso=false){
 }
 
 async function editarVenta(id){
-  if(!confirm('Se va a cargar esta venta otra vez para editarla. Al guardar, reemplazará la venta anterior. ¿Continuar?')) return;
+  if(!(await bgConfirm('¿Cargar esta venta para editarla?<br><span style="font-size:12px;color:var(--text2)">Al guardar los cambios se reemplazará la venta anterior.</span>',{ title:'Editar venta', confirmText:'Cargar para editar', variant:'warning' }))) return;
   const {data:det}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
   const {data:v}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
   if(!v || !det){toast('No se pudo abrir la venta','err');return;}
@@ -2796,7 +2723,7 @@ renderHistorialCompras = async function(){
 };
 
 async function borrarCompra(id, silencioso=false){
-  if(!silencioso && !confirm('¿Borrar esta compra? Si estaba finalizada se descontará el stock.')) return false;
+  if(!silencioso && !(await bgConfirm('¿Borrar esta compra?<br><span style="font-size:12px;color:var(--text2)">Si estaba finalizada, se descontará el stock correspondiente.</span>',{ title:'Borrar compra', confirmText:'Borrar', variant:'danger' }))) return false;
   const {data:compra}=await sb.from('bodega_compras').select('*').eq('id',id).single();
   const {data:detalles}=await sb.from('bodega_compras_detalle').select('*').eq('compra_id',id);
 
@@ -2816,7 +2743,7 @@ async function borrarCompra(id, silencioso=false){
 }
 
 async function editarCompra(id){
-  if(!confirm('Se va a cargar esta compra otra vez para editarla. Al guardar, reemplazará la compra anterior. ¿Continuar?')) return;
+  if(!(await bgConfirm('¿Cargar esta compra para editarla?<br><span style="font-size:12px;color:var(--text2)">Al guardar los cambios se reemplazará la compra anterior.</span>',{ title:'Editar compra', confirmText:'Cargar para editar', variant:'warning' }))) return;
   const {data:compra}=await sb.from('bodega_compras').select('*').eq('id',id).single();
   const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id',id);
   if(!compra || !det){toast('No se pudo abrir la compra','err');return;}
@@ -3309,13 +3236,11 @@ function cajaRenderVentasTabla(ventas){
 window.cajaFiltrarHoras=function(){
   const desde=gs('caja-hora-desde')?.value||'00:00';
   const hasta=gs('caja-hora-hasta')?.value||'23:59';
-  const [dh,dm]=desde.split(':').map(Number);
-  const [hh,hm]=hasta.split(':').map(Number);
   const ventas=(window.__cajaVentasDetalle||[]).filter(v=>{
-    const t=new Date(v.created_at);
-    const vh=t.getHours(),vm=t.getMinutes();
-    const minV=vh*60+vm,minD=dh*60+dm,minH=hh*60+hm;
-    return minV>=minD&&minV<=minH;
+    // Siempre comparar en hora Paraguay UTC-3, igual que el resto del sistema
+    const horaV=fmtHoraVenta(v);
+    if(!horaV||horaV==='--:--') return true;
+    return horaV>=desde&&horaV<=hasta;
   });
   const el=gs('caja-ventas-tabla');
   const badge=gs('caja-ventas-badge');
@@ -3365,7 +3290,7 @@ async function cerrarCaja(id,esperadoBase){
   if(error){toast('Error al cerrar caja: '+error.message,'err');return;}
   toast('Caja cerrada. Diferencia: '+fmtGs(diferencia));renderCaja();
 }
-async function reabrirCaja(id){if(!confirm('¿Reabrir esta caja para corregir el arqueo?'))return;const {error}=await sb.from('bodega_caja').update({estado:'abierta'}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Caja reabierta');renderCaja();}
+async function reabrirCaja(id){if(!(await bgConfirm('¿Reabrir esta caja para corregir el arqueo?<br><span style="font-size:12px;color:var(--text2)">Podrás modificar el arqueo y volver a cerrarla.</span>',{ title:'Reabrir caja', confirmText:'Reabrir', variant:'warning' })))return;const {error}=await sb.from('bodega_caja').update({estado:'abierta'}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Caja reabierta');renderCaja();}
 async function imprimirArqueo(id){
   const {data:caja}=await sb.from('bodega_caja').select('*').eq('id',id).single();
   if(!caja){toast('No encontré la caja','err');return;}
@@ -3477,6 +3402,13 @@ initMobileShell();
     }
     if(!prod){toast('Código no encontrado: '+cod,'err');return;}
     const qty=parseInt(gs('v-qty')?.value)||1;
+    // Aviso de stock insuficiente (no bloqueante)
+    const uds=embFound?.cantidad||1;
+    const totalUds=qty*uds;
+    const yaEnCarrito=(cart||[]).filter(x=>x.producto_id===prod.id).reduce((s,x)=>(s+(x.cantidad||0)*(x.uds||1)),0);
+    if(prod.stock>=0 && (yaEnCarrito+totalUds)>prod.stock){
+      toast('⚠️ '+prod.nombre+': stock disponible '+prod.stock+' uds');
+    }
     addToVenta(prod.id,embFound?.id||null,qty);
     if(gs('v-cod')) gs('v-cod').value='';
     if(gs('v-search')) gs('v-search').value='';
@@ -3829,7 +3761,103 @@ initMobileShell();
       <div class="form-group"><label>Precio venta (Gs.)</label>${mathInput('p-venta', prod?.precio_venta||0)}</div>
       <div class="form-group"><label>Precio mayorista (Gs.)</label>${mathInput('p-mayor', prod?.precio_mayorista||0)}</div>
       <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
+      ${prod?.id?`<div class="form-group" style="grid-column:1/-1">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="margin:0">Historial de precios por proveedor</label>
+          <span id="p-hist-badge" style="font-size:11px;color:var(--text2)"></span>
+        </div>
+        <div id="p-hist-precios" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">
+            <div class="spinner" style="margin:0 auto 6px;width:16px;height:16px"></div>Cargando historial...
+          </div>
+        </div>
+      </div>`:''}
     </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
+    if(prod?.id) setTimeout(async()=>{
+      const el=document.getElementById('p-hist-precios');
+      const badge=document.getElementById('p-hist-badge');
+      if(!el) return;
+      try{
+        const {data,error}=await sb.from('bodega_historial_precios')
+          .select('fecha,precio_costo_pack,precio_costo_unitario,cantidad_uds_pack,compra_id,proveedor_id')
+          .eq('producto_id',prod.id)
+          .order('fecha',{ascending:false})
+          .limit(20);
+
+        if(error) console.warn('historial_precios query error:',error.message);
+        if(!data||!data.length){
+          el.innerHTML='<div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">Sin historial de precios todavía.<br><span style="font-size:11px">Se registrará automáticamente al finalizar compras.</span></div>';
+          return;
+        }
+
+        if(badge) badge.textContent=data.length+' registro'+(data.length>1?'s':'');
+
+        function getNombreProv(provId){
+          if(!provId) return 'Sin proveedor';
+          const p=(provCache||[]).find(x=>String(x.id)===String(provId));
+          return p?.nombre||'Sin proveedor';
+        }
+
+        // Agrupar por proveedor para mostrar el precio más reciente de cada uno
+        const porProveedor={};
+        data.forEach(r=>{
+          const pNombre=getNombreProv(r.proveedor_id);
+          if(!porProveedor[pNombre]) porProveedor[pNombre]=[];
+          porProveedor[pNombre].push(r);
+        });
+
+        // Header fijo de la tabla
+        el.innerHTML=`
+          <div style="display:grid;grid-template-columns:1fr 1fr 110px 110px 90px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:7px 12px;border-bottom:2px solid var(--border);background:var(--bg2)">
+            <span>Proveedor</span><span>Fecha</span><span style="text-align:right">Costo pack</span><span style="text-align:right">Costo unit.</span><span style="text-align:right">Uds/pack</span>
+          </div>
+          <div id="p-hist-rows" style="max-height:200px;overflow-y:auto"></div>
+          <div id="p-hist-toggle" style="padding:7px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--accent2);cursor:pointer;text-align:center;background:var(--bg2)" onclick="bgToggleHistPrecios(this)">
+            Mostrar todo el historial ▾
+          </div>`;
+
+        // Renderizar filas — primero precio más reciente por proveedor (resumen)
+        function buildRows(all){
+          return data.filter(r=>all||Object.values(porProveedor).some(arr=>arr[0]===r))
+            .map((r,idx)=>{
+              const pNombre=getNombreProv(r.proveedor_id);
+              const esMasReciente=porProveedor[pNombre][0]===r;
+              const bg=esMasReciente?'background:var(--bg2)':'';
+              const pesoFuente=esMasReciente?'700':'500';
+              const colorNombre=esMasReciente?'var(--text)':'var(--text2)';
+              const tagUltimo=esMasReciente?'<span style="font-size:10px;margin-left:5px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px">\u00faltimo</span>':'';
+              const pesoUnitario=esMasReciente?'800':'600';
+              const colorUnitario=esMasReciente?'var(--green)':'var(--text)';
+              const costoPack=r.cantidad_uds_pack>1?fmtGs(r.precio_costo_pack):'-';
+              const udsLabel=r.cantidad_uds_pack>1?'x'+r.cantidad_uds_pack:'unitario';
+              return '<div style="display:grid;grid-template-columns:1fr 1fr 110px 110px 90px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;'+bg+'">'
+                +'<div><span style="font-weight:'+pesoFuente+';color:'+colorNombre+'">'+escapeHtml(pNombre)+'</span>'+tagUltimo+'</div>'
+                +'<span style="color:var(--text2)">'+(r.fecha||'-')+'</span>'
+                +'<span style="text-align:right;font-weight:700;color:var(--accent2)">'+costoPack+'</span>'
+                +'<span style="text-align:right;font-weight:'+pesoUnitario+';color:'+colorUnitario+'">'+fmtGs(r.precio_costo_unitario)+'</span>'
+                +'<span style="text-align:right;color:var(--text2)">'+udsLabel+'</span>'
+                +'</div>';
+            }).join('');
+        }
+
+        window.__bgHistPreciosAllData=data;
+        window.__bgHistPreciosPorProv=porProveedor;
+        window.__bgHistPreciosBuilder=buildRows;
+
+        const rowsEl=document.getElementById('p-hist-rows');
+        if(rowsEl) rowsEl.innerHTML=buildRows(false);
+
+        // Ocultar el toggle si todos los registros ya son el primer precio de su proveedor
+        const uniqueProvs=Object.keys(porProveedor).length;
+        if(uniqueProvs>=data.length){
+          const toggle=document.getElementById('p-hist-toggle');
+          if(toggle) toggle.style.display='none';
+        }
+
+      }catch(e){
+        el.innerHTML='<div style="padding:12px;color:var(--red);font-size:12px">No se pudo cargar el historial: '+e.message+'</div>';
+      }
+    },80);
   };
 
   const __openAjusteModalCam = openAjusteModal;
@@ -3988,7 +4016,7 @@ initMobileShell();
   };
 
   window.deleteEmb = async function(embId, prodId, prodNombre){
-    if(!confirm('¿Eliminar este pack?'))return;
+    if(!(await bgConfirm('¿Eliminar este pack/embalaje?',{ title:'Eliminar pack', confirmText:'Eliminar', variant:'danger' })))return;
     const {error}=await sb.from('bodega_embalajes').update({activo:false}).eq('id',embId);
     if(error){toast('Error: '+error.message,'err');return;}
     toast('Pack eliminado');
@@ -4000,7 +4028,7 @@ initMobileShell();
 
 // ─── ARRANQUE ─────────────────────────────────────────────────
 (async function(){
-  const url=localStorage.getItem('bg_url'),key=localStorage.getItem('bg_key');
+  const url=lsGet('bg_url'),key=lsGet('bg_key');
   if(url&&key){document.getElementById('setup').style.display='none';await initSB(url,key);}
   else document.getElementById('loading').style.display='none';
 })();
@@ -4104,15 +4132,102 @@ initMobileShell();
       <div class="form-group"><label>Precio mayorista (Gs.)</label>${mathInput('p-mayor', prod?.precio_mayorista||0)}</div>
       <div class="form-group" style="grid-column:1/-1"><label>Margen de ganancia</label><div id="p-margin-live" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;font-size:13px;color:var(--text)"></div></div>
       <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="p-notas" rows="2">${escapeHtml(prod?.notas||'')}</textarea></div>
+      ${prod?.id?`<div class="form-group" style="grid-column:1/-1">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="margin:0">Historial de precios por proveedor</label>
+          <span id="p-hist-badge" style="font-size:11px;color:var(--text2)"></span>
+        </div>
+        <div id="p-hist-precios" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">
+            <div class="spinner" style="margin:0 auto 6px;width:16px;height:16px"></div>Cargando historial...
+          </div>
+        </div>
+      </div>`:''}
     </div>`,()=>{ stopInlineBarcodeScanner(); saveProd(prod?.id); });
     setTimeout(()=>{
       bgRefreshProdMargin();
-      // Disparar actualización de margen al cambiar precios via mathInput
       ['p-costo','p-venta','p-mayor'].forEach(id=>{
         const inp=document.getElementById(id);
         if(inp) inp.addEventListener('input', bgRefreshProdMargin);
       });
     },0);
+    if(prod?.id) setTimeout(async()=>{
+      const el=document.getElementById('p-hist-precios');
+      const badge=document.getElementById('p-hist-badge');
+      if(!el) return;
+      try{
+        const {data,error}=await sb.from('bodega_historial_precios')
+          .select('fecha,precio_costo_pack,precio_costo_unitario,cantidad_uds_pack,compra_id,proveedor_id')
+          .eq('producto_id',prod.id)
+          .order('fecha',{ascending:false})
+          .limit(20);
+
+        if(error) console.warn('historial_precios query error:',error.message);
+        if(!data||!data.length){
+          el.innerHTML='<div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">Sin historial de precios todavía.<br><span style="font-size:11px">Se registrará automáticamente al finalizar compras.</span></div>';
+          return;
+        }
+
+        if(badge) badge.textContent=data.length+' registro'+(data.length>1?'s':'');
+
+        // Resolver nombre de proveedor desde provCache (no requiere FK en Supabase)
+        function getNombreProv(provId){
+          if(!provId) return 'Sin proveedor';
+          const p=(provCache||[]).find(x=>String(x.id)===String(provId));
+          return p?.nombre||'Sin proveedor';
+        }
+
+        const porProveedor={};
+        data.forEach(r=>{
+          const pNombre=getNombreProv(r.proveedor_id);
+          if(!porProveedor[pNombre]) porProveedor[pNombre]=[];
+          porProveedor[pNombre].push(r);
+        });
+
+        el.innerHTML=`
+          <div style="display:grid;grid-template-columns:1fr 1fr 110px 110px 90px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:7px 12px;border-bottom:2px solid var(--border);background:var(--bg2)">
+            <span>Proveedor</span><span>Fecha</span><span style="text-align:right">Costo pack</span><span style="text-align:right">Costo unit.</span><span style="text-align:right">Uds/pack</span>
+          </div>
+          <div id="p-hist-rows" style="max-height:200px;overflow-y:auto"></div>
+          <div id="p-hist-toggle" style="padding:7px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--accent2);cursor:pointer;text-align:center;background:var(--bg2)" onclick="bgToggleHistPrecios(this)">
+            Mostrar todo el historial ▾
+          </div>`;
+
+        function buildRows(all){
+          return data.filter(r=>all||Object.values(porProveedor).some(arr=>arr[0]===r))
+            .map(r=>{
+              const pNombre=getNombreProv(r.proveedor_id);
+              const esMasReciente=porProveedor[pNombre][0]===r;
+              const bg=esMasReciente?'background:var(--bg2)':'';
+              const pesoFuente=esMasReciente?'700':'500';
+              const colorNombre=esMasReciente?'var(--text)':'var(--text2)';
+              const tagUltimo=esMasReciente?'<span style="font-size:10px;margin-left:5px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px">último</span>':'';
+              const costoPack=r.cantidad_uds_pack>1?fmtGs(r.precio_costo_pack):'-';
+              const udsLabel=r.cantidad_uds_pack>1?'x'+r.cantidad_uds_pack:'unitario';
+              return '<div style="display:grid;grid-template-columns:1fr 1fr 110px 110px 90px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;'+bg+'">'
+                +'<div><span style="font-weight:'+pesoFuente+';color:'+colorNombre+'">'+escapeHtml(pNombre)+'</span>'+tagUltimo+'</div>'
+                +'<span style="color:var(--text2)">'+(r.fecha||'-')+'</span>'
+                +'<span style="text-align:right;font-weight:700;color:var(--accent2)">'+costoPack+'</span>'
+                +'<span style="text-align:right;font-weight:'+(esMasReciente?'800':'600')+';color:'+(esMasReciente?'var(--green)':'var(--text)')+'">'+fmtGs(r.precio_costo_unitario)+'</span>'
+                +'<span style="text-align:right;color:var(--text2)">'+udsLabel+'</span>'
+                +'</div>';
+            }).join('');
+        }
+
+        window.__bgHistPreciosBuilder=buildRows;
+        const rowsEl=document.getElementById('p-hist-rows');
+        if(rowsEl) rowsEl.innerHTML=buildRows(false);
+
+        const uniqueProvs=Object.keys(porProveedor).length;
+        if(uniqueProvs>=data.length){
+          const toggle=document.getElementById('p-hist-toggle');
+          if(toggle) toggle.style.display='none';
+        }
+
+      }catch(e){
+        el.innerHTML='<div style="padding:12px;color:var(--red);font-size:12px">No se pudo cargar: '+escapeHtml(e.message)+'</div>';
+      }
+    },120);
   };
 
   // Ventas: mostrar margen en resultados para saber si el precio conviene.
@@ -4595,7 +4710,7 @@ initMobileShell();
     toast('Gasto agregado');renderCaja();
   };
   window.borrarGastoCaja = async function(id){
-    if(!confirm('¿Borrar este gasto de caja?'))return;
+    if(!(await bgConfirm('¿Borrar este gasto de caja?',{ title:'Borrar gasto', confirmText:'Borrar', variant:'danger' })))return;
     let cajaId=null;
     try{const {data}=await sb.from('bodega_caja_gastos').select('caja_id').eq('id',id).single();cajaId=data?.caja_id||null;}catch(e){}
     const {error}=await sb.from('bodega_caja_gastos').delete().eq('id',id);
@@ -4705,7 +4820,7 @@ initMobileShell();
       const usuarios=data||[];
       initUsuariosNav(); initUserBadge();
       if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();return;}
-      const saved=localStorage.getItem('bg_usuario_actual');
+      const saved=lsGet('bg_usuario_actual');
       if(saved){try{const obj=JSON.parse(saved); const ok=usuarios.find(u=>u.id===obj.id); if(ok) usuarioActual=ok;}catch(e){} }
       if(!usuarioActual) mostrarLoginUsuarios(usuarios); else applyUsuarioPermisos();
     }catch(e){usuariosDisponibles=false;}
@@ -4740,12 +4855,12 @@ initMobileShell();
     const id=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
     const {data,error}=await sb.from('bodega_usuarios').select('*').eq('id',id).eq('pin',pin).eq('activo',true).maybeSingle();
     if(error||!data){toast('Usuario o PIN incorrecto','err');return;}
-    usuarioActual=data; localStorage.setItem('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); goTo('dashboard');
+    usuarioActual=data; lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); goTo('dashboard');
   };
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
   }
-  window.logoutUsuarioSistema=function(){localStorage.removeItem('bg_usuario_actual');usuarioActual=null;closeModal();cargarUsuariosInicial();};
+  window.logoutUsuarioSistema=function(){lsRemove('bg_usuario_actual');usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
   async function renderUsuarios(){
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
@@ -4776,7 +4891,7 @@ initMobileShell();
     if(error){toast('Error: '+error.message,'err');return;}
     toast('Usuario guardado');closeModal();await cargarUsuariosInicial();renderUsuarios();
   };
-  window.desactivarUsuario=async function(id){if(!confirm('¿Desactivar este usuario?'))return;const {error}=await sb.from('bodega_usuarios').update({activo:false}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Usuario desactivado');renderUsuarios();};
+  window.desactivarUsuario=async function(id){if(!(await bgConfirm('¿Desactivar este usuario?<br><span style="font-size:12px;color:var(--text2)">No podrá acceder al sistema hasta que lo reactives.</span>',{ title:'Desactivar usuario', confirmText:'Desactivar', variant:'danger' })))return;const {error}=await sb.from('bodega_usuarios').update({activo:false}).eq('id',id);if(error){toast('Error: '+error.message,'err');return;}toast('Usuario desactivado');renderUsuarios();};
 
   // Si este parche se carga después de que el sistema ya conectó, inicializa también.
   setTimeout(()=>{try{initUsuariosNav(); initUserBadge(); if(sb) cargarUsuariosInicial(); titles.caja='Caja / Arqueo'; pages.caja=renderCaja;}catch(e){}},800);
@@ -4854,9 +4969,14 @@ initMobileShell();
         else if(m==='debito') r.debito+=t;
         else if(m==='credito') r.credito+=t;
         else if(m==='mixto'){
-          r.mixto+=t;
-          r.efectivo+=Number(v.monto_efectivo)||0;
-          r.transferencia+=Number(v.monto_transferencia)||0;
+          // FIX: desglosar mixto en sus componentes SIN sumar t completo a r.mixto
+          // para evitar doble conteo en el efectivo del arqueo
+          const ef=Number(v.monto_efectivo)||0;
+          const tr=Number(v.monto_transferencia)||0;
+          const ot=Number(v.monto_otro)||0;
+          r.efectivo+=ef;
+          r.transferencia+=tr;
+          r.mixto+=(ot); // "otro" (qr/debito/credito dentro del mixto)
         }
       }
     });
@@ -5077,7 +5197,7 @@ initMobileShell();
   };
 
   window.reabrirCajaDesdeAlerta = async function(id){
-    if(!confirm('¿Reabrir esta caja para seguir operando?')) return;
+    if(!(await bgConfirm('¿Reabrir esta caja para seguir operando?',{ title:'Reabrir caja', confirmText:'Reabrir', variant:'warning' }))) return;
     const {error}=await sb.from('bodega_caja').update({estado:'abierta',closed_at:null}).eq('id',id);
     if(error){toast('Error: '+error.message,'err');return;}
     toast('Caja reabierta'); cajaEditId=null; renderCaja();
@@ -5114,7 +5234,7 @@ initMobileShell();
   };
 
   window.borrarGastoCajaTurno = async function(id){
-    if(!confirm('¿Borrar este gasto de caja?'))return;
+    if(!(await bgConfirm('¿Borrar este gasto de caja?',{ title:'Borrar gasto', confirmText:'Borrar', variant:'danger' })))return;
     let cajaId=null;
     try{const {data}=await sb.from('bodega_caja_gastos').select('caja_id').eq('id',id).single();cajaId=data?.caja_id||null;}catch(e){}
     const {error}=await sb.from('bodega_caja_gastos').delete().eq('id',id);
@@ -5667,8 +5787,8 @@ initMobileShell();
     content.innerHTML='<div style="color:var(--text2);padding:40px;text-align:center"><div class="spinner" style="margin:0 auto 12px"></div>Cargando clientes...</div>';
     try{
       const data=await loadClientesData();
-      const q=norm(localStorage.getItem('bg_clientes_q')||'');
-      const filtro=localStorage.getItem('bg_clientes_filtro')||'todos';
+      const q=norm(lsGet('bg_clientes_q','')); 
+      const filtro=lsGet('bg_clientes_filtro','todos');
       const rowsData=data.clientes.map(c=>({cliente:c,res:calcResumenCliente(c,data)})).filter(x=>{
         const c=x.cliente, r=x.res;
         const text=norm([c.nombre,c.razon_social,c.nombre_comercial,c.ruc,c.telefono].join(' '));
@@ -5702,9 +5822,9 @@ initMobileShell();
         <div class="card">
           <div class="card-header"><h3>Clientes / Deudas</h3><button class="btn btn-primary" onclick="openClienteModal()">+ Cliente</button></div>
           <div style="padding:14px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 180px auto;gap:8px;align-items:end">
-            <div class="form-group"><label>Buscar cliente, RUC o teléfono</label><input id="cli-search" value="${esc(localStorage.getItem('bg_clientes_q')||'')}" placeholder="Ej: Juan, 800..., 0981..." oninput="localStorage.setItem('bg_clientes_q',this.value);renderClientes()"></div>
-            <div class="form-group"><label>Filtro</label><select id="cli-filtro" onchange="localStorage.setItem('bg_clientes_filtro',this.value);renderClientes()"><option value="todos" ${filtro==='todos'?'selected':''}>Todos</option><option value="deuda" ${filtro==='deuda'?'selected':''}>Solo con deuda</option><option value="aldia" ${filtro==='aldia'?'selected':''}>Al día</option></select></div>
-            <button class="btn btn-secondary" onclick="localStorage.removeItem('bg_clientes_q');localStorage.setItem('bg_clientes_filtro','todos');renderClientes()">Limpiar</button>
+            <div class="form-group"><label>Buscar cliente, RUC o teléfono</label><input id="cli-search" value="${esc(lsGet('bg_clientes_q',''))}" placeholder="Ej: Juan, 800..., 0981..." oninput="lsSet('bg_clientes_q',this.value);renderClientes()"></div>
+            <div class="form-group"><label>Filtro</label><select id="cli-filtro" onchange="lsSet('bg_clientes_filtro',this.value);renderClientes()"><option value="todos" ${filtro==='todos'?'selected':''}>Todos</option><option value="deuda" ${filtro==='deuda'?'selected':''}>Solo con deuda</option><option value="aldia" ${filtro==='aldia'?'selected':''}>Al día</option></select></div>
+            <button class="btn btn-secondary" onclick="lsRemove('bg_clientes_q');lsSet('bg_clientes_filtro','todos');renderClientes()">Limpiar</button>
           </div>
           <div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Estado</th><th>Deuda</th><th>Total comprado</th><th>Ventas</th><th>Última compra</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
         </div>`;
@@ -5902,7 +6022,7 @@ initMobileShell();
   window.borrarVentasSeleccionadas=async function(){
     const ids=ventasSeleccionadas();
     if(!ids.length){toast('Seleccioná al menos una venta','err');return;}
-    if(!confirm(`¿Borrar ${ids.length} venta${ids.length>1?'s':''}? Se devolverá el stock y se borrarán fiados asociados.`)) return;
+    if(!(await bgConfirm(`¿Borrar <strong>${ids.length} venta${ids.length>1?'s':''}</strong>?<br><span style="font-size:12px;color:var(--text2)">Se devolverá el stock y se eliminarán los fiados asociados.</span>`,{ title:'Borrar ventas', confirmText:'Borrar', variant:'danger' }))) return;
     let ok=0;
     for(const id of ids){
       try{ if(await borrarVenta(id,true)) ok++; }catch(e){ console.warn('Error borrando venta', id, e); }
@@ -6053,10 +6173,10 @@ initMobileShell();
   try{pages['historial-ventas']=renderHistorialVentas;}catch(e){}
 
   window.borrarArqueoTurno=async function(id){
-    if(!confirm('¿Eliminar este arqueo? También se borrarán sus gastos varios. Esta acción no borra ventas.')) return;
+    if(!(await bgConfirm('¿Eliminar este arqueo?<br><span style="font-size:12px;color:var(--text2)">También se borrarán sus gastos varios. Las ventas registradas no se eliminan.</span>',{ title:'Eliminar arqueo', confirmText:'Eliminar', variant:'danger' }))) return;
     try{
       const {data:caja}=await sb.from('bodega_caja').select('estado').eq('id',id).single();
-      if(caja && caja.estado==='abierta' && !confirm('Este arqueo está abierto. ¿Eliminarlo igualmente?')) return;
+      if(caja && caja.estado==='abierta' && !(await bgConfirm('Este arqueo está abierto. ¿Eliminarlo igualmente?',{ title:'Arqueo abierto', confirmText:'Eliminar igual', variant:'danger' }))) return;
     }catch(e){}
     try{await sb.from('bodega_caja_gastos').delete().eq('caja_id',id);}catch(e){}
     const {error}=await sb.from('bodega_caja').delete().eq('id',id);
@@ -6267,25 +6387,7 @@ initMobileShell();
 
   window.hayCajaAbiertaParaVender = hayCajaAbiertaParaVender;
 
-  finalizarVenta = window.finalizarVenta = async function(){
-    const caja = await hayCajaAbiertaParaVender();
-    if(!caja){
-      toast('No podés vender: primero abrí caja.', 'err');
-      openModal('Caja cerrada', `
-        <div class="alert alert-warning">
-          Para registrar ventas necesitás tener una caja abierta.
-          <br><br>
-          Esto evita que queden ventas fuera del arqueo.
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="closeModal();goTo('caja')">Abrir caja ahora</button>
-          <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        </div>
-      `, null, '');
-      return;
-    }
-    return await __finalizarVentaSinBloqueoCaja.apply(this, arguments);
-  };
+  // finalizarVenta v2 (verificación caja) → unificada al final
 })();
 
 
@@ -6312,180 +6414,42 @@ function compraEditBanner(compra){
   if(btn) btn.textContent = '💾 Guardar cambios de compra';
 }
 
-window.cancelarEdicionCompraReal = function(){
-  if(!confirm('¿Cancelar la edición? No se guardará ningún cambio.')) return;
+window.cancelarEdicionCompraReal = async function(){
+  if(!(await bgConfirm('¿Cancelar la edición?<br><span style="font-size:12px;color:var(--text2)">No se guardarán los cambios realizados.</span>',{ title:'Cancelar edición', confirmText:'Sí, cancelar', cancelText:'Seguir editando', variant:'warning' }))) return;
   window.__compraEditando = null;
   compraItems = [];
   renderCompras();
 };
 
-window.cSubtotal = function(i, valor){
-  const subtotal = parseFloat(valor) || 0;
-  const cant = Math.max(1, parseInt(compraItems?.[i]?.cantidad) || 1);
-  if(!compraItems[i]) return;
-  compraItems[i].costo = Math.round(subtotal / cant);
-  renderCompraItems();
-};
+// cSubtotal v1 + renderCompraItems v1 eliminadas — versión unificada final abajo
 
-window.renderCompraItems = function(){
-  const el = gs('ccomp-items');
-  if(!el) return;
-  el.innerHTML = (compraItems || []).map((item, i) => {
-    const cant = Math.max(1, parseInt(item.cantidad) || 1);
-    const costo = parseFloat(item.costo) || 0;
-    const subtotal = costo * cant;
-    return `<div style="display:grid;grid-template-columns:1fr 102px 112px 118px 32px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px">
-      <div style="font-size:13px;font-weight:600">${compraSafeHtml(item.nombre || 'Producto')}<br><span style="color:var(--text2);font-size:11px">+${(parseInt(item.uds)||1)*cant} uds al stock</span></div>
-      <div style="display:flex;align-items:center;gap:4px">
-        <button onclick="cQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">-</button>
-        <input type="number" value="${cant}" min="1" onchange="cQtySet(${i},this.value)" style="width:50px;text-align:center;padding:4px">
-        <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:24px;height:28px;border-radius:4px;cursor:pointer">+</button>
-      </div>
-      <div class="form-group" style="gap:2px"><label style="font-size:10px">Costo unit.</label><input type="number" value="${costo}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:5px"></div>
-      <div class="form-group" style="gap:2px"><label style="font-size:10px">Subtotal</label><input type="number" value="${subtotal}" onchange="cSubtotal(${i},this.value)" style="text-align:right;padding:5px;color:var(--accent2);font-weight:700"></div>
-      <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button>
-    </div>`;
-  }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
-
-  const total = (compraItems || []).reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0),0);
-  if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
-};
 
 async function revertirStockCompraReal(compraId, detalles){
   for(const d of detalles || []){
     const p = prodCache.find(x => x.id === d.producto_id);
     if(!p) continue;
     const cant = parseInt(d.cantidad) || 0;
-    const ns = Math.max(0, (parseInt(p.stock)||0) - cant);
+    const stockAnt = parseInt(p.stock)||0;
+    const ns = Math.max(0, stockAnt - cant);
     await sb.from('bodega_productos').update({stock: ns}).eq('id', d.producto_id);
     await sb.from('bodega_ajustes_stock').insert({
       producto_id: d.producto_id,
       tipo: 'salida',
       cantidad: cant,
-      motivo: 'Edición de compra - reversa anterior',
-      stock_anterior: p.stock,
+      motivo: 'Edición de compra — reversa anterior',
+      stock_anterior: stockAnt,
       stock_nuevo: ns,
       referencia_id: compraId,
       referencia_tipo: 'compra_editada_reversa'
     });
+    p.stock = ns; // actualizar caché local inmediatamente
   }
   await loadCaches(true);
 }
 
-window.editarCompra = async function(id){
-  const {data: compra, error: cErr} = await sb.from('bodega_compras').select('*').eq('id', id).single();
-  const {data: detalles, error: dErr} = await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id', id);
-  if(cErr || dErr || !compra){
-    toast('No se pudo abrir la compra para editar', 'err');
-    return;
-  }
+// editarCompra v1 eliminada — versión unificada final abajo
 
-  window.__compraEditando = {
-    id,
-    compra,
-    detalles: detalles || []
-  };
-
-  renderCompras();
-  compraEditBanner(compra);
-
-  if(gs('comp-fecha')) gs('comp-fecha').value = compra.fecha || fechaHoyPY();
-  if(gs('comp-prov')) gs('comp-prov').value = compra.proveedor_id || '';
-  if(gs('comp-factura')) gs('comp-factura').value = compra.numero_factura || '';
-  if(gs('comp-metpago')) gs('comp-metpago').value = compra.metodo_pago || 'efectivo';
-  if(gs('comp-estado')) gs('comp-estado').value = compra.estado || 'en_proceso';
-  if(gs('comp-notas')) gs('comp-notas').value = compra.notas || '';
-
-  compraItems = (detalles || []).map(d => ({
-    key: d.producto_id,
-    producto_id: d.producto_id,
-    embalaje_id: null,
-    nombre: d.bodega_productos?.nombre || 'Producto',
-    costo: parseFloat(d.costo_unitario) || parseFloat(d.bodega_productos?.precio_costo) || 0,
-    cantidad: parseInt(d.cantidad) || 1,
-    uds: 1
-  }));
-
-  renderCompraItems();
-  toast('Compra abierta para editar. Todavía no se borró nada. Tocá Guardar cambios para aplicar.');
-};
-
-window.finalizarCompra = async function(){
-  if(!compraItems.length){ toast('No hay productos','err'); return; }
-
-  const total = compraItems.reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0),0);
-  const estado = gs('comp-estado')?.value || 'en_proceso';
-  const compra = {
-    fecha: gs('comp-fecha')?.value || fechaHoyPY(),
-    proveedor_id: gs('comp-prov')?.value || null,
-    numero_factura: gs('comp-factura')?.value || null,
-    total,
-    metodo_pago: gs('comp-metpago')?.value || 'efectivo',
-    estado,
-    notas: gs('comp-notas')?.value || null
-  };
-
-  const edit = window.__compraEditando;
-
-  if(edit?.id){
-    const id = edit.id;
-    if(!confirm('¿Guardar cambios de esta compra? Recién ahora se corregirá el stock si corresponde.')) return;
-
-    if(edit.compra?.estado === 'finalizado'){
-      await revertirStockCompraReal(id, edit.detalles || []);
-    }
-
-    const {error: uErr} = await sb.from('bodega_compras').update(compra).eq('id', id);
-    if(uErr){ toast('Error actualizando compra: '+uErr.message,'err'); return; }
-
-    const {error: delErr} = await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
-    if(delErr){ toast('Error limpiando detalle anterior: '+delErr.message,'err'); return; }
-
-    const nuevosDetalles = compraItems.map(c => ({
-      compra_id: id,
-      producto_id: c.producto_id,
-      cantidad: (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),
-      costo_unitario: parseFloat(c.costo)||0
-    }));
-    const {error: insErr} = await sb.from('bodega_compras_detalle').insert(nuevosDetalles);
-    if(insErr){ toast('Error guardando detalle nuevo: '+insErr.message,'err'); return; }
-
-    await loadCaches(true);
-    if(estado === 'finalizado') await impactarStock(id, compraItems);
-
-    window.__compraEditando = null;
-    compraItems = [];
-    toast('✓ Compra editada correctamente');
-    await loadCaches(true);
-    renderHistorialCompras();
-    return;
-  }
-
-  const {data:cD,error:cE}=await sb.from('bodega_compras').insert(compra).select().single();
-  if(cE){ toast('Error: '+cE.message,'err'); return; }
-
-  const detalles = compraItems.map(c=>({
-    compra_id:cD.id,
-    producto_id:c.producto_id,
-    cantidad:(parseInt(c.cantidad)||0)*(parseInt(c.uds)||1),
-    costo_unitario:parseFloat(c.costo)||0
-  }));
-  const {error:dE}=await sb.from('bodega_compras_detalle').insert(detalles);
-  if(dE){ toast('Error detalle: '+dE.message,'err'); return; }
-
-  if(estado === 'finalizado') await impactarStock(cD.id, compraItems);
-  toast(`✓ Compra registrada (${estado}): ${fmtGs(total)}`);
-  await loadCaches(true);
-  compraItems = [];
-  renderCompras();
-};
-
-try{
-  if(typeof pages !== 'undefined'){
-    pages.compras = renderCompras;
-    pages['historial-compras'] = renderHistorialCompras;
-  }
-}catch(e){}
+// finalizarCompra v1 eliminada — versión unificada final abajo
 // ===== FIN FIX EDICIÓN REAL DE COMPRAS =====
 
 
@@ -6526,7 +6490,7 @@ try{
 
     btn.onclick = function(){
       document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('bg_sidebar_collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+      lsSet('bg_sidebar_collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
       pintar();
     };
 
@@ -6534,7 +6498,7 @@ try{
     if(h2) topbar.insertBefore(btn, h2);
     else topbar.insertBefore(btn, topbar.firstChild);
 
-    if(localStorage.getItem('bg_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
+    if(lsGet('bg_sidebar_collapsed') === '1') document.body.classList.add('sidebar-collapsed');
     pintar();
   }
 
@@ -6569,10 +6533,11 @@ try{
     if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
   };
 
-  window.cSubtotal = function(i, valor){
+  /* ══ cSubtotal — VERSIÓN UNIFICADA FINAL (con subtotalManual) ══ */
+  window.cSubtotal = cSubtotal = function(i, valor){
     if(!compraItems || !compraItems[i]) return;
     const subtotal = nnum(valor);
-    const cant = Math.max(1, parseInt(compraItems[i].cantidad) || 1);
+    const cant = Math.max(1, parseInt(compraItems[i].cantidad)||1);
     compraItems[i].subtotalManual = subtotal;
     compraItems[i].costo = subtotal / cant;
     renderCompraItems();
@@ -6599,45 +6564,72 @@ try{
     renderCompraItems();
   };
 
+  window.cToggleControlado = function(i){
+    if(!compraItems[i]) return;
+    compraItems[i].controlado = !compraItems[i].controlado;
+    renderCompraItems();
+  };
+
+  /* ══ renderCompraItems — VERSIÓN UNIFICADA FINAL ══
+     UI mejorada, compraLineSubtotal, subtotalManual,
+     contador de controlados, llama a visuales inline.
+  ══════════════════════════════════════════════════ */
   window.renderCompraItems = function(){
     const el = gs('ccomp-items');
     if(!el) return;
+    const ctrlCount  = (compraItems||[]).filter(c=>c.controlado).length;
+    const totalItems = (compraItems||[]).length;
+
     el.innerHTML = (compraItems || []).map((item, i) => {
-      const cant = Math.max(1, parseInt(item.cantidad) || 1);
-      const costo = nnum(item.costo);
-      const subtotal = compraLineSubtotal(item);
-      const costoMostrar = Number.isInteger(costo) ? costo : costo.toFixed(2);
-      const subtotalMostrar = Number.isInteger(subtotal) ? subtotal : subtotal.toFixed(2);
-      return `<div style="display:grid;grid-template-columns:1fr 110px 126px 138px 32px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);gap:10px">
-        <div style="font-size:14px;font-weight:700;line-height:1.25">${compraSafeHtml(item.nombre || 'Producto')}<br><span style="color:var(--text2);font-size:12px;font-weight:500">+${(parseInt(item.uds)||1)*cant} uds al stock</span></div>
+      const cant   = Math.max(1, parseInt(item.cantidad) || 1);
+      const costo  = nnum(item.costo);
+      const sub    = compraLineSubtotal(item);
+      const costoM = Number.isInteger(costo) ? costo : costo.toFixed(2);
+      const subM   = Number.isInteger(sub)   ? sub   : sub.toFixed(2);
+      const ctrl   = !!item.controlado;
+      return `<div style="display:grid;grid-template-columns:36px 1fr 110px 126px 138px 32px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);gap:10px;${ctrl?'opacity:.45;':''}">
+        <div style="display:flex;align-items:center;justify-content:center">
+          <input type="checkbox" ${ctrl?'checked':''} onchange="cToggleControlado(${i})"
+            title="Marcar como controlado"
+            style="width:18px;height:18px;cursor:pointer;accent-color:var(--green)">
+        </div>
+        <div style="font-size:14px;font-weight:700;line-height:1.25;${ctrl?'text-decoration:line-through;color:var(--text2)':''}">${compraSafeHtml(item.nombre||'Producto')}<br>
+          <span style="color:var(--text2);font-size:12px;font-weight:500">+${(parseInt(item.uds)||1)*cant} uds al stock</span>
+        </div>
         <div style="display:flex;align-items:center;gap:4px">
           <button onclick="cQty(${i},-1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:32px;border-radius:4px;cursor:pointer">-</button>
           <input type="number" value="${cant}" min="1" onchange="cQtySet(${i},this.value)" style="width:54px;text-align:center;padding:6px;font-weight:700">
           <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:28px;height:32px;border-radius:4px;cursor:pointer">+</button>
         </div>
-        <div class="form-group" style="gap:3px"><label style="font-size:11px">Costo unit.</label><input type="number" inputmode="decimal" value="${costoMostrar}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:7px;font-weight:700"></div>
-        <div class="form-group" style="gap:3px"><label style="font-size:11px">Total línea</label><input type="number" inputmode="decimal" value="${subtotalMostrar}" oninput="cSubtotalLive(${i},this.value)" onblur="cSubtotal(${i},this.value)" style="text-align:right;padding:7px;color:var(--accent2);font-weight:800"></div>
+        <div class="form-group" style="gap:3px">
+          <label style="font-size:11px">Costo unit.</label>
+          <input type="number" inputmode="decimal" value="${costoM}" onchange="cCosto(${i},this.value)" style="text-align:right;padding:7px;font-weight:700">
+        </div>
+        <div class="form-group" style="gap:3px">
+          <label style="font-size:11px">Total línea</label>
+          <input type="number" inputmode="decimal" value="${subM}" oninput="cSubtotalLive(${i},this.value)" onblur="cSubtotal(${i},this.value)" style="text-align:right;padding:7px;color:var(--accent2);font-weight:800">
+        </div>
         <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:20px">✕</button>
       </div>`;
     }).join('') || '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
 
-    const total = (compraItems || []).reduce((s,c)=>s+compraLineSubtotal(c),0);
+    const existeContador = document.getElementById('comp-ctrl-counter');
+    const contadorHtml = totalItems > 0
+      ? `<div id="comp-ctrl-counter" style="font-size:12px;color:var(--text2);padding:6px 14px;border-top:1px solid var(--border)">✅ ${ctrlCount} de ${totalItems} ítems controlados</div>`
+      : '';
+    if(existeContador) existeContador.outerHTML = contadorHtml;
+    else if(contadorHtml) el.insertAdjacentHTML('afterend', contadorHtml);
+
+    const total = (compraItems||[]).reduce((s,c)=>s+compraLineSubtotal(c),0);
     if(gs('comp-total')) gs('comp-total').textContent = fmtGs(total);
+
+    // Actualizar totales visuales y layout (sin setTimeout — llamada directa)
+    if(typeof actualizarTotalFacturaVisible === 'function') actualizarTotalFacturaVisible();
+    if(typeof asegurarCompraTotalYGuardar === 'function')   asegurarCompraTotalYGuardar();
+    if(typeof optimizarCompraPantalla === 'function')       optimizarCompraPantalla();
   };
 
-  const prevFinalizarCompraSubtotalFix = window.finalizarCompra;
-  if(typeof prevFinalizarCompraSubtotalFix === 'function'){
-    window.finalizarCompra = async function(){
-      // Antes de guardar, normaliza cada línea para que el total ingresado quede respetado.
-      (compraItems || []).forEach(item => {
-        if(item && item.subtotalManual !== undefined && item.subtotalManual !== null && item.subtotalManual !== ''){
-          const cant = Math.max(1, parseInt(item.cantidad) || 1);
-          item.costo = nnum(item.subtotalManual) / cant;
-        }
-      });
-      return prevFinalizarCompraSubtotalFix.apply(this, arguments);
-    };
-  }
+  // finalizarCompra v2 (normalización subtotalManual) → incorporada en versión unificada final
 })();
 // ===== FIN FIX SUBTOTAL EDITABLE EN COMPRAS =====
 
@@ -6740,27 +6732,9 @@ try{
     try{ if(typeof pages !== 'undefined') pages.compras = renderCompras; }catch(e){}
   }
 
-  const prevRenderCompraItemsVisualFactura = window.renderCompraItems || (typeof renderCompraItems === 'function' ? renderCompraItems : null);
-  if(prevRenderCompraItemsVisualFactura){
-    window.renderCompraItems = renderCompraItems = function(){
-      const r = prevRenderCompraItemsVisualFactura.apply(this, arguments);
-      asegurarCompraTotalYGuardar();
-      actualizarTotalFacturaVisible();
-      return r;
-    };
-  }
+  // renderCompraItems v3 wrapper eliminado — calls inlined en versión unificada
 
-  ['cSubtotalLive','cSubtotal','cCosto','cQty','cQtySet','cRemove','addToCompra'].forEach(fnName=>{
-    const oldFn = window[fnName];
-    if(typeof oldFn === 'function'){
-      window[fnName] = function(){
-        const r = oldFn.apply(this, arguments);
-        setTimeout(function(){ asegurarCompraTotalYGuardar(); actualizarTotalFacturaVisible(); }, 0);
-        return r;
-      };
-      try{ eval(fnName + ' = window[fnName]'); }catch(e){}
-    }
-  });
+  // fn-wrappers eliminados — renderCompraItems unificada ya llama a los visuales
 
   window.addEventListener('resize', function(){ setTimeout(asegurarCompraTotalYGuardar, 50); });
   setTimeout(asegurarCompraTotalYGuardar, 100);
@@ -6887,14 +6861,7 @@ try{
     try{ if(typeof pages !== 'undefined') pages.compras = renderCompras; }catch(e){}
   }
 
-  const prevRenderCompraItemsPantalla = window.renderCompraItems || (typeof renderCompraItems === 'function' ? renderCompraItems : null);
-  if(typeof prevRenderCompraItemsPantalla === 'function'){
-    window.renderCompraItems = renderCompraItems = function(){
-      const r = prevRenderCompraItemsPantalla.apply(this, arguments);
-      setTimeout(optimizarCompraPantalla, 0);
-      return r;
-    };
-  }
+  // renderCompraItems v4 wrapper eliminado — calls inlined en versión unificada
 
   const style = document.createElement('style');
   style.textContent = `
@@ -6994,7 +6961,7 @@ try{
       return;
     }
 
-    if(!confirm('¿Guardar los cambios de esta venta? Se corregirá stock, fiado y total.')) return;
+    if(!(await bgConfirm('¿Guardar los cambios de esta venta?<br><span style="font-size:12px;color:var(--text2)">Se corregirá el stock, el fiado y el total.</span>',{ title:'Guardar venta editada', confirmText:'Guardar cambios', variant:'warning' }))) return;
 
     try{
       await loadCaches(true);
@@ -7060,81 +7027,11 @@ try{
     }
   }
 
-  const finalizarActual=window.finalizarVenta || finalizarVenta;
-  finalizarVenta = window.finalizarVenta = async function(){
-    if(window.__ventaEditandoId) return await guardarVentaEditada();
-    return await finalizarActual.apply(this, arguments);
-  };
-
-  editarVenta = window.editarVenta = async function(id){
-    try{
-      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
-      if(vErr) throw vErr;
-      const {data:det,error:dErr}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre,precio_venta,precio_mayorista)').eq('venta_id',id);
-      if(dErr) throw dErr;
-      if(!v){toast('No se pudo abrir la venta','err');return;}
-
-      window.__ventaEditandoId=id;
-      window.__ventaEditandoOriginal={venta:v, detalles:det||[]};
-
-      await loadCaches(true);
-      await renderVentas();
-
-      ventaTipo=v.tipo||'minorista';
-      selectedPay=v.metodo_pago||'efectivo';
-
-      cart=(det||[]).map(d=>{
-        const cant=Number(d.cantidad)||1;
-        const sub=Number(d.subtotal ?? (cant*(Number(d.precio_unitario)||0)));
-        return {
-          key:String(d.producto_id),
-          producto_id:d.producto_id,
-          embalaje_id:null,
-          nombre:d.bodega_productos?.nombre||'Producto',
-          precio:cant>0 ? sub/cant : (Number(d.precio_unitario)||0),
-          cantidad:cant,
-          uds:1,
-          precioManual:true,
-          packInfo:'Precio guardado',
-          subtotalCalculado:sub
-        };
-      });
-
-      if(gs('v-desc')) gs('v-desc').value=v.descuento||0;
-      if(gs('v-importe')) gs('v-importe').value=v.metodo_pago==='efectivo' ? (v.monto_efectivo||v.total_final||0) : 0;
-
-      const cliente=(clienteCache||[]).find(c=>c.nombre===v.cliente_nombre || c.id===v.cliente_id);
-      if(gs('v-cliente-id') && cliente) gs('v-cliente-id').value=cliente.id;
-      else if(gs('v-cliente') && v.cliente_nombre) gs('v-cliente').value=v.cliente_nombre;
-
-      selectPay(selectedPay);
-      renderVentaTable();
-
-      const cobrar=document.querySelector('.cobrar-btn');
-      if(cobrar){
-        cobrar.textContent='GUARDAR CAMBIOS DE VENTA';
-        cobrar.style.background='var(--amber)';
-      }
-      const header=gs('venta-header');
-      if(header && !gs('venta-edit-alert')){
-        const aviso=document.createElement('div');
-        aviso.id='venta-edit-alert';
-        aviso.className='alert alert-warning';
-        aviso.style.margin='10px 0 0';
-        aviso.innerHTML='✏️ <b>Editando venta</b>. La venta original NO se borra. Los cambios se aplican recién al tocar <b>Guardar cambios de venta</b>.';
-        header.appendChild(aviso);
-      }
-      toast('Venta cargada para editar. No se borró nada todavía.');
-    }catch(e){
-      console.error(e);
-      toast('No se pudo abrir la venta: '+(e.message||e),'err');
-    }
-  };
-
+  // cancelarVenta — conservada (única versión)
   const cancelarActual=window.cancelarVenta || cancelarVenta;
-  cancelarVenta = window.cancelarVenta = function(){
+  cancelarVenta = window.cancelarVenta = async function(){
     if(window.__ventaEditandoId){
-      if(!confirm('¿Cancelar la edición? La venta original quedará sin cambios.')) return;
+      if(!(await bgConfirm('¿Cancelar la edición?<br><span style="font-size:12px;color:var(--text2)">La venta original quedará sin modificaciones.</span>',{ title:'Cancelar edición', confirmText:'Sí, cancelar', cancelText:'Seguir editando', variant:'warning' }))) return;
       window.__ventaEditandoId=null;
       window.__ventaEditandoOriginal=null;
       cart=[];
@@ -7143,6 +7040,7 @@ try{
     }
     return cancelarActual.apply(this, arguments);
   };
+  // finalizarVenta v3 + editarVenta v2 → unificadas al final
 })();
 
 
@@ -7214,59 +7112,7 @@ try{
     });
   }
 
-  window.editarVenta = editarVenta = async function(id){
-    try{
-      const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
-      if(vErr) throw vErr;
-      if(!v){toast('NO SE ENCONTRÓ LA VENTA','err');return;}
-
-      const {data:det,error:dErr}=await sb
-        .from('bodega_ventas_detalle')
-        .select('*,bodega_productos(nombre,precio_venta,precio_mayorista,precio_costo)')
-        .eq('venta_id',id);
-      if(dErr) throw dErr;
-
-      window.__ventaEditandoId=id;
-      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
-      ventaTipo=v.tipo || 'minorista';
-
-      await loadCaches(true);
-      try{ if(typeof cargarClientes==='function') await cargarClientes(); }catch(e){}
-
-      await goTo('ventas');
-      await bgWaitVentaReady();
-      await bgSleep(80);
-
-      cart = bgArmarCartDesdeDetalles(det||[]);
-
-      bgSetCampo('v-desc', Number(v.descuento)||0);
-      bgSetCampo('v-importe', v.metodo_pago==='efectivo' ? (Number(v.monto_efectivo)||Number(v.total_final)||0) : 0);
-      bgSetCampo('v-efec', Number(v.monto_efectivo)||0);
-      bgSetCampo('v-transf', Number(v.monto_transferencia)||0);
-      bgSetCampo('v-qr', 0);
-      bgSetCampo('v-debito', 0);
-      bgSetCampo('v-credito-mix', 0);
-
-      const clientes=bgSafeClientes();
-      const cli=clientes.find(c=>String(c.id||'')===String(v.cliente_id||'') || String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
-      if(gs('v-cliente-id') && cli) gs('v-cliente-id').value=cli.id;
-      if(gs('v-cliente') && (v.cliente_nombre || cli?.nombre)) gs('v-cliente').value=v.cliente_nombre || cli.nombre;
-
-      selectPay(v.metodo_pago || 'efectivo');
-      renderVentaTable();
-      bgSetTextoBotonVenta();
-
-      if(!cart.length){
-        toast('VENTA ABIERTA PARA EDITAR, PERO NO SE ENCONTRARON PRODUCTOS EN EL DETALLE','err');
-      }else{
-        toast('VENTA CARGADA PARA EDITAR');
-      }
-    }catch(e){
-      console.error('Editar venta:', e);
-      toast('NO SE PUDO CARGAR LA VENTA PARA EDITAR: '+(e.message||e),'err');
-      try{goTo('historial-ventas');}catch(_e){}
-    }
-  };
+  // editarVenta v3 → unificada al final del archivo
 
   const css=document.createElement('style');
   css.textContent=`
@@ -7328,6 +7174,20 @@ try{
         ${compacto?'':`<div class="stat-card"><div class="label">ALERTA DE STOCK</div><div class="value" style="color:${x.cero>0?'var(--red)':x.bajo>0?'var(--amber)':'var(--green)'}">${x.cero} / ${x.bajo}</div><div class="sub">sin stock / stock bajo</div></div>`}
       </div>`;
   }
+  async function bgInjectFiadoPendiente(){
+    try{
+      const {data}=await sb.from('bodega_fiados').select('saldo').gt('saldo',0);
+      const total=(data||[]).reduce((s,f)=>s+(Number(f.saldo)||0),0);
+      if(total<=0) return;
+      const grid=document.querySelector('#bg-stock-valor-widget');
+      if(!grid) return;
+      const card=document.createElement('div');
+      card.className='stat-card';
+      card.id='bg-fiado-card';
+      card.innerHTML=`<div class="label">FIADO PENDIENTE</div><div class="value" style="color:var(--red)">${fmtGs(total)}</div><div class="sub">saldo total a cobrar</div>`;
+      grid.appendChild(card);
+    }catch(e){}
+  }
   function bgInjectDashboardStock(){
     const grid=document.querySelector('#content .stats-grid');
     if(!grid || document.getElementById('bg-stock-dashboard-card'))return;
@@ -7348,6 +7208,7 @@ try{
   window.renderDashboard=async function(){
     await oldDash.apply(this,arguments);
     bgInjectDashboardStock();
+    bgInjectFiadoPendiente();
   };
   if(typeof pages==='object' && pages) pages.dashboard=window.renderDashboard;
   const oldProd=window.renderProductos || renderProductos;
@@ -7556,60 +7417,135 @@ try{
      la sobreescribimos a nivel de finalizarVenta igual que el código
      existente lo hace, pero interceptando la construcción de detalles. */
 
-  /* ── 2. PATCH finalizarVenta: incluir embalaje_id en nuevos detalles ── */
-  const _finalizarOrig = window.finalizarVenta || finalizarVenta;
+  /* ══ finalizarVenta — VERSIÓN UNIFICADA FINAL ══
+     Incorpora: verificación caja, validación fiado, embalajes,
+     registro fiado en bodega_fiados, alerta stock bajo,
+     y modo edición delegando a bgGuardarVentaEditadaConEmbalaje.
+  ══════════════════════════════════════════════════════════════ */
   finalizarVenta = window.finalizarVenta = async function(){
-    /* Si estamos editando, delegar al patch de guardar */
+    // ── Modo edición: delegar al guardado de venta editada ──
     if(window.__ventaEditandoId){
       return await bgGuardarVentaEditadaConEmbalaje();
     }
-    /* Venta nueva: guardar con embalaje si corresponde */
-    return await bgFinalizarVentaConEmbalaje();
-  };
 
-  async function bgFinalizarVentaConEmbalaje(){
-    if(!cart.length){toast('No hay productos','err');return;}
+    // ── Venta nueva ──
+    if(!cart.length){ toast('No hay productos en el carrito','err'); return; }
+
+    // Verificar caja abierta
+    if(typeof hayCajaAbiertaParaVender === 'function'){
+      const caja = await hayCajaAbiertaParaVender();
+      if(!caja){
+        toast('No podés vender: primero abrí caja.','err');
+        openModal('Caja cerrada',`
+          <div class="alert alert-warning">
+            Para registrar ventas necesitás tener una caja abierta.<br><br>
+            Esto evita que queden ventas fuera del arqueo.
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="closeModal();goTo('caja')">Abrir caja ahora</button>
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          </div>`,null,'');
+        return;
+      }
+    }
+
     const desc       = parseFloat(gs('v-desc')?.value)||0;
     const total      = cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
     const totalFinal = Math.max(0,total-desc);
     const importe    = parseFloat(gs('v-importe')?.value)||0;
 
+    // Resolver cliente (funciona con o sin módulo de clientes completo)
+    let cli = {id:null, nombre:null};
+    if(typeof getClienteVenta === 'function'){
+      cli = getClienteVenta();
+    } else {
+      const cId = gs('v-cliente-id')?.value;
+      const cNom = gs('v-cliente')?.value?.trim()||null;
+      if(cId){
+        const cObj = (typeof clienteCache!=='undefined'&&clienteCache||[]).find(x=>String(x.id)===String(cId));
+        if(cObj) cli = {id:cObj.id, nombre:cObj.nombre};
+      }
+      if(!cli.nombre && cNom) cli.nombre = cNom;
+    }
+
+    // Validar fiado
+    if(selectedPay==='fiado' && !cli.id && !cli.nombre){
+      toast('Para vender fiado elegí o creá un cliente','err');
+      return;
+    }
+
+    // Construir productos con datos completos de embalaje
     const productos = cart.map(c=>({
-      producto_id:       c.producto_id,
-      cantidad:          c.cantidad * (c.uds||1),   // en unidades para stock
-      precio_unitario:   c.precio,
-      subtotal:          Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
-      es_embalaje:       (c.uds||1) > 1,
-      uds_por_embalaje:  c.uds||1,
-      embalaje_id:       c.embalaje_id||null,
+      producto_id:        c.producto_id,
+      cantidad:           (c.cantidad||0) * (c.uds||1),   // en unidades para stock
+      precio_unitario:    c.precio,
+      subtotal:           Math.round(c.subtotalCalculado ?? (c.precio*c.cantidad)),
+      es_embalaje:        (c.uds||1) > 1,
+      uds_por_embalaje:   c.uds||1,
+      embalaje_id:        c.embalaje_id||null,
       cantidad_embalajes: (c.uds||1) > 1 ? c.cantidad : null
     }));
 
     const {data,error}=await sb.rpc('registrar_venta_atomica',{
-      p_fecha:          fechaHoyPY(),
-      p_tipo:           ventaTipo,
-      p_cliente_nombre: gs('v-cliente')?.value||null,
-      p_total:          Math.round(total),
-      p_descuento:      Math.round(desc),
-      p_total_final:    Math.round(totalFinal),
-      p_metodo_pago:    selectedPay,
-      p_productos:      productos,
-      p_notas:          gs('v-notas')?.value||null,
-      p_monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+      p_fecha:               fechaHoyPY(),
+      p_tipo:                ventaTipo,
+      p_cliente_nombre:      cli.nombre||null,
+      p_total:               Math.round(total),
+      p_descuento:           Math.round(desc),
+      p_total_final:         Math.round(totalFinal),
+      p_metodo_pago:         selectedPay,
+      p_productos:           productos,
+      p_notas:               gs('v-notas')?.value||null,
+      p_monto_efectivo:      selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
       p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
-      p_monto_otro:     selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
+      p_monto_otro:          selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
     });
 
     if(error||!data?.ok){
-      toast('Error: '+(data?.error||error?.message||'Error desconocido'),'err');
+      toast('Error al registrar venta: '+(data?.error||error?.message||'Error desconocido'),'err');
       return;
     }
-    toast(`✓ Cobrado: ${fmtGs(totalFinal)}`);
+
+    const ventaId = data.venta_id;
+
+    // Registrar fiado en bodega_fiados si aplica
+    if(selectedPay==='fiado'){
+      const {error:fE}=await sb.from('bodega_fiados').insert({
+        venta_id:    ventaId,
+        cliente_id:  cli.id||null,
+        cliente_nombre: cli.nombre,
+        monto_total: totalFinal,
+        monto_pagado:0,
+        saldo:       totalFinal,
+        estado:      'pendiente',
+        fecha:       fechaHoyPY()
+      });
+      if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
+    }
+
+    toast(selectedPay==='fiado'
+      ? `✓ Fiado registrado: ${fmtGs(totalFinal)}`
+      : `✓ Cobrado: ${fmtGs(totalFinal)}`);
     _dashCache=null;
     await loadCaches(true);
-    cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;
+
+    // Alerta de stock bajo para productos recién vendidos
+    const bajos=[];
+    for(const c of cart){
+      const p=prodCache.find(x=>x.id===c.producto_id);
+      if(p && p.stock_minimo>0 && p.stock<=p.stock_minimo)
+        bajos.push(`${p.nombre} (${p.stock})`);
+    }
+    if(bajos.length) toast('⚠️ Stock bajo: '+bajos.join(', '),'err');
+
+    cart=[];
+    ventaNum=Math.floor(Math.random()*90000)+10000;
     renderVentas();
-  }
+  };
+
+  // bgFinalizarVentaConEmbalaje ya no se usa directamente — la lógica está en finalizarVenta
+  // Se conserva como función interna por compatibilidad con cualquier llamada externa residual
+  async function bgFinalizarVentaConEmbalaje(){ return await finalizarVenta(); }
 
   async function bgGuardarVentaEditadaConEmbalaje(){
     const ventaId = window.__ventaEditandoId;
@@ -7681,14 +7617,21 @@ try{
       const {error:dErr}=await sb.from('bodega_ventas_detalle').insert(detallesNuevos);
       if(dErr) throw dErr;
 
-      /* Descontar nuevo stock */
+      /* Descontar nuevo stock + registrar en ajustes para trazabilidad */
       for(const c of cart){
         const cantUds=(Number(c.cantidad)||0)*(Number(c.uds)||1);
         const p=prodCache.find(x=>String(x.id)===String(c.producto_id));
         if(p){
-          const ns=Math.max(0,(p.stock||0)-cantUds);
+          const stockAnt=p.stock||0;
+          const ns=stockAnt-cantUds; // permitir negativo para detectar errores de stock
           await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
+          await sb.from('bodega_ajustes_stock').insert({
+            producto_id:c.producto_id,tipo:'salida',cantidad:cantUds,
+            motivo:'Venta editada',stock_anterior:stockAnt,stock_nuevo:ns,
+            referencia_id:ventaId,referencia_tipo:'venta_editada'
+          });
           p.stock=ns;
+          if(ns<0) toast('⚠️ Stock negativo en '+c.nombre+' ('+ns+'). Verificá el inventario.','err');
         }
       }
 
@@ -7705,107 +7648,125 @@ try{
     }
   }
 
-  /* ── 3. PATCH editarVenta: reconstruir cart con datos de embalaje ────── */
+  /* ══ editarVenta — VERSIÓN UNIFICADA FINAL ══
+     Incorpora: goTo+esperar DOM, embalajes preservados,
+     todos los campos de pago, resolución de cliente,
+     botón GUARDAR CAMBIOS + alerta visual.
+  ══════════════════════════════════════════════════════════════ */
   window.editarVenta = editarVenta = async function(id){
-    function bgSleep(ms){return new Promise(r=>setTimeout(r,ms));}
-    async function bgWaitVentaReady(){
+    function _sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+    async function _waitDOM(){
       for(let i=0;i<100;i++){
         if(gs('venta-tbody')&&gs('v-total')&&gs('v-desc')) return true;
-        await bgSleep(30);
+        await _sleep(30);
       }
       return false;
     }
+    function _set(fieldId, val){ const el=gs(fieldId); if(el) el.value=val??''; }
+
     try{
       const {data:v,error:vErr}=await sb.from('bodega_ventas').select('*').eq('id',id).single();
       if(vErr) throw vErr;
-      if(!v){toast('NO SE ENCONTRÓ LA VENTA','err');return;}
+      if(!v){ toast('NO SE ENCONTRÓ LA VENTA','err'); return; }
 
-      /* Incluir embalaje_id y cantidad_embalajes en el select */
       const {data:det,error:dErr}=await sb
         .from('bodega_ventas_detalle')
         .select('*,bodega_productos(nombre,precio_venta,precio_mayorista,precio_costo)')
         .eq('venta_id',id);
       if(dErr) throw dErr;
 
-      window.__ventaEditandoId=id;
-      window.__ventaEditandoOriginal={venta:v,detalles:det||[]};
-      ventaTipo=v.tipo||'minorista';
+      window.__ventaEditandoId  = id;
+      window.__ventaEditandoOriginal = { venta:v, detalles:det||[] };
+      ventaTipo = v.tipo || 'minorista';
 
       await loadCaches(true);
-      try{if(typeof cargarClientes==='function') await cargarClientes();}catch(e){}
+      try{ if(typeof cargarClientes==='function') await cargarClientes(); }catch(e){}
 
       await goTo('ventas');
-      await bgWaitVentaReady();
-      await bgSleep(80);
+      await _waitDOM();
+      await _sleep(80);
 
-      /* Reconstruir cart preservando estructura de embalaje */
+      // Reconstruir carrito preservando estructura de embalajes
       cart = (det||[]).map((d,idx)=>{
-        const embId   = d.embalaje_id||null;
+        const embId   = d.embalaje_id || null;
         const udsFact = Number(d.uds_por_embalaje)||1;
+        // Preferir cantidad_embalajes guardada; si no, calcular desde unidades totales
         const cantEmb = d.cantidad_embalajes != null
-                          ? Number(d.cantidad_embalajes)
-                          : Math.round((Number(d.cantidad)||0) / udsFact) || 1;
-        const sub     = Number(d.subtotal ?? ((Number(d.cantidad)||0)*(Number(d.precio_unitario)||0)));
+          ? Number(d.cantidad_embalajes)
+          : (udsFact > 1 ? Math.round((Number(d.cantidad)||0) / udsFact) || 1 : Number(d.cantidad)||1);
+        const sub = Number(d.subtotal ?? ((Number(d.cantidad)||0) * (Number(d.precio_unitario)||0)));
 
-        /* Recuperar info del pack desde caché para nombre visual */
+        // Nombre visual con sufijo de pack si aplica
         let nombre = d.bodega_productos?.nombre || 'PRODUCTO';
-        let embInfo = null;
         if(embId){
-          embInfo = Object.values(embCache||{}).flat().find(e=>String(e.id)===String(embId));
-          if(embInfo) nombre = `${nombre} (x${embInfo.cantidad||udsFact})`;
-          else if(udsFact>1) nombre = `${nombre} (x${udsFact})`;
+          const embInfo = Object.values(embCache||{}).flat().find(e=>String(e.id)===String(embId));
+          nombre += embInfo ? ` (x${embInfo.cantidad||udsFact})` : (udsFact>1 ? ` (x${udsFact})` : '');
         }
 
         return {
-          key:        String(d.producto_id||'prod')+'_edit_'+idx+'_'+Date.now(),
-          producto_id:d.producto_id,
-          embalaje_id:embId,
-          nombre:     nombre,
-          precio:     cantEmb>0 ? sub/cantEmb : (Number(d.precio_unitario)||0)*udsFact,
-          cantidad:   cantEmb,
-          uds:        udsFact,
-          precioManual: true,
-          packInfo:   embId ? `Pack guardado (x${udsFact})` : 'PRECIO GUARDADO',
+          key:               String(d.producto_id||'prod')+'_edit_'+idx+'_'+Date.now(),
+          producto_id:       d.producto_id,
+          embalaje_id:       embId,
+          nombre:            nombre,
+          precio:            cantEmb>0 ? sub/cantEmb : (Number(d.precio_unitario)||0)*udsFact,
+          cantidad:          cantEmb,
+          uds:               udsFact,
+          precioManual:      true,
+          packInfo:          embId ? `Pack guardado (x${udsFact})` : 'PRECIO GUARDADO',
           subtotalCalculado: sub
         };
       });
 
-      /* Rellenar campos de cabecera */
-      const bgSet=(id,val)=>{const el=gs(id);if(el)el.value=val??'';};
-      bgSet('v-desc',    Number(v.descuento)||0);
-      bgSet('v-importe', v.metodo_pago==='efectivo'?(Number(v.monto_efectivo)||Number(v.total_final)||0):0);
-      bgSet('v-efec',    Number(v.monto_efectivo)||0);
-      bgSet('v-transf',  Number(v.monto_transferencia)||0);
-      bgSet('v-qr',      0); bgSet('v-debito',0); bgSet('v-credito-mix',0);
+      // Rellenar campos de cabecera
+      _set('v-desc',       Number(v.descuento)||0);
+      _set('v-importe',    v.metodo_pago==='efectivo' ? (Number(v.monto_efectivo)||Number(v.total_final)||0) : 0);
+      _set('v-efec',       Number(v.monto_efectivo)||0);
+      _set('v-transf',     Number(v.monto_transferencia)||0);
+      _set('v-qr',         0);
+      _set('v-debito',     0);
+      _set('v-credito-mix',0);
 
-      const clientes=(typeof clienteCache!=='undefined'&&Array.isArray(clienteCache))?clienteCache:[];
-      const cli=clientes.find(c=>String(c.id||'')===String(v.cliente_id||'')||String(c.nombre||'').toUpperCase()===String(v.cliente_nombre||'').toUpperCase());
-      if(gs('v-cliente-id')&&cli) gs('v-cliente-id').value=cli.id;
-      if(gs('v-cliente')&&(v.cliente_nombre||cli?.nombre)) gs('v-cliente').value=v.cliente_nombre||cli?.nombre||'';
+      // Resolver cliente por ID primero, luego por nombre
+      const clientes = (typeof clienteCache!=='undefined' && Array.isArray(clienteCache)) ? clienteCache : [];
+      const cli = clientes.find(c =>
+        String(c.id||'') === String(v.cliente_id||'') ||
+        String(c.nombre||'').toUpperCase() === String(v.cliente_nombre||'').toUpperCase()
+      );
+      if(gs('v-cliente-id') && cli) gs('v-cliente-id').value = cli.id;
+      if(gs('v-cliente') && (v.cliente_nombre || cli?.nombre))
+        gs('v-cliente').value = v.cliente_nombre || cli?.nombre || '';
 
-      selectPay(v.metodo_pago||'efectivo');
+      selectPay(v.metodo_pago || 'efectivo');
       renderVentaTable();
 
-      /* Botón y alerta */
-      const cobrar=document.querySelector('.cobrar-btn');
-      if(cobrar){cobrar.textContent='GUARDAR CAMBIOS DE VENTA';cobrar.style.background='var(--amber)';cobrar.style.color='#111827';}
-      const header=gs('venta-header');
-      if(header&&!gs('venta-edit-alert')){
-        const av=document.createElement('div');
-        av.id='venta-edit-alert'; av.className='alert alert-warning'; av.style.margin='10px 0 0';
-        av.innerHTML='✏️ <b>EDITANDO VENTA</b>. LOS CAMBIOS SE GUARDAN RECIÉN AL TOCAR <b>GUARDAR CAMBIOS DE VENTA</b>.';
-        header.appendChild(av);
+      // Botón GUARDAR CAMBIOS + alerta visual
+      const cobrar = document.querySelector('.cobrar-btn');
+      if(cobrar){
+        cobrar.textContent = 'GUARDAR CAMBIOS DE VENTA';
+        cobrar.style.background = 'var(--amber)';
+        cobrar.style.color = '#111827';
       }
-      toast(cart.length ? 'VENTA CARGADA PARA EDITAR (embalajes preservados)' : 'VENTA ABIERTA — SIN PRODUCTOS EN DETALLE');
+      if(gs('venta-header') && !gs('venta-edit-alert')){
+        const av = document.createElement('div');
+        av.id = 'venta-edit-alert';
+        av.className = 'alert alert-warning';
+        av.style.margin = '10px 0 0';
+        av.innerHTML = '✏️ <b>EDITANDO VENTA</b> — los cambios se guardan recién al tocar <b>GUARDAR CAMBIOS DE VENTA</b>.';
+        gs('venta-header').appendChild(av);
+      }
+
+      toast(cart.length
+        ? 'Venta cargada para editar'+(cart.some(c=>c.embalaje_id)?' (embalajes preservados)':'')
+        : '⚠️ Venta abierta pero sin productos en el detalle');
+
     }catch(e){
-      console.error('Editar venta:', e);
-      toast('NO SE PUDO CARGAR LA VENTA: '+(e.message||e),'err');
-      try{goTo('historial-ventas');}catch(_){}
+      console.error('editarVenta:', e);
+      toast('No se pudo cargar la venta: '+(e.message||e),'err');
+      try{ goTo('historial-ventas'); }catch(_){}
     }
   };
 
-  /* Registrar en pages si está disponible */
-  try{if(typeof pages==='object'&&pages.ventas) pages.ventas=window.renderVentas;}catch(e){}
+  try{ if(typeof pages==='object'&&pages.ventas) pages.ventas=window.renderVentas; }catch(e){}
 })();
 </script>
 
@@ -7850,7 +7811,15 @@ try{
       const uds = Number(item.uds_por_embalaje)||1;
       return uds > 1 ? ` <span style="color:var(--teal);font-size:11px">(x${uds})</span>` : '';
     };
-    const filas = (data||[]).map(d=>`
+    const filas = (data||[]).map(d=>{
+      const uds       = Number(d.uds_por_embalaje)||1;
+      const esPack    = d.cantidad_embalajes != null && uds > 1;
+      const cantMostr = esPack ? d.cantidad_embalajes + ' pack(s)' : d.cantidad;
+      // costo_unitario es el costo del pack completo, subtotal = cantEmbalajes × costoUnitario
+      const costoUnit = d.costo_unitario;
+      const cantNum   = esPack ? Number(d.cantidad_embalajes)||1 : Number(d.cantidad)||1;
+      const subtotal  = d.subtotal || (cantNum * costoUnit);
+      return `
       <tr id="ctrl-c-row-${d.id}" style="${d.controlado?'opacity:.45;text-decoration:line-through;color:var(--text2)':''}">
         <td style="display:flex;align-items:center;gap:8px;padding:8px 10px">
           <input type="checkbox" class="ctrl-check" ${d.controlado?'checked':''}
@@ -7858,10 +7827,11 @@ try{
             style="width:17px;height:17px;cursor:pointer;accent-color:var(--green);flex-shrink:0">
           <span>${ESC(d.bodega_productos?.nombre||'-')}${udsLabel(d)}</span>
         </td>
-        <td style="text-align:center;font-weight:800">${d.cantidad_embalajes != null ? d.cantidad_embalajes + ' pack(s)' : d.cantidad}</td>
-        <td style="text-align:right">${fmtGs(d.costo_unitario)}</td>
-        <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(d.subtotal || (d.cantidad * d.costo_unitario))}</td>
-      </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text2)">Sin detalle</td></tr>';
+        <td style="text-align:center;font-weight:800">${cantMostr}</td>
+        <td style="text-align:right">${fmtGs(costoUnit)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(subtotal)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text2)">Sin detalle</td></tr>';
 
     openModal('DETALLE DE COMPRA', `
       <div class="card">
@@ -7901,27 +7871,40 @@ try{
 
   /* ── Guardar con embalaje en compras nuevas ── */
   const _finalizarOrig = window.finalizarCompra;
+  /* ══ finalizarCompra — VERSIÓN UNIFICADA FINAL ══
+     Incorpora: normalización subtotalManual, embalajes en
+     detalle (embalaje_id, uds_por_embalaje, cantidad_embalajes),
+     modo edición con reversión de stock, modo nueva compra.
+  ══════════════════════════════════════════════════════════════ */
   window.finalizarCompra = async function(){
     if(!compraItems.length){ toast('No hay productos','err'); return; }
 
-    const total  = compraItems.reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0), 0);
+    // Normalizar subtotalManual antes de guardar (preservar total ingresado a mano)
+    (compraItems||[]).forEach(item => {
+      if(item && item.subtotalManual != null && item.subtotalManual !== ''){
+        const cant = Math.max(1, parseInt(item.cantidad)||1);
+        item.costo = nnum(item.subtotalManual) / cant;
+      }
+    });
+
+    const total  = (compraItems||[]).reduce((s,c)=>s+compraLineSubtotal(c), 0);
     const estado = gs('comp-estado')?.value || 'en_proceso';
     const compra = {
-      fecha:          gs('comp-fecha')?.value  || fechaHoyPY(),
-      proveedor_id:   gs('comp-prov')?.value   || null,
-      numero_factura: gs('comp-factura')?.value|| null,
+      fecha:          gs('comp-fecha')?.value   || fechaHoyPY(),
+      proveedor_id:   gs('comp-prov')?.value    || null,
+      numero_factura: gs('comp-factura')?.value || null,
       total,
-      metodo_pago:    gs('comp-metpago')?.value|| 'efectivo',
+      metodo_pago:    gs('comp-metpago')?.value || 'efectivo',
       estado,
-      notas:          gs('comp-notas')?.value  || null
+      notas:          gs('comp-notas')?.value   || null
     };
 
     const edit = window.__compraEditando;
 
     if(edit?.id){
-      /* ── EDITAR compra existente ── */
+      // ── Modo edición ──
       const id = edit.id;
-      if(!confirm('¿Guardar cambios de esta compra? Recién ahora se corregirá el stock si corresponde.')) return;
+      if(!(await bgConfirm('¿Guardar los cambios de esta compra?<br><span style="font-size:12px;color:var(--text2)">El stock se corregirá en este momento.</span>', { title:'Guardar compra', confirmText:'Guardar cambios', variant:'warning' }))) return;
 
       if(edit.compra?.estado === 'finalizado'){
         await revertirStockCompraReal(id, edit.detalles || []);
@@ -7930,17 +7913,17 @@ try{
       const {error:uErr} = await sb.from('bodega_compras').update(compra).eq('id', id);
       if(uErr){ toast('Error actualizando compra: '+uErr.message,'err'); return; }
 
-      await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
+      const {error:delErr} = await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
+      if(delErr){ toast('Error limpiando detalle anterior: '+delErr.message,'err'); return; }
 
       const nuevosDetalles = compraItems.map(c => ({
-        compra_id:         id,
-        producto_id:       c.producto_id,
-        cantidad:          (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),  // en unidades
-        costo_unitario:    parseFloat(c.costo)||0,
-        subtotal:          Math.round((parseFloat(c.costo)||0) * (parseInt(c.cantidad)||0)),
-        embalaje_id:       c.embalaje_id||null,
-        uds_por_embalaje:  parseInt(c.uds)||1,
-        cantidad_embalajes:(parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
+        compra_id:          id,
+        producto_id:        c.producto_id,
+        cantidad:           (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),
+        costo_unitario:     parseFloat(c.costo)||0,
+        embalaje_id:        c.embalaje_id||null,
+        uds_por_embalaje:   parseInt(c.uds)||1,
+        cantidad_embalajes: (parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
       }));
       const {error:insErr} = await sb.from('bodega_compras_detalle').insert(nuevosDetalles);
       if(insErr){ toast('Error guardando detalle: '+insErr.message,'err'); return; }
@@ -7956,31 +7939,33 @@ try{
       return;
     }
 
-    /* ── NUEVA compra ── */
+    // ── Nueva compra ──
     const {data:cD,error:cE} = await sb.from('bodega_compras').insert(compra).select().single();
-    if(cE){ toast('Error: '+cE.message,'err'); return; }
+    if(cE){ toast('Error guardando compra: '+cE.message,'err'); return; }
 
-    const detalles = compraItems.map(c=>({
-      compra_id:         cD.id,
-      producto_id:       c.producto_id,
-      cantidad:          (parseInt(c.cantidad)||0)*(parseInt(c.uds)||1),
-      costo_unitario:    parseFloat(c.costo)||0,
-      subtotal:          Math.round((parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0)),
-      embalaje_id:       c.embalaje_id||null,
-      uds_por_embalaje:  parseInt(c.uds)||1,
-      cantidad_embalajes:(parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
+    const detalles = compraItems.map(c => ({
+      compra_id:          cD.id,
+      producto_id:        c.producto_id,
+      cantidad:           (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),
+      costo_unitario:     parseFloat(c.costo)||0,
+      embalaje_id:        c.embalaje_id||null,
+      uds_por_embalaje:   parseInt(c.uds)||1,
+      cantidad_embalajes: (parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
     }));
     const {error:dE} = await sb.from('bodega_compras_detalle').insert(detalles);
     if(dE){ toast('Error guardando detalle: '+dE.message,'err'); return; }
 
-    if(estado==='finalizado') await impactarStock(cD.id, compraItems);
+    if(estado === 'finalizado') await impactarStock(cD.id, compraItems);
     await loadCaches(true);
-    compraItems=[];
-    toast('✓ Compra guardada');
+    compraItems = [];
+    toast(`✓ Compra guardada (${estado}): ${fmtGs(total)}`);
     renderCompras();
   };
 
-  /* ── Reconstruir compraItems preservando embalaje al editar ── */
+  /* ══ editarCompra — VERSIÓN UNIFICADA FINAL ══
+     Incorpora: embalajes preservados, nombre visual con pack,
+     recuperación de embCache, todos los campos de formulario.
+  ══════════════════════════════════════════════════════════════ */
   window.editarCompra = async function(id){
     const {data:compra, error:cErr} = await sb.from('bodega_compras').select('*').eq('id',id).single();
     const {data:detalles, error:dErr} = await sb
@@ -7988,7 +7973,7 @@ try{
       .select('*,bodega_productos(nombre,precio_costo)')
       .eq('compra_id', id);
 
-    if(cErr||dErr||!compra){
+    if(cErr || dErr || !compra){
       toast('No se pudo abrir la compra para editar','err');
       return;
     }
@@ -7998,25 +7983,24 @@ try{
     renderCompras();
     compraEditBanner(compra);
 
-    if(gs('comp-fecha'))    gs('comp-fecha').value    = compra.fecha || fechaHoyPY();
-    if(gs('comp-prov'))     gs('comp-prov').value     = compra.proveedor_id||'';
-    if(gs('comp-factura'))  gs('comp-factura').value  = compra.numero_factura||'';
-    if(gs('comp-metpago'))  gs('comp-metpago').value  = compra.metodo_pago||'efectivo';
-    if(gs('comp-estado'))   gs('comp-estado').value   = compra.estado||'en_proceso';
-    if(gs('comp-notas'))    gs('comp-notas').value    = compra.notas||'';
+    if(gs('comp-fecha'))    gs('comp-fecha').value    = compra.fecha           || fechaHoyPY();
+    if(gs('comp-prov'))     gs('comp-prov').value     = compra.proveedor_id    || '';
+    if(gs('comp-factura'))  gs('comp-factura').value  = compra.numero_factura  || '';
+    if(gs('comp-metpago'))  gs('comp-metpago').value  = compra.metodo_pago     || 'efectivo';
+    if(gs('comp-estado'))   gs('comp-estado').value   = compra.estado          || 'en_proceso';
+    if(gs('comp-notas'))    gs('comp-notas').value    = compra.notas           || '';
 
     compraItems = (detalles||[]).map(d => {
       const udsFact   = parseInt(d.uds_por_embalaje)||1;
       const cantTotal = parseInt(d.cantidad)||0;
-      /* Si tiene cantidad_embalajes guardada, usarla; si no, calcular */
-      const cantEmb   = d.cantidad_embalajes != null
-                          ? parseInt(d.cantidad_embalajes)
-                          : (udsFact > 1 ? Math.round(cantTotal / udsFact) || 1 : cantTotal);
+      // Usar cantidad_embalajes guardada; si no existe, calcular desde unidades totales
+      const cantEmb = d.cantidad_embalajes != null
+        ? parseInt(d.cantidad_embalajes)
+        : (udsFact > 1 ? Math.round(cantTotal / udsFact) || 1 : cantTotal);
 
-      /* Nombre visual con pack si aplica */
+      // Nombre visual con sufijo de pack si aplica
       let nombre = d.bodega_productos?.nombre || 'Producto';
       if(udsFact > 1){
-        /* Intentar recuperar info del pack desde embCache */
         const embInfo = d.embalaje_id
           ? Object.values(embCache||{}).flat().find(e=>String(e.id)===String(d.embalaje_id))
           : null;
@@ -8030,12 +8014,13 @@ try{
         nombre,
         costo:       parseFloat(d.costo_unitario) || parseFloat(d.bodega_productos?.precio_costo) || 0,
         cantidad:    cantEmb,
-        uds:         udsFact
+        uds:         udsFact,
+        subtotalManual: null
       };
     });
 
     renderCompraItems();
-    toast('Compra abierta para editar (embalajes preservados). Tocá Guardar cambios para aplicar.');
+    toast('Compra abierta para editar. Embalajes preservados. Tocá Guardar cambios para aplicar.');
   };
 })();
 </script>
