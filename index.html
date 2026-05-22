@@ -7809,5 +7809,236 @@ try{
 })();
 </script>
 
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   MEJORA 1 (COMPRAS) — MARCAR ÍTEMS CONTROLADOS / FACTURADOS
+   ───────────────────────────────────────────────────────────────────────
+   SQL necesario en Supabase (una sola vez):
+     ALTER TABLE bodega_compras_detalle
+       ADD COLUMN IF NOT EXISTS controlado BOOLEAN DEFAULT FALSE;
+═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const ESC = s => String(s ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  window.bgToggleControladoCompra = async function(detalleId, checked, rowEl){
+    const {error} = await sb
+      .from('bodega_compras_detalle')
+      .update({controlado: checked})
+      .eq('id', detalleId);
+    if(error){
+      toast('Error guardando estado: ' + error.message, 'err');
+      if(rowEl){ const cb=rowEl.querySelector('.ctrl-check'); if(cb) cb.checked=!checked; }
+      return;
+    }
+    if(rowEl){
+      rowEl.style.opacity      = checked ? '0.45' : '';
+      rowEl.style.textDecoration = checked ? 'line-through' : '';
+      rowEl.style.color          = checked ? 'var(--text2)' : '';
+    }
+  };
+
+  window.verCompra = async function(id){
+    const {data} = await sb
+      .from('bodega_compras_detalle')
+      .select('*,bodega_productos(nombre)')
+      .eq('compra_id', id);
+
+    const totalItems = (data||[]).length;
+    const ctrlCount  = (data||[]).filter(d=>d.controlado).length;
+    const udsLabel   = item => {
+      const uds = Number(item.uds_por_embalaje)||1;
+      return uds > 1 ? ` <span style="color:var(--teal);font-size:11px">(x${uds})</span>` : '';
+    };
+    const filas = (data||[]).map(d=>`
+      <tr id="ctrl-c-row-${d.id}" style="${d.controlado?'opacity:.45;text-decoration:line-through;color:var(--text2)':''}">
+        <td style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+          <input type="checkbox" class="ctrl-check" ${d.controlado?'checked':''}
+            onchange="bgToggleControladoCompra('${d.id}',this.checked,document.getElementById('ctrl-c-row-${d.id}'))"
+            style="width:17px;height:17px;cursor:pointer;accent-color:var(--green);flex-shrink:0">
+          <span>${ESC(d.bodega_productos?.nombre||'-')}${udsLabel(d)}</span>
+        </td>
+        <td style="text-align:center;font-weight:800">${d.cantidad_embalajes != null ? d.cantidad_embalajes + ' pack(s)' : d.cantidad}</td>
+        <td style="text-align:right">${fmtGs(d.costo_unitario)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(d.subtotal || (d.cantidad * d.costo_unitario))}</td>
+      </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text2)">Sin detalle</td></tr>';
+
+    openModal('DETALLE DE COMPRA', `
+      <div class="card">
+        <div class="card-header">
+          <h3>Productos</h3>
+          <span style="font-size:12px;color:var(--text2);margin-left:auto">Marcá ✓ los ítems controlados/facturados</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th style="width:36px"></th><th>PRODUCTO</th>
+              <th style="text-align:center">CANT.</th>
+              <th style="text-align:right">COSTO UNIT.</th>
+              <th style="text-align:right">SUBTOTAL</th>
+            </tr></thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+        <div style="font-size:12px;color:var(--text2);padding:8px 12px;border-top:1px solid var(--border)">
+          ✅ ${ctrlCount} de ${totalItems} ítems controlados
+        </div>
+      </div>`, null, '');
+  };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MEJORA 2 (COMPRAS) — PRESERVAR EMBALAJES AL EDITAR
+   ───────────────────────────────────────────────────────────────────────
+   SQL necesario en Supabase (una sola vez):
+     ALTER TABLE bodega_compras_detalle
+       ADD COLUMN IF NOT EXISTS embalaje_id UUID REFERENCES bodega_embalajes(id),
+       ADD COLUMN IF NOT EXISTS uds_por_embalaje INTEGER DEFAULT 1,
+       ADD COLUMN IF NOT EXISTS cantidad_embalajes INTEGER DEFAULT NULL;
+═══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  /* ── Guardar con embalaje en compras nuevas ── */
+  const _finalizarOrig = window.finalizarCompra;
+  window.finalizarCompra = async function(){
+    if(!compraItems.length){ toast('No hay productos','err'); return; }
+
+    const total  = compraItems.reduce((s,c)=>s+(parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0), 0);
+    const estado = gs('comp-estado')?.value || 'en_proceso';
+    const compra = {
+      fecha:          gs('comp-fecha')?.value  || fechaHoyPY(),
+      proveedor_id:   gs('comp-prov')?.value   || null,
+      numero_factura: gs('comp-factura')?.value|| null,
+      total,
+      metodo_pago:    gs('comp-metpago')?.value|| 'efectivo',
+      estado,
+      notas:          gs('comp-notas')?.value  || null
+    };
+
+    const edit = window.__compraEditando;
+
+    if(edit?.id){
+      /* ── EDITAR compra existente ── */
+      const id = edit.id;
+      if(!confirm('¿Guardar cambios de esta compra? Recién ahora se corregirá el stock si corresponde.')) return;
+
+      if(edit.compra?.estado === 'finalizado'){
+        await revertirStockCompraReal(id, edit.detalles || []);
+      }
+
+      const {error:uErr} = await sb.from('bodega_compras').update(compra).eq('id', id);
+      if(uErr){ toast('Error actualizando compra: '+uErr.message,'err'); return; }
+
+      await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
+
+      const nuevosDetalles = compraItems.map(c => ({
+        compra_id:         id,
+        producto_id:       c.producto_id,
+        cantidad:          (parseInt(c.cantidad)||0) * (parseInt(c.uds)||1),  // en unidades
+        costo_unitario:    parseFloat(c.costo)||0,
+        subtotal:          Math.round((parseFloat(c.costo)||0) * (parseInt(c.cantidad)||0)),
+        embalaje_id:       c.embalaje_id||null,
+        uds_por_embalaje:  parseInt(c.uds)||1,
+        cantidad_embalajes:(parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
+      }));
+      const {error:insErr} = await sb.from('bodega_compras_detalle').insert(nuevosDetalles);
+      if(insErr){ toast('Error guardando detalle: '+insErr.message,'err'); return; }
+
+      await loadCaches(true);
+      if(estado === 'finalizado') await impactarStock(id, compraItems);
+
+      window.__compraEditando = null;
+      compraItems = [];
+      toast('✓ Compra editada correctamente');
+      await loadCaches(true);
+      renderHistorialCompras();
+      return;
+    }
+
+    /* ── NUEVA compra ── */
+    const {data:cD,error:cE} = await sb.from('bodega_compras').insert(compra).select().single();
+    if(cE){ toast('Error: '+cE.message,'err'); return; }
+
+    const detalles = compraItems.map(c=>({
+      compra_id:         cD.id,
+      producto_id:       c.producto_id,
+      cantidad:          (parseInt(c.cantidad)||0)*(parseInt(c.uds)||1),
+      costo_unitario:    parseFloat(c.costo)||0,
+      subtotal:          Math.round((parseFloat(c.costo)||0)*(parseInt(c.cantidad)||0)),
+      embalaje_id:       c.embalaje_id||null,
+      uds_por_embalaje:  parseInt(c.uds)||1,
+      cantidad_embalajes:(parseInt(c.uds)||1) > 1 ? parseInt(c.cantidad)||null : null
+    }));
+    const {error:dE} = await sb.from('bodega_compras_detalle').insert(detalles);
+    if(dE){ toast('Error guardando detalle: '+dE.message,'err'); return; }
+
+    if(estado==='finalizado') await impactarStock(cD.id, compraItems);
+    await loadCaches(true);
+    compraItems=[];
+    toast('✓ Compra guardada');
+    renderCompras();
+  };
+
+  /* ── Reconstruir compraItems preservando embalaje al editar ── */
+  window.editarCompra = async function(id){
+    const {data:compra, error:cErr} = await sb.from('bodega_compras').select('*').eq('id',id).single();
+    const {data:detalles, error:dErr} = await sb
+      .from('bodega_compras_detalle')
+      .select('*,bodega_productos(nombre,precio_costo)')
+      .eq('compra_id', id);
+
+    if(cErr||dErr||!compra){
+      toast('No se pudo abrir la compra para editar','err');
+      return;
+    }
+
+    window.__compraEditando = { id, compra, detalles: detalles||[] };
+
+    renderCompras();
+    compraEditBanner(compra);
+
+    if(gs('comp-fecha'))    gs('comp-fecha').value    = compra.fecha || fechaHoyPY();
+    if(gs('comp-prov'))     gs('comp-prov').value     = compra.proveedor_id||'';
+    if(gs('comp-factura'))  gs('comp-factura').value  = compra.numero_factura||'';
+    if(gs('comp-metpago'))  gs('comp-metpago').value  = compra.metodo_pago||'efectivo';
+    if(gs('comp-estado'))   gs('comp-estado').value   = compra.estado||'en_proceso';
+    if(gs('comp-notas'))    gs('comp-notas').value    = compra.notas||'';
+
+    compraItems = (detalles||[]).map(d => {
+      const udsFact   = parseInt(d.uds_por_embalaje)||1;
+      const cantTotal = parseInt(d.cantidad)||0;
+      /* Si tiene cantidad_embalajes guardada, usarla; si no, calcular */
+      const cantEmb   = d.cantidad_embalajes != null
+                          ? parseInt(d.cantidad_embalajes)
+                          : (udsFact > 1 ? Math.round(cantTotal / udsFact) || 1 : cantTotal);
+
+      /* Nombre visual con pack si aplica */
+      let nombre = d.bodega_productos?.nombre || 'Producto';
+      if(udsFact > 1){
+        /* Intentar recuperar info del pack desde embCache */
+        const embInfo = d.embalaje_id
+          ? Object.values(embCache||{}).flat().find(e=>String(e.id)===String(d.embalaje_id))
+          : null;
+        nombre = `${nombre} (x${embInfo?.cantidad || udsFact})`;
+      }
+
+      return {
+        key:         String(d.producto_id) + (d.embalaje_id||''),
+        producto_id: d.producto_id,
+        embalaje_id: d.embalaje_id||null,
+        nombre,
+        costo:       parseFloat(d.costo_unitario) || parseFloat(d.bodega_productos?.precio_costo) || 0,
+        cantidad:    cantEmb,
+        uds:         udsFact
+      };
+    });
+
+    renderCompraItems();
+    toast('Compra abierta para editar (embalajes preservados). Tocá Guardar cambios para aplicar.');
+  };
+})();
+</script>
+
 </body>
 </html>
