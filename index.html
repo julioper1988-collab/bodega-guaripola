@@ -465,7 +465,41 @@
           const body=gs('modal-body');
           if(body && !gs('stock-admin-warning')) body.insertAdjacentHTML('afterbegin','<div id="stock-admin-warning" class="alert alert-warning">Stock bloqueado: solo el administrador puede modificar stock desde Productos. Usá Inventario o Ajuste de stock según tu permiso.</div>');
         }
-      },80);
+        // ── Historial de precios — se carga acá porque este wrapper es el último en ejecutarse
+        if(!prod?.id) return;
+        const el=document.getElementById('p-hist-precios');
+        const badge=document.getElementById('p-hist-badge');
+        if(!el) return;
+        try{
+          const {data,error}=await sb.from('bodega_historial_precios')
+            .select('fecha,precio_costo_pack,precio_costo_unitario,cantidad_uds_pack,proveedor_id')
+            .eq('producto_id',prod.id)
+            .order('fecha',{ascending:false})
+            .limit(20);
+          if(error||!data||!data.length){
+            el.innerHTML='<div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">Sin historial todavía.<br><span style="font-size:11px">Se registra automáticamente al finalizar compras.</span></div>';
+            return;
+          }
+          if(badge) badge.textContent=data.length+' registro'+(data.length>1?'s':'');
+          function getNombreProv(id){ const p=(provCache||[]).find(x=>String(x.id)===String(id)); return p?.nombre||'Sin proveedor'; }
+          const porProv={};
+          data.forEach(r=>{ const n=getNombreProv(r.proveedor_id); if(!porProv[n])porProv[n]=[]; porProv[n].push(r); });
+          el.innerHTML=`<div style="display:grid;grid-template-columns:1fr 100px 110px 110px 80px;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;padding:7px 12px;border-bottom:2px solid var(--border);background:var(--bg2)"><span>Proveedor</span><span>Fecha</span><span style="text-align:right">Costo pack</span><span style="text-align:right">Costo unit.</span><span style="text-align:right">Uds</span></div><div id="p-hist-rows" style="max-height:180px;overflow-y:auto"></div>`;
+          const rowsEl=document.getElementById('p-hist-rows');
+          if(rowsEl) rowsEl.innerHTML=data.map(r=>{
+            const n=getNombreProv(r.proveedor_id);
+            const esReciente=porProv[n][0]===r;
+            const bg=esReciente?'background:var(--bg2)':'';
+            return '<div style="display:grid;grid-template-columns:1fr 100px 110px 110px 80px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;'+bg+'">'
+              +'<div><span style="font-weight:'+(esReciente?'700':'400')+';color:'+(esReciente?'var(--text)':'var(--text2)')+'">'+escapeHtml(n)+'</span>'+(esReciente?'<span style="font-size:10px;margin-left:5px;background:var(--green-bg);color:var(--green);border-radius:4px;padding:1px 5px">último</span>':'')+'</div>'
+              +'<span style="color:var(--text2);font-size:11px">'+(r.fecha||'-')+'</span>'
+              +'<span style="text-align:right;color:var(--accent2);font-weight:700">'+(r.cantidad_uds_pack>1?fmtGs(r.precio_costo_pack):'-')+'</span>'
+              +'<span style="text-align:right;font-weight:'+(esReciente?'800':'600')+';color:'+(esReciente?'var(--green)':'var(--text)')+'">'+fmtGs(r.precio_costo_unitario)+'</span>'
+              +'<span style="text-align:right;color:var(--text2)">'+(r.cantidad_uds_pack>1?'x'+r.cantidad_uds_pack:'unit.')+'</span>'
+              +'</div>';
+          }).join('');
+        }catch(e){ el.innerHTML='<div style="padding:12px;color:var(--red);font-size:12px">Error: '+escapeHtml(e.message)+'</div>'; }
+      },120);
     };
   }
   const oldSaveProdInv = window.saveProd;
