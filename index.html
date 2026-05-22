@@ -2638,14 +2638,12 @@ async function saveCliente(){
 const __renderVentasOriginal = renderVentas;
 renderVentas = async function(){
   await cargarClientes();
-  await __renderVentasOriginal();
-  // Cargar el próximo número de comprobante real desde la BD
+  // Cargar próximo número ANTES de renderizar para que el template lo tome
   try{
     const {data:nv}=await sb.from('bodega_ventas').select('numero_venta').order('numero_venta',{ascending:false}).limit(1).single();
-    if(nv?.numero_venta){ ventaNum=nv.numero_venta+1; }
-    const el=document.querySelector('.vinfo span');
-    if(el) el.textContent='#'+ventaNum;
+    if(nv?.numero_venta) ventaNum=nv.numero_venta+1;
   }catch(e){}
+  await __renderVentasOriginal();
 
   const clienteInput=gs('v-cliente');
   if(clienteInput){
