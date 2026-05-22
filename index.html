@@ -3776,16 +3776,20 @@ initMobileShell();
     if(prod?.id) setTimeout(async()=>{
       const el=document.getElementById('p-hist-precios');
       const badge=document.getElementById('p-hist-badge');
-      if(!el) return;
+      console.log('HIST: prod.id=', prod.id, 'el=', el);
+      if(!el){ console.warn('HIST: elemento p-hist-precios NO encontrado'); return; }
       try{
+        console.log('HIST: ejecutando query...');
         const {data,error}=await sb.from('bodega_historial_precios')
           .select('fecha,precio_costo_pack,precio_costo_unitario,cantidad_uds_pack,compra_id,proveedor_id')
           .eq('producto_id',prod.id)
           .order('fecha',{ascending:false})
           .limit(20);
 
-        if(error) console.warn('historial_precios query error:',error.message);
+        console.log('HIST: resultado data=', data, 'error=', error);
+        if(error){ console.error('HIST error:', error.message); el.innerHTML='<div style="padding:12px;color:var(--red);font-size:12px">Error: '+error.message+'</div>'; return; }
         if(!data||!data.length){
+          console.log('HIST: sin datos para producto', prod.id);
           el.innerHTML='<div style="padding:12px;text-align:center;color:var(--text2);font-size:12px">Sin historial de precios todavía.<br><span style="font-size:11px">Se registrará automáticamente al finalizar compras.</span></div>';
           return;
         }
