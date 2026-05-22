@@ -2641,14 +2641,16 @@ renderVentas = async function(){
   await __renderVentasOriginal();
   // Actualizar número de comprobante con el valor real de la BD
   try{
-    const {data:nv,error:nvErr}=await sb.from('bodega_ventas').select('numero_venta').order('numero_venta',{ascending:false}).limit(1).single();
-    console.log('VNUM: data=',nv,'error=',nvErr);
-    if(nv?.numero_venta){
-      ventaNum=nv.numero_venta+1;
-      const span=document.getElementById('v-num-comp');
-      console.log('VNUM: span=',span,'nuevo numero=',ventaNum);
-      if(span) span.textContent='#'+ventaNum;
-      else console.warn('VNUM: span v-num-comp NO encontrado en DOM');
+    const {data:nvRows}=await sb.from('bodega_ventas')
+      .select('numero_venta')
+      .not('numero_venta','is',null)
+      .order('numero_venta',{ascending:false})
+      .limit(1);
+    const maxNum = nvRows?.[0]?.numero_venta || null;
+    if(maxNum){
+      ventaNum = maxNum + 1;
+      const span = document.getElementById('v-num-comp');
+      if(span) span.textContent = '#' + ventaNum;
     }
   }catch(e){ console.error('VNUM error:',e); }
 
