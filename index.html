@@ -2090,7 +2090,7 @@ function updateVTotals(){
 
 async function cancelarVenta(){
   if(cart.length&&!(await bgConfirm('¿Cancelar la venta actual?<br><span style="font-size:12px;color:var(--text2)">Se perderán los productos del carrito.</span>',{ title:'Cancelar venta', confirmText:'Cancelar venta', cancelText:'Seguir', variant:'warning' })))return;
-  cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;renderVentas();
+  cart=[];renderVentas();
 }
 
 async function finalizarVenta(){
@@ -2639,6 +2639,13 @@ const __renderVentasOriginal = renderVentas;
 renderVentas = async function(){
   await cargarClientes();
   await __renderVentasOriginal();
+  // Cargar el próximo número de comprobante real desde la BD
+  try{
+    const {data:nv}=await sb.from('bodega_ventas').select('numero_venta').order('numero_venta',{ascending:false}).limit(1).single();
+    if(nv?.numero_venta){ ventaNum=nv.numero_venta+1; }
+    const el=document.querySelector('.vinfo span');
+    if(el) el.textContent='#'+ventaNum;
+  }catch(e){}
 
   const clienteInput=gs('v-cliente');
   if(clienteInput){
@@ -7581,8 +7588,8 @@ async function revertirStockCompraReal(compraId, detalles){
     if(bajos.length) toast('⚠️ Stock bajo: '+bajos.join(', '),'err');
 
     cart=[];
-    // Siguiente número de comprobante = numero_venta + 1 si lo tenemos, sino random
-    ventaNum = numVenta ? numVenta + 1 : Math.floor(Math.random()*90000)+10000;
+    // Siguiente número de comprobante = numero_venta + 1 (secuencial real)
+    if(numVenta) ventaNum = numVenta + 1;
     renderVentas();
   };
 
