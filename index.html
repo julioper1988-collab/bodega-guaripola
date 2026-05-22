@@ -1827,7 +1827,7 @@ function renderVentas(){
     <div id="venta-left">
       <div id="venta-header">
         <div class="vtitle">🛒 Ventas</div>
-        <div class="vinfo">N° comprobante: <span>#${ventaNum}</span> &nbsp;|&nbsp; Productos: <span id="v-count">0</span> &nbsp;|&nbsp;
+        <div class="vinfo">N° comprobante: <span id="v-num-comp">#${ventaNum}</span> &nbsp;|&nbsp; Productos: <span id="v-count">0</span> &nbsp;|&nbsp;
           <button class="btn btn-sm ${ventaTipo==='minorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('minorista')" style="margin-right:4px">Minorista</button>
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
         </div>
@@ -2131,8 +2131,8 @@ async function finalizarVenta(){
   toast(`✓ Cobrado: ${fmtGs(totalFinal)}`);
   _dashCache=null;
   await loadCaches(true);
-  cart=[];ventaNum=Math.floor(Math.random()*90000)+10000;
-  renderVentas();
+  cart=[];
+  renderVentas(); // renderVentas cargará el próximo número real
 }
 
 // ─── HISTORIAL VENTAS ─────────────────────────────────────────
@@ -2638,12 +2638,19 @@ async function saveCliente(){
 const __renderVentasOriginal = renderVentas;
 renderVentas = async function(){
   await cargarClientes();
-  // Cargar próximo número ANTES de renderizar para que el template lo tome
-  try{
-    const {data:nv}=await sb.from('bodega_ventas').select('numero_venta').order('numero_venta',{ascending:false}).limit(1).single();
-    if(nv?.numero_venta) ventaNum=nv.numero_venta+1;
-  }catch(e){}
   await __renderVentasOriginal();
+  // Actualizar número de comprobante con el valor real de la BD
+  try{
+    const {data:nv,error:nvErr}=await sb.from('bodega_ventas').select('numero_venta').order('numero_venta',{ascending:false}).limit(1).single();
+    console.log('VNUM: data=',nv,'error=',nvErr);
+    if(nv?.numero_venta){
+      ventaNum=nv.numero_venta+1;
+      const span=document.getElementById('v-num-comp');
+      console.log('VNUM: span=',span,'nuevo numero=',ventaNum);
+      if(span) span.textContent='#'+ventaNum;
+      else console.warn('VNUM: span v-num-comp NO encontrado en DOM');
+    }
+  }catch(e){ console.error('VNUM error:',e); }
 
   const clienteInput=gs('v-cliente');
   if(clienteInput){
