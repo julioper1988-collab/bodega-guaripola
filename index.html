@@ -1458,146 +1458,28 @@ input[type=number] { -moz-appearance: textfield; }
 }
 #sidebar-overlay.show { display: block; }
 
-/* ══ MENÚ MACOS — NUEVO DISEÑO ══════════════════════════════════ */
+/* ══ SIDEBAR REDISEÑO ════════════════════════════════════════ */
 #sidebar .logo {
-  display: flex; align-items: center; gap: 6px;
-  padding: 0 10px 0 0;
-  border-bottom: none;
-  border-right: 1px solid rgba(255,255,255,.1);
-  height: 28px; flex-shrink: 0; margin-right: 4px;
-  white-space: nowrap;
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid var(--border);
 }
 .logo-icon {
-  width: 16px; height: 16px; border-radius: 4px;
-  background: var(--accent);
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent) 0%, #6b48ff 100%);
   display: flex; align-items: center; justify-content: center;
-  font-size: 7px; font-weight: 900; color: #fff;
+  font-size: 13px; font-weight: 900; color: #fff;
   letter-spacing: -.5px; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(79,126,248,.4);
 }
-#sidebar .logo h1 { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.9); }
-#sidebar .cfg-btn {
-  border-top: none; border-left: 1px solid rgba(255,255,255,.1);
-  padding: 0 10px; height: 28px; flex-shrink: 0;
-  font-size: 11px; display: flex; align-items: center; gap: 5px;
-  color: rgba(255,255,255,.45); white-space: nowrap; cursor: pointer;
-}
-#sidebar .cfg-btn:hover { color: rgba(255,255,255,.8); }
-#sidebar .cfg-btn svg { width: 11px; height: 11px; }
-
-/* Grupos del menú */
-.bg-menu-group {
-  position: relative;
-  display: flex; align-items: center;
-}
-
-/* Botones principales del menú */
-.bg-menu-btn {
-  all: unset;
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 0 9px; height: 28px;
-  font-size: 12px; font-weight: 500;
-  color: rgba(255,255,255,.72);
-  cursor: pointer; white-space: nowrap;
-  border-radius: 0; transition: background .12s, color .12s;
-  font-family: inherit;
-}
-.bg-menu-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
-.bg-menu-btn.active { background: rgba(79,126,248,.28); color: #fff; font-weight: 600; }
-.bg-menu-btn.submenu-open { background: rgba(255,255,255,.14); color: #fff; }
-
-/* Flecha del submenú */
-.bg-menu-arrow {
-  font-size: 9px; opacity: .6; margin-left: 1px;
-  transition: transform .2s, opacity .2s;
-  display: inline-block;
-}
-.bg-menu-btn.submenu-open .bg-menu-arrow { transform: rotate(180deg); opacity: 1; }
-
-/* Submenú flotante estilo macOS */
-.bg-submenu {
-  position: absolute; top: 100%; left: 0;
-  min-width: 180px;
-  background: #1e2130;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
-  padding: 5px 0;
-  z-index: 9999;
-  opacity: 0; pointer-events: none;
-  transform: translateY(-4px);
-  transition: opacity .15s ease, transform .15s ease;
-}
-.bg-submenu.open {
-  opacity: 1; pointer-events: auto;
-  transform: translateY(0);
-}
-.bg-submenu a {
-  display: flex; align-items: center; gap: 9px;
-  padding: 6px 14px;
-  font-size: 12px; font-weight: 500;
-  color: rgba(255,255,255,.82);
-  cursor: pointer; white-space: nowrap;
-  transition: background .1s, color .1s;
-  border-radius: 0;
-}
-.bg-submenu a:hover { background: var(--accent); color: #fff; }
-.bg-submenu a.active { background: rgba(79,126,248,.22); color: #fff; font-weight: 600; }
-.bg-submenu a svg {
-  width: 13px; height: 13px; flex-shrink: 0;
-  opacity: .7; stroke: currentColor;
-}
-.bg-submenu a:hover svg, .bg-submenu a.active svg { opacity: 1; }
-
-/* Hamburger para móvil */
-#bg-hamburger {
-  display: none;
-  align-items: center; justify-content: center;
-  width: 34px; height: 28px;
-  cursor: pointer; flex-shrink: 0;
-  background: none; border: none; color: rgba(255,255,255,.75);
-  font-size: 18px; padding: 0;
-}
-#bg-hamburger:hover { color: #fff; }
-
-/* ══ MACOS RESPONSIVE MÓVIL ══════════════════════════════════════ */
-@media (max-width: 900px) {
-  #bg-hamburger { display: flex !important; }
-  #bg-macos-nav { display: none !important; }
-  #sidebar.open #bg-macos-nav {
-    display: flex !important;
-    flex-direction: column !important;
-    position: fixed !important;
-    top: 28px !important; left: 0 !important;
-    width: 240px !important; bottom: 0 !important;
-    background: #1a1d2a !important;
-    border-right: 1px solid var(--border) !important;
-    overflow-y: auto !important; z-index: 302 !important;
-    padding: 8px 6px 16px !important; gap: 2px !important;
-  }
-  #sidebar.open .bg-menu-group { width: 100% !important; flex-direction: column !important; align-items: flex-start !important; }
-  #sidebar.open .bg-menu-btn {
-    width: 100% !important; height: 44px !important;
-    border-radius: 8px !important; padding: 0 12px !important;
-    font-size: 13px !important; justify-content: space-between !important;
-  }
-  #sidebar.open .bg-submenu {
-    position: static !important; opacity: 1 !important;
-    pointer-events: auto !important; transform: none !important;
-    background: rgba(255,255,255,.04) !important;
-    border: none !important; box-shadow: none !important;
-    border-radius: 8px !important;
-    padding: 2px 0 4px !important; width: 100% !important;
-    display: none;
-  }
-  #sidebar.open .bg-submenu.open { display: block !important; }
-  #sidebar.open .bg-submenu a {
-    padding: 10px 14px 10px 28px !important;
-    font-size: 13px !important; border-radius: 8px !important;
-    margin: 1px 0 !important;
-  }
-  #sidebar .logo { padding: 0 8px 0 0 !important; }
-  #sidebar .cfg-btn { display: none !important; }
-}
+#sidebar .logo h1 { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+#sidebar .logo p { font-size: 10px; color: var(--text2); margin-top: 1px; }
+#sidebar nav a svg.ico { width: 16px; height: 16px; flex-shrink: 0; opacity: .7; transition: opacity .15s; }
+#sidebar nav a:hover svg.ico, #sidebar nav a.active svg.ico { opacity: 1; }
+#sidebar nav a span { font-size: 13px; font-weight: 500; }
+#sidebar nav a.active span { font-weight: 600; }
+#sidebar .cfg-btn { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 14px 16px; }
+body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 18px !important; opacity: .8; }
 
 /* ══ STAT CARD CON ICONO ══════════════════════════════════════ */
 .stat-card { display: flex; align-items: flex-start; gap: 14px; }
@@ -1655,117 +1537,57 @@ input[type=number] { -moz-appearance: textfield; }
 
 <div id="loading"><div class="spinner"></div><span style="color:var(--text2);font-size:13px">Cargando...</span></div>
 
-<!-- OVERLAY para cerrar menús y sidebar móvil -->
-<div id="sidebar-overlay" onclick="bgMenuCloseAll();closeSidebar()"></div>
-
-<!-- ══ TOPNAV macOS ══════════════════════════════════════════════ -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
-  <!-- Logo -->
   <div class="logo">
     <div class="logo-icon">BG</div>
-    <div class="logo-text"><h1>Bodega Guaripola</h1></div>
+    <div class="logo-text"><h1>Bodega Guaripola</h1><p>Sistema de gestión</p></div>
   </div>
-
-  <!-- Hamburger solo en móvil -->
-  <button id="bg-hamburger" onclick="bgHamburgerToggle()" aria-label="Menú">☰</button>
-
-  <!-- Nav principal con submenús -->
-  <nav id="bg-macos-nav">
-
-    <!-- INICIO ▼ -->
-    <div class="bg-menu-group" id="mgr-inicio">
-      <button class="bg-menu-btn" onclick="bgMenuToggle('inicio')" id="nav-inicio-btn">
-        Inicio <span class="bg-menu-arrow">▾</span>
-      </button>
-      <div class="bg-submenu" id="sub-inicio">
-        <a onclick="bgMenuNav('ventas')" id="nav-ventas">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="13" r="1" fill="currentColor"/><circle cx="12" cy="13" r="1" fill="currentColor"/><path d="M1 2h2l2 7h6l1.5-5H5"/></svg>
-          Nueva venta
-        </a>
-        <a onclick="bgMenuNav('historial-ventas')" id="nav-historial-ventas">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h10v11H3z"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>
-          Historial ventas
-        </a>
-        <a onclick="bgMenuNav('caja')" id="nav-caja">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="12" height="9" rx="1"/><path d="M5 5V3.5A2.5 2.5 0 0111 3.5V5"/><path d="M8 9v2M6 10h4"/></svg>
-          Arqueo de caja
-        </a>
-        <a onclick="bgMenuNav('clientes')" id="nav-clientes">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="2.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-          Clientes
-        </a>
-      </div>
-    </div>
-
-    <!-- DASHBOARD -->
-    <div class="bg-menu-group" id="mgr-dashboard">
-      <button class="bg-menu-btn" onclick="bgMenuNav('dashboard')" id="nav-dashboard">
-        Dashboard
-      </button>
-    </div>
-
-    <!-- PRODUCTOS ▼ -->
-    <div class="bg-menu-group" id="mgr-productos">
-      <button class="bg-menu-btn" onclick="bgMenuToggle('productos')" id="nav-productos-btn">
-        Productos <span class="bg-menu-arrow">▾</span>
-      </button>
-      <div class="bg-submenu" id="sub-productos">
-        <a onclick="bgMenuNav('ajustes')" id="nav-ajustes">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 10a2 2 0 100-4 2 2 0 000 4z"/><path d="M14 8a6.1 6.1 0 01-.1 1.1l1.2 1-1.1 1.9-1.5-.4a5.3 5.3 0 01-1 .6l-.2 1.6H9.8l-.2-1.6a5.3 5.3 0 01-1-.6l-1.5.4-1.1-2 1.2-.9A6.1 6.1 0 018 8c0-.4 0-.8.1-1.1l-1.2-1 1.1-1.9 1.5.4a5.3 5.3 0 011-.6L10.7 2h2.2l.2 1.6c.4.2.7.4 1 .6l1.5-.4 1.1 1.9-1.2.9A6.1 6.1 0 0114 8z"/></svg>
-          Ajuste de stock
-        </a>
-        <a onclick="bgMenuNav('inventario')" id="nav-inventario">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h12v11H2z"/><path d="M5 6h6M5 9h4"/><path d="M11 9l1.5 1.5L15 8"/></svg>
-          Inventario
-        </a>
-        <a onclick="bgMenuNav('proveedores')" id="nav-proveedores">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 2H3a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V3a1 1 0 00-1-1z"/><path d="M13 2h-2v3h3V3a1 1 0 00-1-1zM11 9h3v4a1 1 0 01-1 1h-2V9zM7 9H3a1 1 0 00-1 1v3a1 1 0 001 1h4a1 1 0 001-1v-3a1 1 0 00-1-1z"/></svg>
-          Proveedores
-        </a>
-        <a onclick="bgMenuNav('categorias')" id="nav-categorias">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h6"/><circle cx="13" cy="12" r="1.5"/></svg>
-          Categorías
-        </a>
-      </div>
-    </div>
-
-    <!-- COMPRAS ▼ -->
-    <div class="bg-menu-group" id="mgr-compras">
-      <button class="bg-menu-btn" onclick="bgMenuToggle('compras')" id="nav-compras-btn">
-        Compras <span class="bg-menu-arrow">▾</span>
-      </button>
-      <div class="bg-submenu" id="sub-compras">
-        <a onclick="bgMenuNav('compras')" id="nav-compras">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-4 6 4v7a1 1 0 01-1 1H3a1 1 0 01-1-1V5z"/><path d="M6 14V9h4v5"/></svg>
-          Compra nueva
-        </a>
-        <a onclick="bgMenuNav('historial-compras')" id="nav-historial-compras">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
-          Historial compras
-        </a>
-      </div>
-    </div>
-
-    <!-- REPORTES -->
-    <div class="bg-menu-group" id="mgr-reportes">
-      <button class="bg-menu-btn" onclick="bgMenuNav('reportes')" id="nav-reportes">
-        Reportes
-      </button>
-    </div>
-
-    <!-- USUARIOS -->
-    <div class="bg-menu-group" id="mgr-usuarios">
-      <button class="bg-menu-btn" onclick="bgMenuNav('usuarios')" id="nav-usuarios">
-        Usuarios
-      </button>
-    </div>
-
+  <nav>
+    <a onclick="goTo('dashboard')" id="nav-dashboard">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
+      <span>Dashboard</span>
+    </a>
+    <a onclick="goTo('productos')" id="nav-productos">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6l8-4 8 4v8l-8 4-8-4V6z"/><path d="M10 2v16M2 6l8 4 8-4"/></svg>
+      <span>Productos</span>
+    </a>
+    <a onclick="goTo('ventas')" id="nav-ventas">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="16" r="1.2" fill="currentColor"/><circle cx="15" cy="16" r="1.2" fill="currentColor"/><path d="M1 2h2.5l2.5 9h8l2-6H6"/></svg>
+      <span>Nueva venta</span>
+    </a>
+    <a onclick="goTo('historial-ventas')" id="nav-historial-ventas">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h12v14H4z"/><path d="M7 8h6M7 11h6M7 14h4"/></svg>
+      <span>Historial ventas</span>
+    </a>
+    <a onclick="goTo('compras')" id="nav-compras">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l7-5 7 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M8 17v-6h4v6"/></svg>
+      <span>Nueva compra</span>
+    </a>
+    <a onclick="goTo('historial-compras')" id="nav-historial-compras">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+      <span>Historial compras</span>
+    </a>
+    <a onclick="goTo('proveedores')" id="nav-proveedores">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3H4a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M16 3h-3v4h4V4a1 1 0 00-1-1zM13 11h4v5a1 1 0 01-1 1h-3v-6zM9 11H4a1 1 0 00-1 1v4a1 1 0 001 1h5a1 1 0 001-1v-4a1 1 0 00-1-1z"/></svg>
+      <span>Proveedores</span>
+    </a>
+    <a onclick="goTo('ajustes')" id="nav-ajustes">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
+      <span>Ajuste de stock</span>
+    </a>
+    <a onclick="goTo('reportes')" id="nav-reportes">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17V9M8 17V5M13 17v-6M18 17v-9"/></svg>
+      <span>Reportes</span>
+    </a>
+    <a onclick="goTo('categorias')" id="nav-categorias">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14M3 10h14M3 15h8"/><circle cx="16" cy="15" r="2"/></svg>
+      <span>Categorías</span>
+    </a>
   </nav>
-
-  <!-- Config al final -->
   <div class="cfg-btn" onclick="resetConfig()">
-    <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
-    <span>Conexión</span>
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
+    <span>Cambiar conexión</span>
   </div>
 </div>
 
@@ -1890,38 +1712,7 @@ function toggleSidebar(){
   }
 }
 function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay')?.classList.add('show'); }
-function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay')?.classList.remove('show'); bgMenuCloseAll(); }
-
-/* ══ MENÚ MACOS — LÓGICA ══════════════════════════════════════ */
-function bgMenuCloseAll(){
-  document.querySelectorAll('.bg-submenu').forEach(s=>s.classList.remove('open'));
-  document.querySelectorAll('.bg-menu-btn').forEach(b=>b.classList.remove('submenu-open'));
-}
-function bgMenuToggle(key){
-  const sub=document.getElementById('sub-'+key);
-  const btn=event.currentTarget;
-  const isOpen=sub&&sub.classList.contains('open');
-  bgMenuCloseAll();
-  if(!isOpen && sub){
-    sub.classList.add('open');
-    btn.classList.add('submenu-open');
-  }
-}
-function bgMenuNav(page){
-  bgMenuCloseAll();
-  if(window.innerWidth<=900) closeSidebar();
-  goTo(page);
-}
-function bgHamburgerToggle(){
-  const s=document.getElementById('sidebar');
-  s.classList.contains('open')?closeSidebar():openSidebar();
-}
-// Cerrar submenús al hacer click fuera (desktop)
-document.addEventListener('click',function(e){
-  if(!e.target.closest('.bg-menu-group') && !e.target.closest('#bg-macos-nav')){
-    bgMenuCloseAll();
-  }
-});
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay')?.classList.remove('show'); }
 function closeModal(){gs('modal-overlay').classList.remove('show');gs('modal-confirm').style.display='';}
 
 /* ══ bgToggleHistPrecios — alterna entre resumen y historial completo en modal producto ══ */
@@ -2019,26 +1810,12 @@ function bgConfirm(mensaje, opts = {}){
   });
 }
 
-const titles={dashboard:'Dashboard',productos:'Productos',ventas:'Nueva venta','historial-ventas':'Historial ventas',compras:'Nueva compra','historial-compras':'Historial compras',proveedores:'Proveedores',ajustes:'Ajuste de stock',reportes:'Reportes',categorias:'Categorías',caja:'Arqueo de caja',clientes:'Clientes',usuarios:'Usuarios',inventario:'Inventario'};
+const titles={dashboard:'Dashboard',productos:'Productos',ventas:'Nueva venta','historial-ventas':'Historial ventas',compras:'Nueva compra','historial-compras':'Historial compras',proveedores:'Proveedores',ajustes:'Ajuste de stock',reportes:'Reportes',categorias:'Categorías'};
 const pages={dashboard:renderDashboard,productos:renderProductos,ventas:renderVentas,'historial-ventas':renderHistorialVentas,compras:renderCompras,'historial-compras':renderHistorialCompras,proveedores:renderProveedores,ajustes:renderAjustes,reportes:renderReportes,categorias:renderCategorias};
 
 async function goTo(page){
-  // Limpiar activos previos en ambos sistemas
-  document.querySelectorAll('#sidebar nav a, #bg-macos-nav a, .bg-menu-btn').forEach(a=>a.classList.remove('active'));
-  // Marcar enlace activo
+  document.querySelectorAll('#sidebar nav a').forEach(a=>a.classList.remove('active'));
   const nav=gs('nav-'+page);if(nav)nav.classList.add('active');
-  // Marcar botón de grupo padre activo
-  const parentMap={
-    'ventas':'inicio','historial-ventas':'inicio','caja':'inicio','clientes':'inicio',
-    'productos':'productos','ajustes':'productos','inventario':'productos','proveedores':'productos','categorias':'productos',
-    'compras':'compras','historial-compras':'compras',
-    'dashboard':'dashboard','reportes':'reportes','usuarios':'usuarios'
-  };
-  const parentKey=parentMap[page];
-  if(parentKey){
-    const parentBtn=gs('nav-'+parentKey+'-btn')||gs('nav-'+parentKey);
-    if(parentBtn)parentBtn.classList.add('active');
-  }
   gs('page-title').textContent=titles[page]||page;
   const content=gs('content');
   content.className=page==='ventas'?'no-pad':'';
@@ -9847,6 +9624,220 @@ async function revertirStockCompraReal(compraId, detalles){
     var input=gs('prod-search-input'); if(input){input.focus({preventScroll:true}); try{input.setSelectionRange(input.value.length,input.value.length)}catch(e){}}
   };
   try{pages.productos=renderProductos;}catch(e){}
+})();
+</script>
+
+
+<!-- ===== MENÚ MACOS AGRUPADO - PARCHE LIMPIO ===== -->
+<style id="bg-macos-menu-clean-css">
+/* Menú superior estilo macOS, compacto y agrupado */
+@media (min-width: 901px){
+  body{display:block!important;height:100vh!important;overflow:hidden!important;}
+  #sidebar{
+    position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:auto!important;
+    width:100%!important;height:30px!important;min-height:30px!important;max-height:30px!important;
+    display:flex!important;flex-direction:row!important;align-items:center!important;gap:0!important;
+    padding:0 10px!important;z-index:450!important;overflow:visible!important;
+    background:rgba(26,29,42,.96)!important;border-right:none!important;border-bottom:1px solid rgba(255,255,255,.08)!important;
+    box-shadow:0 1px 8px rgba(0,0,0,.42)!important;transform:none!important;transition:none!important;
+  }
+  #sidebar .logo{height:30px!important;min-height:30px!important;padding:0 12px 0 0!important;margin:0 6px 0 0!important;border-bottom:none!important;border-right:1px solid rgba(255,255,255,.1)!important;display:flex!important;align-items:center!important;gap:6px!important;flex-shrink:0!important;}
+  #sidebar .logo-icon{width:16px!important;height:16px!important;border-radius:4px!important;font-size:7px!important;background:var(--accent)!important;color:#fff!important;border:none!important;}
+  #sidebar .logo .logo-text{opacity:1!important;display:block!important;}
+  #sidebar .logo h1{font-size:11px!important;font-weight:700!important;margin:0!important;color:rgba(255,255,255,.9)!important;line-height:1!important;}
+  #sidebar .logo p{display:none!important;}
+  #sidebar nav#macos-main-menu{flex:1!important;height:30px!important;display:flex!important;align-items:center!important;gap:2px!important;padding:0!important;margin:0!important;overflow:visible!important;white-space:nowrap!important;}
+  #sidebar nav#macos-main-menu *{box-sizing:border-box;}
+  #sidebar nav#macos-main-menu .mac-menu-group{position:relative!important;height:30px!important;display:flex!important;align-items:center!important;flex-shrink:0!important;}
+  #sidebar nav#macos-main-menu a,
+  #sidebar nav#macos-main-menu button.mac-menu-trigger{
+    appearance:none!important;border:0!important;background:transparent!important;color:rgba(255,255,255,.76)!important;
+    height:24px!important;min-height:24px!important;padding:0 9px!important;margin:3px 0!important;border-radius:6px!important;
+    display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;
+    font-family:inherit!important;font-size:12px!important;font-weight:500!important;line-height:1!important;cursor:pointer!important;text-decoration:none!important;box-shadow:none!important;letter-spacing:-.05px!important;
+  }
+  #sidebar nav#macos-main-menu a:hover,
+  #sidebar nav#macos-main-menu button.mac-menu-trigger:hover,
+  #sidebar nav#macos-main-menu .mac-menu-group.open > button.mac-menu-trigger{background:rgba(255,255,255,.12)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(79,126,248,.28)!important;color:#fff!important;font-weight:650!important;}
+  #sidebar nav#macos-main-menu .ico,
+  #sidebar nav#macos-main-menu svg{display:none!important;}
+  #sidebar nav#macos-main-menu .mac-caret{font-size:9px!important;opacity:.72!important;margin-left:1px!important;}
+  #sidebar nav#macos-main-menu .mac-submenu{
+    display:none!important;position:absolute!important;top:28px!important;left:0!important;min-width:190px!important;padding:6px!important;
+    background:rgba(28,31,45,.98)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:10px!important;
+    box-shadow:0 14px 36px rgba(0,0,0,.55)!important;z-index:9999!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;
+  }
+  #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu,
+  #sidebar nav#macos-main-menu .mac-menu-group:hover > .mac-submenu{display:block!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a{height:30px!important;margin:0!important;width:100%!important;justify-content:flex-start!important;padding:0 12px!important;border-radius:7px!important;color:rgba(255,255,255,.82)!important;font-size:12.5px!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(79,126,248,.22)!important;color:#fff!important;}
+  #sidebar .cfg-btn{height:30px!important;min-height:30px!important;padding:0 10px!important;border-top:none!important;border-left:1px solid rgba(255,255,255,.1)!important;margin-left:6px!important;display:flex!important;align-items:center!important;color:rgba(255,255,255,.45)!important;background:transparent!important;flex-shrink:0!important;}
+  #sidebar .cfg-btn svg{width:11px!important;height:11px!important;}
+  #sidebar .cfg-btn span{opacity:1!important;font-size:11px!important;}
+  #main{padding-top:30px!important;width:100%!important;height:100vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;}
+  #topbar{height:46px!important;flex-shrink:0!important;}
+  #content{height:calc(100vh - 30px - 46px)!important;overflow-y:auto!important;}
+  #content.no-pad{padding:0!important;overflow:hidden!important;}
+  #sidebar-overlay,#bg-top-hover-zone{display:none!important;}
+  .sidebar-toggle-btn,#sidebar-toggle-btn{display:none!important;}
+}
+@media (max-width:900px){
+  #sidebar{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:auto!important;width:100%!important;height:auto!important;max-height:none!important;display:flex!important;flex-direction:column!important;z-index:450!important;overflow:visible!important;background:rgba(26,29,42,.98)!important;border-bottom:1px solid rgba(255,255,255,.08)!important;transform:none!important;padding:0!important;}
+  #sidebar .logo{height:34px!important;min-height:34px!important;padding:0 12px!important;border-bottom:1px solid rgba(255,255,255,.08)!important;display:flex!important;align-items:center!important;gap:8px!important;}
+  #sidebar .logo-icon{width:18px!important;height:18px!important;font-size:8px!important;border-radius:5px!important;background:var(--accent)!important;color:#fff!important;}
+  #sidebar .logo h1{font-size:12px!important;margin:0!important;}.logo p{display:none!important;}
+  #sidebar nav#macos-main-menu{height:38px!important;display:flex!important;align-items:center!important;gap:4px!important;padding:4px 8px!important;overflow-x:auto!important;overflow-y:visible!important;white-space:nowrap!important;scrollbar-width:none!important;}
+  #sidebar nav#macos-main-menu::-webkit-scrollbar{display:none!important;}
+  #sidebar nav#macos-main-menu .mac-menu-group{position:relative!important;display:inline-flex!important;flex-shrink:0!important;}
+  #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{height:30px!important;min-height:30px!important;padding:0 11px!important;border:0!important;border-radius:8px!important;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86)!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important;display:inline-flex!important;align-items:center!important;gap:4px!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(79,126,248,.3)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu .ico,#sidebar nav#macos-main-menu svg{display:none!important;}
+  #sidebar nav#macos-main-menu .mac-submenu{display:none!important;position:fixed!important;top:74px!important;left:8px!important;right:8px!important;padding:8px!important;background:rgba(28,31,45,.99)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:12px!important;box-shadow:0 16px 40px rgba(0,0,0,.6)!important;z-index:9999!important;}
+  #sidebar nav#macos-main-menu .mac-menu-group.open>.mac-submenu{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a{width:100%!important;justify-content:flex-start!important;background:rgba(255,255,255,.06)!important;}
+  #sidebar .cfg-btn{display:none!important;}
+  #main{padding-top:74px!important;height:100dvh!important;width:100%!important;}
+  #content{height:calc(100dvh - 74px - 46px)!important;overflow-y:auto!important;}
+  #content.no-pad{padding:0!important;overflow:hidden!important;}
+}
+
+
+/* Ajuste solicitado: submenús verticales hacia abajo en Inicio, Productos y Compras */
+@media (min-width:901px){
+  #sidebar nav#macos-main-menu .mac-submenu{
+    display:none!important;
+    position:absolute!important;
+    top:30px!important;
+    left:0!important;
+    min-width:210px!important;
+    padding:6px!important;
+    flex-direction:column!important;
+    gap:3px!important;
+  }
+  #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu{
+    display:flex!important;
+  }
+  #sidebar nav#macos-main-menu .mac-menu-group:hover > .mac-submenu{
+    display:none!important;
+  }
+  #sidebar nav#macos-main-menu .mac-menu-group.open:hover > .mac-submenu{
+    display:flex!important;
+  }
+  #sidebar nav#macos-main-menu .mac-submenu a{
+    display:flex!important;
+    width:100%!important;
+    height:32px!important;
+    min-height:32px!important;
+    margin:0!important;
+    padding:0 12px!important;
+    justify-content:flex-start!important;
+    align-items:center!important;
+    text-align:left!important;
+    white-space:nowrap!important;
+  }
+}
+@media (max-width:900px){
+  #sidebar nav#macos-main-menu .mac-submenu{
+    display:none!important;
+    position:fixed!important;
+    top:74px!important;
+    left:8px!important;
+    right:8px!important;
+    padding:8px!important;
+    flex-direction:column!important;
+    gap:6px!important;
+  }
+  #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu{
+    display:flex!important;
+  }
+  #sidebar nav#macos-main-menu .mac-submenu a{
+    display:flex!important;
+    width:100%!important;
+    min-height:42px!important;
+    justify-content:flex-start!important;
+    align-items:center!important;
+  }
+}
+
+</style>
+<script id="bg-macos-menu-clean-js">
+(function(){
+  var routes={
+    'mac-nav-dashboard':'dashboard','mac-nav-ventas':'ventas','mac-nav-historial-ventas':'historial-ventas','mac-nav-caja':'caja','mac-nav-clientes':'clientes',
+    'mac-nav-productos':'productos','mac-nav-ajustes':'ajustes','mac-nav-inventario':'inventario','mac-nav-proveedores':'proveedores','mac-nav-categorias':'categorias',
+    'mac-nav-compras':'compras','mac-nav-historial-compras':'historial-compras','mac-nav-reportes':'reportes','mac-nav-usuarios':'usuarios'
+  };
+  function byId(id){return document.getElementById(id)}
+  function closeSubs(){document.querySelectorAll('#macos-main-menu .mac-menu-group.open').forEach(function(g){g.classList.remove('open')})}
+  function registerKnownPages(){
+    try{
+      if(typeof titles!=='undefined'){
+        titles.dashboard=titles.dashboard||'Dashboard'; titles.ventas='Nueva venta'; titles['historial-ventas']='Historial ventas'; titles.caja='Caja / Arqueo'; titles.clientes='Clientes';
+        titles.productos='Productos'; titles.ajustes='Ajuste de stock'; titles.inventario='Inventario'; titles.proveedores='Proveedores'; titles.categorias='Categorías';
+        titles.compras='Nueva compra'; titles['historial-compras']='Historial compras'; titles.reportes='Reportes'; titles.usuarios='Usuarios';
+      }
+      if(typeof pages!=='undefined'){
+        if(typeof renderDashboard==='function') pages.dashboard=renderDashboard;
+        if(typeof renderVentas==='function') pages.ventas=renderVentas;
+        if(typeof renderHistorialVentas==='function') pages['historial-ventas']=renderHistorialVentas;
+        if(typeof renderCaja==='function') pages.caja=renderCaja;
+        if(typeof renderClientes==='function') pages.clientes=renderClientes;
+        if(typeof renderProductos==='function') pages.productos=renderProductos;
+        if(typeof renderAjustes==='function') pages.ajustes=renderAjustes;
+        if(typeof renderInventario==='function') pages.inventario=renderInventario;
+        if(typeof renderProveedores==='function') pages.proveedores=renderProveedores;
+        if(typeof renderCategorias==='function') pages.categorias=renderCategorias;
+        if(typeof renderCompras==='function') pages.compras=renderCompras;
+        if(typeof renderHistorialCompras==='function') pages['historial-compras']=renderHistorialCompras;
+        if(typeof renderReportes==='function') pages.reportes=renderReportes;
+        if(typeof renderUsuarios==='function') pages.usuarios=renderUsuarios;
+      }
+    }catch(e){console.warn('No se pudo registrar páginas del menú',e)}
+  }
+  function menuHtml(){
+    return '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Inicio <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
+      '<a href="#" id="nav-ventas" data-page="ventas">Nueva venta</a><a href="#" id="nav-historial-ventas" data-page="historial-ventas">Historial de ventas</a><a href="#" id="nav-caja" data-page="caja">Arqueo de caja</a><a href="#" id="nav-clientes" data-page="clientes">Clientes</a></div></div>'+
+      '<div class="mac-menu-group"><a href="#" id="nav-dashboard" data-page="dashboard">Dashboard</a></div>'+
+      '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Productos <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
+      '<a href="#" id="nav-productos" data-page="productos">Lista de productos</a><a href="#" id="nav-ajustes" data-page="ajustes">Ajuste de stock</a><a href="#" id="nav-inventario" data-page="inventario">Inventario</a><a href="#" id="nav-proveedores" data-page="proveedores">Proveedores</a><a href="#" id="nav-categorias" data-page="categorias">Categorías</a></div></div>'+
+      '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Compras <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
+      '<a href="#" id="nav-compras" data-page="compras">Compra nueva</a><a href="#" id="nav-historial-compras" data-page="historial-compras">Historial de compras</a></div></div>'+
+      '<div class="mac-menu-group"><a href="#" id="nav-reportes" data-page="reportes">Reportes</a></div>'+
+      '<div class="mac-menu-group"><a href="#" id="nav-usuarios" data-page="usuarios">Usuarios</a></div>';
+  }
+  function buildMenu(){
+    var sb=byId('sidebar'); if(!sb) return;
+    var nav=sb.querySelector('nav'); if(!nav){nav=document.createElement('nav'); sb.appendChild(nav)}
+    if(nav.getAttribute('data-macos-built')==='1') return;
+    nav.id='macos-main-menu'; nav.setAttribute('data-macos-built','1'); nav.innerHTML=menuHtml();
+    wireMenu();
+  }
+  function wireMenu(){
+    var menu=byId('macos-main-menu'); if(!menu) return;
+    menu.querySelectorAll('.mac-menu-trigger').forEach(function(btn){
+      btn.onclick=function(ev){ev.preventDefault();ev.stopPropagation();var group=btn.closest('.mac-menu-group');var was=group.classList.contains('open');closeSubs();if(!was)group.classList.add('open')};
+    });
+    menu.querySelectorAll('a[data-page]').forEach(function(a){
+      a.onclick=function(ev){ev.preventDefault();ev.stopPropagation();registerKnownPages();closeSubs();if(typeof window.goTo==='function')window.goTo(a.getAttribute('data-page'));};
+    });
+  }
+  function mark(page){
+    document.querySelectorAll('#macos-main-menu a[data-page]').forEach(function(a){a.classList.toggle('active',a.getAttribute('data-page')===page)});
+  }
+  var oldGoTo=window.goTo;
+  function wrapGoTo(){
+    if(typeof window.goTo==='function' && !window.goTo.__macosWrapped){
+      oldGoTo=window.goTo;
+      var wrapped=async function(page){registerKnownPages();var r=await oldGoTo.apply(this,arguments);mark(page);return r;};
+      wrapped.__macosWrapped=true; window.goTo=wrapped;
+    }
+  }
+  function boot(){registerKnownPages();buildMenu();wireMenu();wrapGoTo();try{document.body.classList.remove('topnav-open','sidebar-collapsed')}catch(e){} }
+  document.addEventListener('click',function(e){if(!e.target.closest('#macos-main-menu'))closeSubs()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeSubs()});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  [50,200,600,1200,2500,4500].forEach(function(ms){setTimeout(function(){var nav=byId('macos-main-menu'); if(nav && nav.getAttribute('data-macos-built')==='1'){wireMenu();registerKnownPages();wrapGoTo();}else{boot();}},ms)});
 })();
 </script>
 </body>
