@@ -1458,28 +1458,146 @@ input[type=number] { -moz-appearance: textfield; }
 }
 #sidebar-overlay.show { display: block; }
 
-/* ══ SIDEBAR REDISEÑO ════════════════════════════════════════ */
+/* ══ MENÚ MACOS — NUEVO DISEÑO ══════════════════════════════════ */
 #sidebar .logo {
-  display: flex; align-items: center; gap: 12px;
-  padding: 18px 16px 16px;
-  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px 0 0;
+  border-bottom: none;
+  border-right: 1px solid rgba(255,255,255,.1);
+  height: 28px; flex-shrink: 0; margin-right: 4px;
+  white-space: nowrap;
 }
 .logo-icon {
-  width: 36px; height: 36px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent) 0%, #6b48ff 100%);
+  width: 16px; height: 16px; border-radius: 4px;
+  background: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 900; color: #fff;
+  font-size: 7px; font-weight: 900; color: #fff;
   letter-spacing: -.5px; flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(79,126,248,.4);
 }
-#sidebar .logo h1 { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
-#sidebar .logo p { font-size: 10px; color: var(--text2); margin-top: 1px; }
-#sidebar nav a svg.ico { width: 16px; height: 16px; flex-shrink: 0; opacity: .7; transition: opacity .15s; }
-#sidebar nav a:hover svg.ico, #sidebar nav a.active svg.ico { opacity: 1; }
-#sidebar nav a span { font-size: 13px; font-weight: 500; }
-#sidebar nav a.active span { font-weight: 600; }
-#sidebar .cfg-btn { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 14px 16px; }
-body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 18px !important; opacity: .8; }
+#sidebar .logo h1 { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.9); }
+#sidebar .cfg-btn {
+  border-top: none; border-left: 1px solid rgba(255,255,255,.1);
+  padding: 0 10px; height: 28px; flex-shrink: 0;
+  font-size: 11px; display: flex; align-items: center; gap: 5px;
+  color: rgba(255,255,255,.45); white-space: nowrap; cursor: pointer;
+}
+#sidebar .cfg-btn:hover { color: rgba(255,255,255,.8); }
+#sidebar .cfg-btn svg { width: 11px; height: 11px; }
+
+/* Grupos del menú */
+.bg-menu-group {
+  position: relative;
+  display: flex; align-items: center;
+}
+
+/* Botones principales del menú */
+.bg-menu-btn {
+  all: unset;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 0 9px; height: 28px;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,.72);
+  cursor: pointer; white-space: nowrap;
+  border-radius: 0; transition: background .12s, color .12s;
+  font-family: inherit;
+}
+.bg-menu-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.bg-menu-btn.active { background: rgba(79,126,248,.28); color: #fff; font-weight: 600; }
+.bg-menu-btn.submenu-open { background: rgba(255,255,255,.14); color: #fff; }
+
+/* Flecha del submenú */
+.bg-menu-arrow {
+  font-size: 9px; opacity: .6; margin-left: 1px;
+  transition: transform .2s, opacity .2s;
+  display: inline-block;
+}
+.bg-menu-btn.submenu-open .bg-menu-arrow { transform: rotate(180deg); opacity: 1; }
+
+/* Submenú flotante estilo macOS */
+.bg-submenu {
+  position: absolute; top: 100%; left: 0;
+  min-width: 180px;
+  background: #1e2130;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  padding: 5px 0;
+  z-index: 9999;
+  opacity: 0; pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity .15s ease, transform .15s ease;
+}
+.bg-submenu.open {
+  opacity: 1; pointer-events: auto;
+  transform: translateY(0);
+}
+.bg-submenu a {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 14px;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,.82);
+  cursor: pointer; white-space: nowrap;
+  transition: background .1s, color .1s;
+  border-radius: 0;
+}
+.bg-submenu a:hover { background: var(--accent); color: #fff; }
+.bg-submenu a.active { background: rgba(79,126,248,.22); color: #fff; font-weight: 600; }
+.bg-submenu a svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  opacity: .7; stroke: currentColor;
+}
+.bg-submenu a:hover svg, .bg-submenu a.active svg { opacity: 1; }
+
+/* Hamburger para móvil */
+#bg-hamburger {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 34px; height: 28px;
+  cursor: pointer; flex-shrink: 0;
+  background: none; border: none; color: rgba(255,255,255,.75);
+  font-size: 18px; padding: 0;
+}
+#bg-hamburger:hover { color: #fff; }
+
+/* ══ MACOS RESPONSIVE MÓVIL ══════════════════════════════════════ */
+@media (max-width: 900px) {
+  #bg-hamburger { display: flex !important; }
+  #bg-macos-nav { display: none !important; }
+  #sidebar.open #bg-macos-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    top: 28px !important; left: 0 !important;
+    width: 240px !important; bottom: 0 !important;
+    background: #1a1d2a !important;
+    border-right: 1px solid var(--border) !important;
+    overflow-y: auto !important; z-index: 302 !important;
+    padding: 8px 6px 16px !important; gap: 2px !important;
+  }
+  #sidebar.open .bg-menu-group { width: 100% !important; flex-direction: column !important; align-items: flex-start !important; }
+  #sidebar.open .bg-menu-btn {
+    width: 100% !important; height: 44px !important;
+    border-radius: 8px !important; padding: 0 12px !important;
+    font-size: 13px !important; justify-content: space-between !important;
+  }
+  #sidebar.open .bg-submenu {
+    position: static !important; opacity: 1 !important;
+    pointer-events: auto !important; transform: none !important;
+    background: rgba(255,255,255,.04) !important;
+    border: none !important; box-shadow: none !important;
+    border-radius: 8px !important;
+    padding: 2px 0 4px !important; width: 100% !important;
+    display: none;
+  }
+  #sidebar.open .bg-submenu.open { display: block !important; }
+  #sidebar.open .bg-submenu a {
+    padding: 10px 14px 10px 28px !important;
+    font-size: 13px !important; border-radius: 8px !important;
+    margin: 1px 0 !important;
+  }
+  #sidebar .logo { padding: 0 8px 0 0 !important; }
+  #sidebar .cfg-btn { display: none !important; }
+}
 
 /* ══ STAT CARD CON ICONO ══════════════════════════════════════ */
 .stat-card { display: flex; align-items: flex-start; gap: 14px; }
@@ -1537,57 +1655,117 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
 
 <div id="loading"><div class="spinner"></div><span style="color:var(--text2);font-size:13px">Cargando...</span></div>
 
-<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+<!-- OVERLAY para cerrar menús y sidebar móvil -->
+<div id="sidebar-overlay" onclick="bgMenuCloseAll();closeSidebar()"></div>
+
+<!-- ══ TOPNAV macOS ══════════════════════════════════════════════ -->
 <div id="sidebar">
+  <!-- Logo -->
   <div class="logo">
     <div class="logo-icon">BG</div>
-    <div class="logo-text"><h1>Bodega Guaripola</h1><p>Sistema de gestión</p></div>
+    <div class="logo-text"><h1>Bodega Guaripola</h1></div>
   </div>
-  <nav>
-    <a onclick="goTo('dashboard')" id="nav-dashboard">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
-      <span>Dashboard</span>
-    </a>
-    <a onclick="goTo('productos')" id="nav-productos">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6l8-4 8 4v8l-8 4-8-4V6z"/><path d="M10 2v16M2 6l8 4 8-4"/></svg>
-      <span>Productos</span>
-    </a>
-    <a onclick="goTo('ventas')" id="nav-ventas">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="16" r="1.2" fill="currentColor"/><circle cx="15" cy="16" r="1.2" fill="currentColor"/><path d="M1 2h2.5l2.5 9h8l2-6H6"/></svg>
-      <span>Nueva venta</span>
-    </a>
-    <a onclick="goTo('historial-ventas')" id="nav-historial-ventas">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h12v14H4z"/><path d="M7 8h6M7 11h6M7 14h4"/></svg>
-      <span>Historial ventas</span>
-    </a>
-    <a onclick="goTo('compras')" id="nav-compras">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l7-5 7 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/><path d="M8 17v-6h4v6"/></svg>
-      <span>Nueva compra</span>
-    </a>
-    <a onclick="goTo('historial-compras')" id="nav-historial-compras">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
-      <span>Historial compras</span>
-    </a>
-    <a onclick="goTo('proveedores')" id="nav-proveedores">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3H4a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M16 3h-3v4h4V4a1 1 0 00-1-1zM13 11h4v5a1 1 0 01-1 1h-3v-6zM9 11H4a1 1 0 00-1 1v4a1 1 0 001 1h5a1 1 0 001-1v-4a1 1 0 00-1-1z"/></svg>
-      <span>Proveedores</span>
-    </a>
-    <a onclick="goTo('ajustes')" id="nav-ajustes">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
-      <span>Ajuste de stock</span>
-    </a>
-    <a onclick="goTo('reportes')" id="nav-reportes">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17V9M8 17V5M13 17v-6M18 17v-9"/></svg>
-      <span>Reportes</span>
-    </a>
-    <a onclick="goTo('categorias')" id="nav-categorias">
-      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14M3 10h14M3 15h8"/><circle cx="16" cy="15" r="2"/></svg>
-      <span>Categorías</span>
-    </a>
+
+  <!-- Hamburger solo en móvil -->
+  <button id="bg-hamburger" onclick="bgHamburgerToggle()" aria-label="Menú">☰</button>
+
+  <!-- Nav principal con submenús -->
+  <nav id="bg-macos-nav">
+
+    <!-- INICIO ▼ -->
+    <div class="bg-menu-group" id="mgr-inicio">
+      <button class="bg-menu-btn" onclick="bgMenuToggle('inicio')" id="nav-inicio-btn">
+        Inicio <span class="bg-menu-arrow">▾</span>
+      </button>
+      <div class="bg-submenu" id="sub-inicio">
+        <a onclick="bgMenuNav('ventas')" id="nav-ventas">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="13" r="1" fill="currentColor"/><circle cx="12" cy="13" r="1" fill="currentColor"/><path d="M1 2h2l2 7h6l1.5-5H5"/></svg>
+          Nueva venta
+        </a>
+        <a onclick="bgMenuNav('historial-ventas')" id="nav-historial-ventas">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h10v11H3z"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>
+          Historial ventas
+        </a>
+        <a onclick="bgMenuNav('caja')" id="nav-caja">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="12" height="9" rx="1"/><path d="M5 5V3.5A2.5 2.5 0 0111 3.5V5"/><path d="M8 9v2M6 10h4"/></svg>
+          Arqueo de caja
+        </a>
+        <a onclick="bgMenuNav('clientes')" id="nav-clientes">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="2.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+          Clientes
+        </a>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="bg-menu-group" id="mgr-dashboard">
+      <button class="bg-menu-btn" onclick="bgMenuNav('dashboard')" id="nav-dashboard">
+        Dashboard
+      </button>
+    </div>
+
+    <!-- PRODUCTOS ▼ -->
+    <div class="bg-menu-group" id="mgr-productos">
+      <button class="bg-menu-btn" onclick="bgMenuToggle('productos')" id="nav-productos-btn">
+        Productos <span class="bg-menu-arrow">▾</span>
+      </button>
+      <div class="bg-submenu" id="sub-productos">
+        <a onclick="bgMenuNav('ajustes')" id="nav-ajustes">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 10a2 2 0 100-4 2 2 0 000 4z"/><path d="M14 8a6.1 6.1 0 01-.1 1.1l1.2 1-1.1 1.9-1.5-.4a5.3 5.3 0 01-1 .6l-.2 1.6H9.8l-.2-1.6a5.3 5.3 0 01-1-.6l-1.5.4-1.1-2 1.2-.9A6.1 6.1 0 018 8c0-.4 0-.8.1-1.1l-1.2-1 1.1-1.9 1.5.4a5.3 5.3 0 011-.6L10.7 2h2.2l.2 1.6c.4.2.7.4 1 .6l1.5-.4 1.1 1.9-1.2.9A6.1 6.1 0 0114 8z"/></svg>
+          Ajuste de stock
+        </a>
+        <a onclick="bgMenuNav('inventario')" id="nav-inventario">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h12v11H2z"/><path d="M5 6h6M5 9h4"/><path d="M11 9l1.5 1.5L15 8"/></svg>
+          Inventario
+        </a>
+        <a onclick="bgMenuNav('proveedores')" id="nav-proveedores">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 2H3a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V3a1 1 0 00-1-1z"/><path d="M13 2h-2v3h3V3a1 1 0 00-1-1zM11 9h3v4a1 1 0 01-1 1h-2V9zM7 9H3a1 1 0 00-1 1v3a1 1 0 001 1h4a1 1 0 001-1v-3a1 1 0 00-1-1z"/></svg>
+          Proveedores
+        </a>
+        <a onclick="bgMenuNav('categorias')" id="nav-categorias">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h6"/><circle cx="13" cy="12" r="1.5"/></svg>
+          Categorías
+        </a>
+      </div>
+    </div>
+
+    <!-- COMPRAS ▼ -->
+    <div class="bg-menu-group" id="mgr-compras">
+      <button class="bg-menu-btn" onclick="bgMenuToggle('compras')" id="nav-compras-btn">
+        Compras <span class="bg-menu-arrow">▾</span>
+      </button>
+      <div class="bg-submenu" id="sub-compras">
+        <a onclick="bgMenuNav('compras')" id="nav-compras">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-4 6 4v7a1 1 0 01-1 1H3a1 1 0 01-1-1V5z"/><path d="M6 14V9h4v5"/></svg>
+          Compra nueva
+        </a>
+        <a onclick="bgMenuNav('historial-compras')" id="nav-historial-compras">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+          Historial compras
+        </a>
+      </div>
+    </div>
+
+    <!-- REPORTES -->
+    <div class="bg-menu-group" id="mgr-reportes">
+      <button class="bg-menu-btn" onclick="bgMenuNav('reportes')" id="nav-reportes">
+        Reportes
+      </button>
+    </div>
+
+    <!-- USUARIOS -->
+    <div class="bg-menu-group" id="mgr-usuarios">
+      <button class="bg-menu-btn" onclick="bgMenuNav('usuarios')" id="nav-usuarios">
+        Usuarios
+      </button>
+    </div>
+
   </nav>
+
+  <!-- Config al final -->
   <div class="cfg-btn" onclick="resetConfig()">
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
-    <span>Cambiar conexión</span>
+    <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M18 10a8.09 8.09 0 01-.14 1.5l1.64 1.28-1.5 2.6-2-.54a7.1 7.1 0 01-1.3.76l-.3 2.08h-3l-.3-2.08a7.1 7.1 0 01-1.3-.76l-2 .54-1.5-2.6 1.64-1.28A8.09 8.09 0 012 10c0-.51.05-1 .14-1.5L.5 7.22l1.5-2.6 2 .54a7.1 7.1 0 011.3-.76L5.6 2.32h3l.3 2.08c.46.2.9.45 1.3.76l2-.54 1.5 2.6-1.64 1.28A8.09 8.09 0 0118 10z"/></svg>
+    <span>Conexión</span>
   </div>
 </div>
 
@@ -1712,7 +1890,38 @@ function toggleSidebar(){
   }
 }
 function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay')?.classList.add('show'); }
-function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay')?.classList.remove('show'); }
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay')?.classList.remove('show'); bgMenuCloseAll(); }
+
+/* ══ MENÚ MACOS — LÓGICA ══════════════════════════════════════ */
+function bgMenuCloseAll(){
+  document.querySelectorAll('.bg-submenu').forEach(s=>s.classList.remove('open'));
+  document.querySelectorAll('.bg-menu-btn').forEach(b=>b.classList.remove('submenu-open'));
+}
+function bgMenuToggle(key){
+  const sub=document.getElementById('sub-'+key);
+  const btn=event.currentTarget;
+  const isOpen=sub&&sub.classList.contains('open');
+  bgMenuCloseAll();
+  if(!isOpen && sub){
+    sub.classList.add('open');
+    btn.classList.add('submenu-open');
+  }
+}
+function bgMenuNav(page){
+  bgMenuCloseAll();
+  if(window.innerWidth<=900) closeSidebar();
+  goTo(page);
+}
+function bgHamburgerToggle(){
+  const s=document.getElementById('sidebar');
+  s.classList.contains('open')?closeSidebar():openSidebar();
+}
+// Cerrar submenús al hacer click fuera (desktop)
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.bg-menu-group') && !e.target.closest('#bg-macos-nav')){
+    bgMenuCloseAll();
+  }
+});
 function closeModal(){gs('modal-overlay').classList.remove('show');gs('modal-confirm').style.display='';}
 
 /* ══ bgToggleHistPrecios — alterna entre resumen y historial completo en modal producto ══ */
@@ -1810,12 +2019,26 @@ function bgConfirm(mensaje, opts = {}){
   });
 }
 
-const titles={dashboard:'Dashboard',productos:'Productos',ventas:'Nueva venta','historial-ventas':'Historial ventas',compras:'Nueva compra','historial-compras':'Historial compras',proveedores:'Proveedores',ajustes:'Ajuste de stock',reportes:'Reportes',categorias:'Categorías'};
+const titles={dashboard:'Dashboard',productos:'Productos',ventas:'Nueva venta','historial-ventas':'Historial ventas',compras:'Nueva compra','historial-compras':'Historial compras',proveedores:'Proveedores',ajustes:'Ajuste de stock',reportes:'Reportes',categorias:'Categorías',caja:'Arqueo de caja',clientes:'Clientes',usuarios:'Usuarios',inventario:'Inventario'};
 const pages={dashboard:renderDashboard,productos:renderProductos,ventas:renderVentas,'historial-ventas':renderHistorialVentas,compras:renderCompras,'historial-compras':renderHistorialCompras,proveedores:renderProveedores,ajustes:renderAjustes,reportes:renderReportes,categorias:renderCategorias};
 
 async function goTo(page){
-  document.querySelectorAll('#sidebar nav a').forEach(a=>a.classList.remove('active'));
+  // Limpiar activos previos en ambos sistemas
+  document.querySelectorAll('#sidebar nav a, #bg-macos-nav a, .bg-menu-btn').forEach(a=>a.classList.remove('active'));
+  // Marcar enlace activo
   const nav=gs('nav-'+page);if(nav)nav.classList.add('active');
+  // Marcar botón de grupo padre activo
+  const parentMap={
+    'ventas':'inicio','historial-ventas':'inicio','caja':'inicio','clientes':'inicio',
+    'productos':'productos','ajustes':'productos','inventario':'productos','proveedores':'productos','categorias':'productos',
+    'compras':'compras','historial-compras':'compras',
+    'dashboard':'dashboard','reportes':'reportes','usuarios':'usuarios'
+  };
+  const parentKey=parentMap[page];
+  if(parentKey){
+    const parentBtn=gs('nav-'+parentKey+'-btn')||gs('nav-'+parentKey);
+    if(parentBtn)parentBtn.classList.add('active');
+  }
   gs('page-title').textContent=titles[page]||page;
   const content=gs('content');
   content.className=page==='ventas'?'no-pad':'';
