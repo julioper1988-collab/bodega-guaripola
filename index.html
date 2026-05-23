@@ -9934,5 +9934,234 @@ async function revertirStockCompraReal(compraId, detalles){
 })();
 </script>
 
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PATCH COMPRAS USABLE — búsqueda primero, lista recién al buscar
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="bg-compras-usable-css">
+  .compra-empty-search{padding:34px 18px;text-align:center;color:var(--text2);font-size:13px;line-height:1.45}
+  .compra-empty-search .ico{font-size:34px;margin-bottom:10px;display:block;opacity:.85}
+  .compra-empty-search b{color:var(--text);font-size:15px;display:block;margin-bottom:4px}
+  .compra-result-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;gap:8px;transition:background .1s}
+  .compra-result-row:hover{background:var(--bg3)}
+  .compra-pack-row{padding-left:28px;background:rgba(20,184,166,.04)}
+  .compra-pack-row:hover{background:rgba(20,184,166,.10)}
+  .compra-item-row{display:grid;grid-template-columns:1fr 126px 110px 34px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px}
+  .compra-item-name{font-size:12px;font-weight:650;color:var(--text)}
+  .compra-item-sub{color:var(--text2);font-size:11px;margin-top:2px}
+  .compra-qty-box{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+  .compra-qty-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);width:26px;height:26px;border-radius:7px;cursor:pointer;font-weight:800}
+  .compra-cost-wrap{display:flex;flex-direction:column;gap:3px}
+  .compra-cost-label{font-size:10px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.2px;text-align:right}
+  @media(max-width:900px){
+    .compra-main-layout{display:flex!important;flex-direction:column!important;height:auto!important;min-height:0!important;gap:12px!important;}
+    .compra-picker-card,.compra-order-card{width:100%!important;min-width:0!important;max-height:none!important;overflow:visible!important;border-radius:16px!important;}
+    .compra-picker-card{min-height:0!important;}
+    .compra-search-head{padding:14px!important;}
+    .compra-search-head .compra-search-grid{display:grid!important;grid-template-columns:1fr 78px!important;gap:8px!important;}
+    #compra-prod-list{max-height:42dvh!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}
+    .compra-result-row{padding:13px 14px!important;min-height:58px!important;}
+    .compra-pack-row{padding-left:22px!important;}
+    .compra-order-head{padding:12px 14px!important;font-size:15px!important;}
+    .compra-order-meta{padding:12px!important;}
+    .compra-order-meta .form-grid{grid-template-columns:1fr!important;gap:12px!important;}
+    #ccomp-items{max-height:none!important;overflow:visible!important;}
+    .compra-item-row{grid-template-columns:1fr!important;align-items:stretch!important;gap:9px!important;padding:13px 14px!important;}
+    .compra-qty-box{justify-content:flex-start!important;}
+    .compra-qty-btn{width:42px!important;height:38px!important;border-radius:10px!important;font-size:18px!important;}
+    .compra-item-row input[type="number"]{height:40px!important;min-height:40px!important;font-size:16px!important;}
+    .compra-cost-label{text-align:left!important;}
+    .compra-footer{position:sticky!important;bottom:0!important;background:rgba(26,29,39,.98)!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;border-top:1px solid var(--border)!important;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))!important;z-index:20!important;}
+  }
+</style>
+<script id="bg-compras-usable-js">
+(function(){
+  function safeHtml(s){
+    if(typeof escapeHtml==='function') return escapeHtml(s);
+    return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});
+  }
+  function normTxt(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/,/g,'.').replace(/[^a-z0-9.]+/g,' ').trim();
+  }
+  function normCode(s){return String(s||'').trim().replace(/^0+/,'') || '0';}
+  function codeMatch(code,q){
+    code=String(code||'').trim(); q=String(q||'').trim();
+    if(!code || !q) return false;
+    return code===q || normCode(code)===normCode(q) || code.endsWith(q);
+  }
+  function productMatches(p,q){
+    q=String(q||'').trim(); if(!q) return false;
+    if(codeMatch(p.codigo_barra,q)) return true;
+    var nq=normTxt(q); if(!nq) return false;
+    var base=normTxt([p.nombre,p.codigo_barra].join(' '));
+    var compact=base.replace(/\s+/g,'');
+    return nq.split(/\s+/).filter(Boolean).every(function(t){return base.indexOf(t)>=0 || compact.indexOf(t.replace(/\s+/g,''))>=0;});
+  }
+  function embalajeMatches(e,q){return codeMatch(e.codigo_barra,q) || normTxt([e.nombre,e.codigo_barra,'pack x '+e.cantidad].join(' ')).indexOf(normTxt(q))>=0;}
+  function currentQty(){var el=gs('cp-qty');return Math.max(1,parseInt(el&&el.value)||1);}
+  function clearCompraSearch(){var s=gs('cp-search');var q=gs('cp-qty');if(s)s.value='';if(q)q.value=1;renderCPList('');setTimeout(function(){var ss=gs('cp-search');if(ss)ss.focus();},40);}
+
+  window.renderCompras = renderCompras = function(){
+    compraItems=[];
+    gs('content').innerHTML=
+      '<div class="compra-main-layout" style="display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 132px)">'+
+        '<div id="prod-picker" class="compra-picker-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">'+
+          '<div class="compra-search-head" style="padding:12px;border-bottom:1px solid var(--border)">'+
+            '<div style="font-size:14px;font-weight:700;margin-bottom:10px">🚛 Agregar productos</div>'+
+            '<div class="compra-search-grid" style="display:grid;grid-template-columns:1fr 80px;gap:8px">'+
+              '<div class="autocomplete-wrap">'+
+                '<input id="cp-search" placeholder="🔍 Buscar producto o escanear código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">'+
+                '<div class="autocomplete-list" id="cp-ac-list" style="display:none"></div>'+
+              '</div>'+
+              '<input id="cp-qty" type="number" value="1" min="1" placeholder="Cant." style="text-align:center">'+
+            '</div>'+
+          '</div>'+
+          '<div style="flex:1;overflow-y:auto" id="compra-prod-list"></div>'+
+        '</div>'+
+        '<div class="compra-order-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">'+
+          '<div class="compra-order-head" style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700">Orden de compra</div>'+
+          '<div class="compra-order-meta" style="padding:10px;border-bottom:1px solid var(--border)">'+
+            '<div class="form-grid" style="grid-template-columns:1fr 1fr">'+
+              '<div class="form-group"><label>Proveedor</label><select id="comp-prov"><option value="">Sin proveedor</option>'+((provCache||[]).map(function(p){return '<option value="'+safeHtml(p.id)+'">'+safeHtml(p.nombre)+'</option>';}).join(''))+'</select></div>'+
+              '<div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="'+fechaHoyPY()+'"></div>'+
+              '<div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>'+
+              '<div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>'+
+              '<div class="form-group" style="grid-column:1/-1"><label>Estado</label><select id="comp-estado"><option value="en_proceso">🕐 En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
+            '</div>'+
+          '</div>'+
+          '<div style="flex:1;overflow-y:auto" id="ccomp-items"></div>'+
+          '<div class="compra-footer" style="padding:14px 16px;border-top:1px solid var(--border)">'+
+            '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--accent2);margin-bottom:10px"><span>TOTAL</span><span id="comp-total">Gs. 0</span></div>'+
+            '<div class="form-group" style="margin-bottom:10px"><label>Notas</label><textarea id="comp-notas" rows="2"></textarea></div>'+
+            '<button class="btn btn-primary" style="width:100%;justify-content:center" onclick="finalizarCompra()">✓ Registrar compra</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    renderCPList('');
+    renderCompraItems();
+  };
+
+  window.renderCPList = renderCPList = function(q){
+    var list=gs('compra-prod-list'); if(!list)return;
+    q=String(q||'').trim();
+    if(!q){
+      list.innerHTML='<div class="compra-empty-search"><span class="ico">🔎</span><b>Buscá para mostrar productos</b><span>Para que en móvil no se cargue una lista gigante, los productos aparecen recién al escribir nombre, código o código de embalaje.</span></div>';
+      return;
+    }
+    var results=(prodCache||[]).filter(function(p){
+      var ok=productMatches(p,q);
+      if(ok) return true;
+      return ((embCache&&embCache[p.id])||[]).some(function(e){return embalajeMatches(e,q);});
+    }).slice(0,40);
+    if(!results.length){
+      list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+safeHtml(q)+'</span></div>';
+      return;
+    }
+    list.innerHTML=results.map(function(p){
+      var embs=(embCache&&embCache[p.id])||[];
+      return '<div>'+
+        '<div class="compra-result-row" onclick="addToCompra(\''+p.id+'\',null,currentCompraQtyPublic())">'+
+          '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+safeHtml(p.nombre)+'</div><div style="font-size:11px;color:var(--text2)">'+safeHtml(p.codigo_barra||'-')+' · Stock: '+(p.stock||0)+' · Costo unit.: '+fmtGs(p.precio_costo||0)+'</div></div>'+
+          '<div style="font-size:13px;color:var(--accent2);font-weight:800;white-space:nowrap">'+fmtGs(p.precio_costo||0)+'</div>'+
+        '</div>'+
+        embs.map(function(e){return '<div class="compra-result-row compra-pack-row" onclick="addToCompra(\''+p.id+'\',\''+e.id+'\',currentCompraQtyPublic())">'+
+          '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--teal);font-weight:800">↳ Pack x'+(e.cantidad||1)+(e.codigo_barra?' · '+safeHtml(e.codigo_barra):'')+'</div><div style="font-size:11px;color:var(--text2)">Suma '+(e.cantidad||1)+' uds al stock · costo unit. aprox. '+fmtGs(Math.round((Number(e.precio_costo)||0)/Math.max(1,Number(e.cantidad)||1)))+'</div></div>'+
+          '<div style="font-size:12px;color:var(--teal);font-weight:800;white-space:nowrap">'+fmtGs(e.precio_costo||0)+'</div>'+
+        '</div>';}).join('')+
+      '</div>';
+    }).join('');
+  };
+
+  window.currentCompraQtyPublic=function(){return currentQty();};
+
+  window.onCPSearch = onCPSearch = function(q){
+    renderCPList(q);
+    var ac=gs('cp-ac-list'); if(ac)ac.style.display='none';
+  };
+
+  window.onCPKeydown = onCPKeydown = function(e){
+    if(e.key==='Enter'){
+      e.preventDefault();
+      var q=(gs('cp-search')&&gs('cp-search').value||'').trim();
+      if(!q)return;
+      var found=null, embFound=null;
+      (prodCache||[]).some(function(p){
+        if(codeMatch(p.codigo_barra,q)){found=p;return true;}
+        return ((embCache&&embCache[p.id])||[]).some(function(e){if(codeMatch(e.codigo_barra,q)){found=p;embFound=e;return true;}return false;});
+      });
+      if(found){addToCompra(found.id,embFound?embFound.id:null,currentQty());return;}
+      var results=(prodCache||[]).filter(function(p){return productMatches(p,q);});
+      if(results.length===1){addToCompra(results[0].id,null,currentQty());}
+    }
+  };
+
+  window.addToCompra = addToCompra = function(prodId,embId,qty){
+    qty=Math.max(1,parseInt(qty)||1);
+    var prod=(prodCache||[]).find(function(p){return String(p.id)===String(prodId);}); if(!prod)return;
+    var costo,nombre,uds;
+    if(embId){
+      var emb=((embCache&&embCache[prodId])||[]).find(function(e){return String(e.id)===String(embId);}); if(!emb)return;
+      costo=Number(emb.precio_costo)||0; nombre=prod.nombre+' x'+emb.cantidad; uds=Math.max(1,Number(emb.cantidad)||1);
+    }else{
+      costo=Number(prod.precio_costo)||0; nombre=prod.nombre; uds=1;
+    }
+    var key=String(prodId)+'_'+String(embId||'unit');
+    var ex=compraItems.find(function(c){return c.key===key;});
+    if(ex) ex.cantidad+=qty;
+    else compraItems.push({key:key,producto_id:prodId,embalaje_id:embId||null,nombre:nombre,costo:costo,cantidad:qty,uds:uds});
+    renderCompraItems();
+    clearCompraSearch();
+  };
+
+  window.renderCompraItems = renderCompraItems = function(){
+    var el=gs('ccomp-items'); if(!el)return;
+    if(!compraItems.length){
+      el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px">Todavía no agregaste productos.<br><b style="color:var(--text)">Buscá arriba y tocá el producto.</b></div>';
+    }else{
+      el.innerHTML=compraItems.map(function(item,i){
+        var uds=Math.max(1,Number(item.uds)||1), packs=Number(item.cantidad)||1, totalUds=packs*uds, costo=Number(item.costo)||0;
+        var costoUnit=Math.round(costo/uds);
+        return '<div class="compra-item-row">'+
+          '<div><div class="compra-item-name">'+safeHtml(item.nombre)+'</div><div class="compra-item-sub">+'+totalUds+' uds al stock'+(uds>1?' · costo unit. '+fmtGs(costoUnit):'')+'</div></div>'+
+          '<div class="compra-qty-box"><button class="compra-qty-btn" onclick="cQty('+i+',-1)">−</button><input type="number" value="'+packs+'" min="1" onchange="cQtySet('+i+',this.value)" style="width:48px;text-align:center;padding:4px"><button class="compra-qty-btn" onclick="cQty('+i+',1)">+</button></div>'+
+          '<div class="compra-cost-wrap"><div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div><input type="number" value="'+costo+'" onchange="cCosto('+i+',this.value)" style="width:100%;text-align:right;padding:4px"></div>'+
+          '<button onclick="cRemove('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button>'+
+        '</div>';
+      }).join('');
+    }
+    var total=compraItems.reduce(function(s,c){return s+(Number(c.costo)||0)*(Number(c.cantidad)||0);},0);
+    if(gs('comp-total'))gs('comp-total').textContent=fmtGs(total);
+  };
+
+  window.cQty = cQty = function(i,d){if(!compraItems[i])return;compraItems[i].cantidad=Math.max(1,(parseInt(compraItems[i].cantidad)||1)+d);renderCompraItems();};
+  window.cQtySet = cQtySet = function(i,v){if(!compraItems[i])return;compraItems[i].cantidad=Math.max(1,parseInt(v)||1);renderCompraItems();};
+  window.cCosto = cCosto = function(i,v){if(!compraItems[i])return;compraItems[i].costo=parseFloat(v)||0;renderCompraItems();};
+  window.cRemove = cRemove = function(i){compraItems.splice(i,1);renderCompraItems();};
+
+  window.finalizarCompra = finalizarCompra = async function(){
+    if(!compraItems.length){toast('No hay productos','err');return;}
+    var total=compraItems.reduce(function(s,c){return s+(Number(c.costo)||0)*(Number(c.cantidad)||0);},0);
+    var estado=gs('comp-estado').value;
+    var compra={fecha:gs('comp-fecha').value,proveedor_id:gs('comp-prov').value||null,numero_factura:gs('comp-factura').value||null,total:total,metodo_pago:gs('comp-metpago').value,estado:estado,notas:gs('comp-notas').value||null};
+    var res=await sb.from('bodega_compras').insert(compra).select().single();
+    if(res.error){toast('Error: '+res.error.message,'err');return;}
+    var cD=res.data;
+    var detalles=compraItems.map(function(c){
+      var uds=Math.max(1,Number(c.uds)||1);
+      var cantUds=(Number(c.cantidad)||0)*uds;
+      var costoUnit=(Number(c.costo)||0)/uds;
+      return {compra_id:cD.id,producto_id:c.producto_id,cantidad:cantUds,costo_unitario:costoUnit};
+    });
+    var detRes=await sb.from('bodega_compras_detalle').insert(detalles);
+    if(detRes.error){toast('Error detalle: '+detRes.error.message,'err');return;}
+    if(estado==='finalizado')await impactarStock(cD.id,compraItems);
+    toast('✓ Compra registrada ('+estado+'): '+fmtGs(total));
+    await loadCaches(true);compraItems=[];renderCompras();
+  };
+
+  try{ if(typeof pages!=='undefined'){ pages.compras=renderCompras; } if(typeof titles!=='undefined'){titles.compras='Nueva compra';} }catch(e){}
+})();
+</script>
 </body>
 </html>
