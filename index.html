@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script id="bg-safehtml-global-fix">
+window.safeHtml = window.safeHtml || function(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+};
+</script>
+
 <script>
 /* ─── editarVenta y finalizarVenta unificadas más abajo ─── */
 
@@ -219,7 +227,7 @@
       <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="invAgregarYLimpiar('${p.id}')">
         <div style="flex:1">
           <div style="font-weight:800;font-size:15px">${htmlInv(p.nombre)}</div>
-          <div style="font-size:12px;color:var(--text2)">${htmlInv(p.codigo_barra||'-')} · Stock: <b style="color:var(--accent2)">${p.stock||0}</b></div>
+          <div style="font-size:12px;color:var(--text2)">${htmlInv(p.codigo_barra||'-')} · Stock: <b class="inv-stock-cantidad">${p.stock||0}</b></div>
         </div>
         <button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="event.stopPropagation();invAgregarYLimpiar('${p.id}')">+ Contar</button>
       </div>`).join('');
@@ -1891,7 +1899,13 @@ async function renderDashboard(){
   const now=Date.now();
   if(_dashCache && (now-_dashCacheTs)<60*1000){
     gs('content').innerHTML=_dashCache;
-    // Reconectar evento toggle
+    // Reconectar gráfico dashboard
+    setTimeout(function(){
+      if(window.bgRenderDashboardArqueoCharts){
+        var mes=(document.getElementById('bg-dash-mes')||{}).value;
+        window.bgRenderDashboardArqueoCharts(mes);
+      }
+    },80);
     return;
   }
   // Fecha en zona horaria de Paraguay (UTC-4)
@@ -2065,17 +2079,30 @@ async function renderDashboard(){
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header"><h3>Últimas ventas</h3><button class="btn btn-secondary btn-sm" onclick="goTo('historial-ventas')">Ver todo</button></div>
-    <table><thead><tr><th>Hora</th><th>Fecha</th><th>Método</th><th>Total</th></tr></thead><tbody>
-      ${(uv.data||[]).map(v=>{
-        const hora=fmtHoraVenta(v);
-        return `<tr><td style="color:var(--text2);font-size:13px">${hora}</td><td>${fmtDate(fechaVentaPY(v))}</td><td>${v.metodo_pago||'-'}</td><td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td></tr>`;
-      }).join('')}
-    </tbody></table>
+  <div class="card bg-dashboard-graficos-card" id="bg-dashboard-graficos-arqueo">
+    <div class="bg-dash-graph-head">
+      <div>
+        <h3>Ventas por arqueo y por mes</h3>
+        <p>Resumen visual basado en tus jornadas de caja.</p>
+      </div>
+      <div class="bg-dash-filter">
+        <label>Mes del arqueo</label>
+        <input type="month" id="bg-dash-mes" value="${today.slice(0,7)}" onchange="bgRenderDashboardArqueoCharts(this.value)">
+      </div>
+    </div>
+    <div id="bg-dash-chart-content">
+      <div class="bg-chart-empty">Cargando gráficos...</div>
+    </div>
+  </div>
   </div>`;
 
   window.__dashVentasCaja=ventasCaja;
+  setTimeout(function(){
+    if(window.bgRenderDashboardArqueoCharts){
+      var mes=(document.getElementById('bg-dash-mes')||{}).value;
+      window.bgRenderDashboardArqueoCharts(mes);
+    }
+  },80);
   // ── Contador animado en stat cards ──────────────────────────
   (function(){
     function animateCounter(el, target, isGs){
@@ -2959,12 +2986,12 @@ function renderCompras(){
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600">Orden de compra</div>
       <div style="padding:10px;border-bottom:1px solid var(--border)">
-        <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <div class="form-grid" style="grid-template-columns:1.2fr .85fr 1fr 1fr;gap:8px 10px;align-items:end">
           <div class="form-group"><label>Proveedor</label><select id="comp-prov"><option value="">Sin proveedor</option>${provCache.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('')}</select></div>
           <div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="${fechaHoyPY()}"></div>
           <div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>
           <div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>
-          <div class="form-group" style="grid-column:1/-1"><label>Estado</label>
+          <div class="form-group"><label>Estado</label>
             <select id="comp-estado">
               <option value="en_proceso">🕐 En proceso (no impacta stock)</option>
               <option value="finalizado">✅ Finalizado (impacta stock ahora)</option>
@@ -2972,9 +2999,9 @@ function renderCompras(){
           </div>
         </div>
       </div>
-      <div style="flex:1;overflow-y:auto" id="ccomp-items"></div>
+      <div style="flex:1 1 auto;min-height:0;height:auto;max-height:none;overflow-y:auto;overflow-x:hidden;padding-bottom:8px" id="ccomp-items"></div>
       <div style="padding:14px 16px;border-top:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--accent2);margin-bottom:10px"><span>TOTAL</span><span id="comp-total">Gs. 0</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--accent2);margin-bottom:10px"><span>TOTAL</span><span id="comp-total" data-compra-total="1" class="compra-total-sync">Gs. 0</span></div>
         <div class="form-group" style="margin-bottom:10px"><label>Notas</label><textarea id="comp-notas" rows="2"></textarea></div>
         <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="finalizarCompra()">✓ Registrar compra</button>
       </div>
@@ -6918,6 +6945,80 @@ initMobileShell();
   };
   try{pages.productos=renderProductos;}catch(e){}
 
+  /* ── Sorting de columnas en historial de ventas ── */
+  window.hvSortBy = function(col){
+    if(window.__hvSortCol === col){
+      window.__hvSortDir = window.__hvSortDir==='asc'?'desc':'asc';
+    } else {
+      window.__hvSortCol = col;
+      window.__hvSortDir = col==='numero_venta'||col==='total'||col==='total_final' ? 'desc' : 'asc';
+    }
+    hvRedibujarTabla();
+  };
+
+  /* ── Filtrar por nombre de producto (busca en detalle de ventas) ── */
+  window.hvFiltrarPorProducto = async function(){
+    const busqueda = (window.__hvProducto||'').trim().toLowerCase();
+    if(!busqueda){
+      window.__hvVentasFiltradas = null;
+      hvRedibujarTabla();
+      return;
+    }
+    // Buscar en bodega_ventas_detalle los producto_id que coincidan
+    const {data:prods} = await sb.from('bodega_productos')
+      .select('id,nombre')
+      .ilike('nombre', '%'+busqueda+'%')
+      .limit(50);
+    if(!prods || !prods.length){
+      window.__hvVentasFiltradas = [];
+      hvRedibujarTabla();
+      return;
+    }
+    const prodIds = prods.map(p=>p.id);
+    // Buscar ventas que contengan esos productos
+    const {data:detalles} = await sb.from('bodega_ventas_detalle')
+      .select('venta_id')
+      .in('producto_id', prodIds);
+    const ventaIds = [...new Set((detalles||[]).map(d=>d.venta_id))];
+    // Filtrar los datos ya cargados
+    window.__hvVentasFiltradas = (window.__histVentasRaw||[]).filter(v=>ventaIds.includes(v.id));
+    hvRedibujarTabla();
+  };
+
+  /* ── Redibujar tabla con sort y filtro actuales ── */
+  window.hvRedibujarTabla = function(){
+    const wrap = document.getElementById('hv-tabla-wrap');
+    if(!wrap) return;
+    let ventas = window.__hvVentasFiltradas !== null && window.__hvVentasFiltradas !== undefined
+      ? window.__hvVentasFiltradas
+      : (window.__histVentasRaw||[]);
+
+    // Aplicar sort
+    const col = window.__hvSortCol;
+    const dir = window.__hvSortDir||'desc';
+    if(col){
+      ventas = [...ventas].sort((a,b)=>{
+        let va = col==='hora' ? fmtHoraVenta(a) : (a[col]||'');
+        let vb = col==='hora' ? fmtHoraVenta(b) : (b[col]||'');
+        if(col==='total'||col==='total_final'||col==='numero_venta'){
+          va=Number(va)||0; vb=Number(vb)||0;
+          return dir==='asc'?va-vb:vb-va;
+        }
+        va=String(va).toLowerCase(); vb=String(vb).toLowerCase();
+        return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+      });
+    }
+
+    wrap.innerHTML = histVentasTabla(ventas);
+
+    // Actualizar contador si hay filtro de producto
+    const busqueda = (window.__hvProducto||'').trim();
+    const badge = document.getElementById('hv-count');
+    if(badge && busqueda){
+      badge.textContent = ventas.length + ' ventas (filtrado por producto)';
+    }
+  };
+
   window.toggleVentasSeleccionadas=function(source){
     document.querySelectorAll('.venta-check').forEach(ch=>{ch.checked=source.checked;});
     actualizarContadorVentasSeleccionadas();
@@ -6961,6 +7062,7 @@ initMobileShell();
 
     const {data,error,count}=await q;
     if(error){gs('content').innerHTML=`<div class="alert alert-error">Error: ${h(error.message)}</div>`;return;}
+    window.__histVentasRaw=data||[];
     window.__histVentas=data||[];
 
     const totalPags=Math.ceil((count||0)/lim);
@@ -6993,6 +7095,12 @@ initMobileShell();
             <option ${metodo==='mixto'?'selected':''}>mixto</option>
           </select>
         </div>
+        <div class="form-group" style="min-width:180px"><label>Filtrar por producto</label>
+          <input type="text" id="hv-producto" placeholder="Nombre del producto..." 
+            value="${window.__hvProducto||''}"
+            oninput="window.__hvProducto=this.value; hvFiltrarPorProducto()"
+            style="width:100%">
+        </div>
       </div>
       <div class="card">
         <div class="card-header" style="gap:8px;flex-wrap:wrap">
@@ -7014,16 +7122,24 @@ initMobileShell();
 
   function histVentasTabla(ventas){
     const total=ventas.reduce((s,v)=>s+(v.total_final||0),0);
-    return `<table><thead><tr>
+    // Header con sorting
+    const sortCol = window.__hvSortCol||'';
+    const sortDir = window.__hvSortDir||'desc';
+    function thSort(col, label){
+      const activo = sortCol===col;
+      const icono  = activo ? (sortDir==='asc'?'↑':'↓') : '<span style="opacity:.3">↕</span>';
+      return `<th onclick="hvSortBy('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${label} ${icono}</th>`;
+    }
+    return `<table id="hv-tabla"><thead><tr>
       <th><input type="checkbox" onchange="toggleVentasSeleccionadas(this)"></th>
-      <th style="color:var(--accent2)">N°</th>
-      <th style="color:var(--accent2)">HORA</th>
-      <th>FECHA</th>
+      ${thSort('numero_venta','N°')}
+      ${thSort('hora','HORA')}
+      ${thSort('fecha','FECHA')}
       <th>TIPO</th>
-      <th>CLIENTE</th>
-      <th>SUBTOTAL</th>
+      ${thSort('cliente_nombre','CLIENTE')}
+      ${thSort('total','SUBTOTAL')}
       <th>DESC.</th>
-      <th>TOTAL</th>
+      ${thSort('total_final','TOTAL')}
       <th>PAGO</th>
       <th>ACCIONES</th>
     </tr></thead><tbody>
@@ -8135,10 +8251,23 @@ async function revertirStockCompraReal(compraId, detalles){
     if(!grid || document.getElementById('bg-stock-dashboard-card'))return;
     const x=bgCalcStockValorizado();
     grid.insertAdjacentHTML('beforeend', `
-      <div class="stat-card" id="bg-stock-dashboard-card">
-        <div class="label">MONTO EN STOCK</div>
-        <div class="value" style="color:var(--amber)">${bgMoney(x.costo)}</div>
-        <div class="sub">Venta estimada: ${bgMoney(x.venta)} · Margen: ${x.margen.toFixed(1)}%</div>
+      <div class="stat-card bg-stock-card-pro" id="bg-stock-dashboard-card">
+        <div class="bg-stock-main">
+          <div>
+            <div class="label">MONTO EN STOCK</div>
+            <div class="value bg-stock-costo">${bgMoney(x.costo)}</div>
+          </div>
+          <div class="bg-stock-extra">
+            <div class="bg-stock-extra-row">
+              <span>Venta estimada</span>
+              <strong>${bgMoney(x.venta)}</strong>
+            </div>
+            <div class="bg-stock-extra-row">
+              <span>Margen</span>
+              <strong>${x.margen.toFixed(1)}%</strong>
+            </div>
+          </div>
+        </div>
       </div>`);
   }
   function bgInjectProductosStock(){
@@ -9147,14 +9276,10 @@ async function revertirStockCompraReal(compraId, detalles){
 
   function shellHTML(tab){
     return `
-      <div class="compras-module-shell">
-        <div class="compras-module-head card">
-          <div>
-            <div class="compras-eyebrow">Módulo de compras</div>
-            <h3>Compras</h3>
-            <p>Cargá facturas, revisá el historial y administrá proveedores desde una sola pantalla.</p>
-          </div>
-          <div class="compras-tabs">
+      <div class="compras-module-shell compras-shell-sin-cabecera">
+        <div class="compras-mini-toolbar">
+          <div class="compras-mini-title">${nombreTab(tab)}</div>
+          <div class="compras-tabs compras-tabs-mini">
             <button class="compras-tab ${tab==='nueva'?'active':''}" onclick="abrirComprasTab('nueva')">${iconoTab('nueva')} Nueva compra</button>
             <button class="compras-tab ${tab==='historial'?'active':''}" onclick="abrirComprasTab('historial')">${iconoTab('historial')} Historial</button>
             <button class="compras-tab ${tab==='proveedores'?'active':''}" onclick="abrirComprasTab('proveedores')">${iconoTab('proveedores')} Proveedores</button>
@@ -10296,6 +10421,1130 @@ async function revertirStockCompraReal(compraId, detalles){
     .compra-cost-label{text-align:left!important;}
     .compra-footer{position:sticky!important;bottom:0!important;background:rgba(26,29,39,.98)!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;border-top:1px solid var(--border)!important;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))!important;z-index:20!important;}
   }
+
+/* ══ COMPRAS V16 SEGURO: CAMPOS COMPACTOS SIN TOCAR MENÚ ══════ */
+.compra-main-layout{
+  grid-template-columns:minmax(250px,30%) minmax(620px,70%) !important;
+  gap:14px !important;
+}
+.compra-search-head{
+  padding:10px !important;
+}
+.compra-search-head > div:first-child{
+  font-size:13px !important;
+  margin-bottom:8px !important;
+}
+.compra-search-grid{
+  grid-template-columns:1fr 70px !important;
+  gap:8px !important;
+}
+.compra-order-head{
+  padding:8px 12px !important;
+  font-size:14px !important;
+  font-weight:900 !important;
+}
+.compra-order-meta{
+  padding:8px 10px !important;
+}
+.compra-order-meta .form-grid{
+  grid-template-columns:1.2fr .85fr 1fr 1fr !important;
+  gap:8px 10px !important;
+  align-items:end !important;
+}
+.compra-order-meta .form-group{
+  margin-bottom:0 !important;
+}
+.compra-order-meta .form-group label,
+.compra-footer .form-group label{
+  font-size:11px !important;
+  font-weight:900 !important;
+  color:var(--text3) !important;
+  letter-spacing:.45px !important;
+  text-transform:uppercase !important;
+  margin-bottom:4px !important;
+}
+.compra-order-meta input,
+.compra-order-meta select,
+.compra-footer input,
+.compra-footer select,
+.compra-footer textarea{
+  min-height:34px !important;
+  padding:7px 9px !important;
+}
+.compra-order-meta .form-group[style*="grid-column"]{
+  grid-column:auto !important;
+}
+.compra-total-top-box{
+  padding:8px 12px !important;
+}
+.compra-total-top-box > div:first-child > div:nth-child(2){
+  display:none !important;
+}
+.compra-total-top-box .compra-total-sync{
+  font-size:24px !important;
+}
+#ccomp-items{
+  min-height:56dvh !important;
+  max-height:calc(100dvh - 285px) !important;
+  overflow-y:auto !important;
+}
+.compra-footer{
+  padding:10px 12px !important;
+}
+.compra-footer textarea{
+  min-height:58px !important;
+}
+.compra-item-row-total{
+  padding:10px 12px !important;
+}
+.compra-item-row-total .compra-item-name{
+  font-weight:900 !important;
+}
+.detalle-legible,
+.compra-item-sub,
+.product-meta-readable,
+#compra-prod-list div[style*="font-size:11px"],
+small,
+[class*="sub"],
+[class*="meta"]{
+  font-weight:900 !important;
+  color:#d2daf4 !important;
+}
+.detalle-legible b,
+.compra-item-sub b,
+.product-meta-readable b{
+  font-weight:950 !important;
+  color:#fff !important;
+}
+@media(max-width:1100px){
+  .compra-order-meta .form-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+}
+@media(max-width:900px){
+  .compra-main-layout{
+    grid-template-columns:1fr !important;
+    height:auto !important;
+  }
+  .compra-order-meta .form-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+  #compra-prod-list{
+    max-height:24dvh !important;
+  }
+  #ccomp-items{
+    min-height:44dvh !important;
+    max-height:56dvh !important;
+  }
+}
+
+
+/* ══ COMPRAS V17: CABECERA SUPERIOR MÁS COMPACTA ═════════════ */
+.compras-module-shell{
+  gap:10px !important;
+}
+.compras-module-head{
+  padding:12px 16px !important;
+  gap:12px !important;
+  align-items:center !important;
+}
+.compras-module-head h3{
+  font-size:18px !important;
+  margin:1px 0 !important;
+}
+.compras-module-head p{
+  font-size:12px !important;
+  line-height:1.35 !important;
+  margin-top:2px !important;
+}
+.compras-eyebrow{
+  font-size:10px !important;
+  letter-spacing:.6px !important;
+}
+.compras-tabs{
+  gap:6px !important;
+}
+.compras-tab{
+  padding:8px 12px !important;
+  font-size:12px !important;
+  min-height:38px !important;
+}
+@media(max-width:900px){
+  .compras-module-shell{
+    gap:8px !important;
+  }
+  .compras-module-head{
+    padding:10px 12px !important;
+  }
+  .compras-tabs{
+    margin-top:10px !important;
+  }
+  .compras-tab{
+    min-height:40px !important;
+    padding:8px 10px !important;
+  }
+}
+
+
+/* ══ COMPRAS V18: SIN CABECERA GRANDE, SOLO MINI BARRA ═══════ */
+.compras-shell-sin-cabecera{
+  gap:8px !important;
+}
+.compras-mini-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:6px 0 4px;
+  background:transparent !important;
+  border:none !important;
+}
+.compras-mini-title{
+  font-size:15px;
+  font-weight:900;
+  color:var(--text);
+  letter-spacing:-.2px;
+}
+.compras-tabs-mini{
+  display:flex;
+  gap:6px;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+.compras-tabs-mini .compras-tab{
+  padding:6px 10px !important;
+  min-height:32px !important;
+  font-size:12px !important;
+  border-radius:999px !important;
+}
+.compras-shell-sin-cabecera #compras-tab-content > .card:first-child{
+  margin-top:0 !important;
+}
+@media(max-width:900px){
+  .compras-mini-toolbar{
+    align-items:stretch;
+    flex-direction:column;
+    gap:8px;
+    padding:4px 0 6px;
+  }
+  .compras-tabs-mini{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:6px;
+  }
+  .compras-tabs-mini .compras-tab{
+    width:100%;
+    padding:7px 6px !important;
+    font-size:11px !important;
+    min-height:34px !important;
+  }
+}
+
+
+/* ══ COMPRAS V19: TOTALES VISIBLES SIN CAMBIAR DISEÑO ═══════ */
+.compra-total-visible-row{
+  display:grid !important;
+  grid-template-columns:minmax(220px,1.4fr) auto minmax(105px,115px) minmax(115px,135px) 26px !important;
+  gap:10px !important;
+  align-items:center !important;
+  padding:10px 12px !important;
+}
+.compra-total-visible-row .compra-item-name{
+  font-size:14px !important;
+  font-weight:950 !important;
+}
+.compra-total-visible-row .detalle-legible{
+  font-size:12.6px !important;
+  font-weight:900 !important;
+  color:#d2daf4 !important;
+}
+.compra-total-visible-row .detalle-legible b{
+  color:#fff !important;
+  font-weight:950 !important;
+}
+.compra-total-wrap input{
+  color:var(--accent) !important;
+}
+.compra-total-sync,
+[data-compra-total="1"]{
+  font-weight:950 !important;
+}
+@media(max-width:900px){
+  .compra-total-visible-row{
+    grid-template-columns:1fr !important;
+    align-items:stretch !important;
+  }
+}
+
+
+/* ══ COMPRAS V21: LISTA DE PRODUCTOS CARGADOS MÁS GRANDE ═════ */
+#ccomp-items{
+  min-height: 62dvh !important;
+  max-height: calc(100dvh - 235px) !important;
+  overflow-y: auto !important;
+  padding-bottom: 12px !important;
+}
+.compra-order-card{
+  min-height: calc(100dvh - 108px) !important;
+  max-height: calc(100dvh - 108px) !important;
+}
+.compra-total-top-box{
+  padding: 6px 12px !important;
+}
+.compra-total-top-box .compra-total-sync{
+  font-size: 22px !important;
+}
+.compra-footer{
+  padding: 8px 12px !important;
+}
+.compra-footer .form-group{
+  margin-bottom: 6px !important;
+}
+.compra-footer textarea,
+#comp-notas{
+  min-height: 42px !important;
+  height: 42px !important;
+}
+.compra-footer .btn,
+.compra-footer button.btn,
+.compra-footer button{
+  min-height: 42px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+@media(max-width:900px){
+  #ccomp-items{
+    min-height: 52dvh !important;
+    max-height: 64dvh !important;
+  }
+  .compra-order-card{
+    min-height: auto !important;
+    max-height: none !important;
+  }
+  .compra-footer textarea,
+  #comp-notas{
+    min-height: 38px !important;
+    height: 38px !important;
+  }
+}
+
+
+/* ══ COMPRAS V22: LISTA EDITABLE REAL, SIN TAPARSE CON FOOTER ══ */
+.compra-main-layout{
+  height: calc(100dvh - 118px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.compra-order-card{
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.compra-order-head{
+  flex: 0 0 auto !important;
+}
+.compra-order-meta{
+  flex: 0 0 auto !important;
+  padding: 6px 10px !important;
+}
+.compra-order-meta .form-grid{
+  gap: 6px 10px !important;
+}
+.compra-order-meta .form-group{
+  margin-bottom: 0 !important;
+}
+.compra-order-meta label{
+  margin-bottom: 3px !important;
+}
+.compra-order-meta input,
+.compra-order-meta select{
+  min-height: 32px !important;
+  padding: 6px 9px !important;
+}
+.compra-total-top-box{
+  flex: 0 0 auto !important;
+  padding: 6px 12px !important;
+}
+.compra-total-top-box .compra-total-sync{
+  font-size: 22px !important;
+}
+
+/* ESTA ES LA PARTE CLAVE */
+#ccomp-items{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-bottom: 8px !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hacer cada línea más compacta para que entren más productos */
+.compra-total-visible-row,
+.compra-item-row-total,
+.compra-item-row{
+  padding: 8px 12px !important;
+  min-height: 58px !important;
+  gap: 8px !important;
+}
+.compra-total-visible-row .compra-item-name,
+.compra-item-row-total .compra-item-name,
+.compra-item-row .compra-item-name{
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}
+.compra-total-visible-row .detalle-legible,
+.compra-item-row-total .detalle-legible,
+.compra-item-row .compra-item-sub{
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+.compra-cost-label{
+  font-size: 9.5px !important;
+  margin-bottom: 2px !important;
+}
+.compra-total-visible-row input,
+.compra-item-row-total input,
+.compra-item-row input{
+  min-height: 30px !important;
+  padding: 4px 7px !important;
+}
+.compra-qty-btn{
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Footer compacto, siempre abajo, sin tapar la lista */
+.compra-footer{
+  flex: 0 0 auto !important;
+  padding: 7px 12px !important;
+  border-top: 1px solid var(--border) !important;
+  background: var(--bg2) !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+.compra-footer > div:first-child{
+  margin-bottom: 5px !important;
+  font-size: 15px !important;
+}
+.compra-footer .form-group{
+  margin-bottom: 6px !important;
+}
+.compra-footer label{
+  margin-bottom: 3px !important;
+}
+.compra-footer textarea,
+#comp-notas{
+  min-height: 34px !important;
+  height: 34px !important;
+  max-height: 34px !important;
+  resize: none !important;
+  padding: 6px 8px !important;
+}
+.compra-footer button,
+.compra-footer .btn{
+  min-height: 38px !important;
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+}
+
+/* Panel izquierdo también con altura correcta */
+.compra-picker-card{
+  height: 100% !important;
+  min-height: 0 !important;
+}
+#compra-prod-list{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+}
+
+@media(max-width:900px){
+  .compra-main-layout{
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .compra-order-card{
+    min-height: 68dvh !important;
+    height: 68dvh !important;
+  }
+  #ccomp-items{
+    min-height: 0 !important;
+  }
+  .compra-footer textarea,
+  #comp-notas{
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+}
+
+
+/* ══ COMPRAS V23: COSTO UNITARIO → PRECIO VENTA → TOTAL ══════ */
+.compra-row-precio-venta{
+  display:grid !important;
+  grid-template-columns:minmax(210px,1.35fr) auto minmax(105px,115px) minmax(105px,120px) minmax(115px,130px) 26px !important;
+  gap:8px !important;
+  align-items:center !important;
+}
+.compra-row-precio-venta .compra-cost-label{
+  font-size:9.5px !important;
+  font-weight:900 !important;
+  color:var(--text3) !important;
+  text-transform:uppercase !important;
+  letter-spacing:.35px !important;
+  margin-bottom:2px !important;
+  text-align:right !important;
+}
+.compra-row-precio-venta input{
+  min-height:30px !important;
+  padding:4px 7px !important;
+  text-align:right !important;
+  font-weight:900 !important;
+}
+.compra-row-precio-venta .compra-input-cant{
+  width:48px !important;
+  text-align:center !important;
+}
+.compra-input-costo,
+.compra-input-venta,
+.compra-input-total{
+  width:100% !important;
+}
+.compra-input-venta{
+  color:var(--green) !important;
+}
+.compra-input-total{
+  color:var(--accent) !important;
+}
+.compra-venta-wrap input{
+  border-color:rgba(34,197,94,.35) !important;
+}
+@media(max-width:900px){
+  .compra-row-precio-venta{
+    grid-template-columns:1fr !important;
+    align-items:stretch !important;
+  }
+  .compra-row-precio-venta .compra-cost-label{
+    text-align:left !important;
+  }
+  .compra-row-precio-venta .compra-venta-wrap,
+  .compra-row-precio-venta .compra-total-wrap,
+  .compra-row-precio-venta .compra-cost-wrap{
+    display:grid !important;
+    grid-template-columns:110px 1fr !important;
+    gap:8px !important;
+    align-items:center !important;
+  }
+}
+
+
+/* ══ COMPRAS V24: COSTO → PRECIO VENTA → % MARGEN → TOTAL ═══ */
+.compra-row-margen-venta{
+  display:grid !important;
+  grid-template-columns:minmax(190px,1.25fr) auto minmax(95px,105px) minmax(105px,115px) minmax(82px,92px) minmax(110px,125px) 26px !important;
+  gap:7px !important;
+  align-items:center !important;
+}
+.compra-row-margen-venta .compra-cost-label{
+  font-size:9.2px !important;
+  font-weight:900 !important;
+  color:var(--text3) !important;
+  text-transform:uppercase !important;
+  letter-spacing:.3px !important;
+  margin-bottom:2px !important;
+  text-align:right !important;
+}
+.compra-row-margen-venta input{
+  min-height:30px !important;
+  padding:4px 6px !important;
+  text-align:right !important;
+  font-weight:900 !important;
+}
+.compra-input-margen{
+  width:100% !important;
+  color:var(--yellow, #facc15) !important;
+}
+.compra-margen-wrap input{
+  border-color:rgba(250,204,21,.35) !important;
+}
+@media(max-width:900px){
+  .compra-row-margen-venta{
+    grid-template-columns:1fr !important;
+    align-items:stretch !important;
+  }
+  .compra-row-margen-venta .compra-cost-label{
+    text-align:left !important;
+  }
+  .compra-row-margen-venta .compra-cost-wrap,
+  .compra-row-margen-venta .compra-venta-wrap,
+  .compra-row-margen-venta .compra-margen-wrap,
+  .compra-row-margen-venta .compra-total-wrap{
+    display:grid !important;
+    grid-template-columns:115px 1fr !important;
+    gap:8px !important;
+    align-items:center !important;
+  }
+}
+
+
+/* ══ INVENTARIO V25: DETALLES PEQUEÑOS MÁS VISIBLES ═══════════ */
+/* Aplica al módulo inventario y también refuerza textos tipo código/stock/costo */
+#content:has(#inventario-list) small,
+#content:has(#inventario-list) .sub,
+#content:has(#inventario-list) .meta,
+#content:has(#inventario-list) .detalle,
+#content:has(#inventario-list) .text-muted,
+#content:has(#inventario-list) [style*="font-size:11px"],
+#content:has(#inventario-list) [style*="font-size:12px"],
+#content:has(#inventario-list) td small,
+#content:has(#inventario-list) .card small,
+#content:has(#inventario-list) .badge,
+#content:has(#inventario-list) label,
+#content:has(#inventario-list) .form-group label,
+
+#content:has([id*="inventario"]) small,
+#content:has([id*="inventario"]) .sub,
+#content:has([id*="inventario"]) .meta,
+#content:has([id*="inventario"]) .detalle,
+#content:has([id*="inventario"]) .text-muted,
+#content:has([id*="inventario"]) [style*="font-size:11px"],
+#content:has([id*="inventario"]) [style*="font-size:12px"],
+#content:has([id*="inventario"]) td small,
+#content:has([id*="inventario"]) .card small,
+#content:has([id*="inventario"]) .badge,
+#content:has([id*="inventario"]) label,
+#content:has([id*="inventario"]) .form-group label {
+  color: #d2daf4 !important;
+  font-weight: 900 !important;
+  letter-spacing: .08px !important;
+}
+
+/* Palabras o números destacados dentro de detalles */
+#content:has(#inventario-list) small b,
+#content:has(#inventario-list) .sub b,
+#content:has(#inventario-list) .meta b,
+#content:has(#inventario-list) .detalle b,
+#content:has(#inventario-list) small strong,
+#content:has(#inventario-list) .sub strong,
+#content:has(#inventario-list) .meta strong,
+#content:has(#inventario-list) .detalle strong,
+
+#content:has([id*="inventario"]) small b,
+#content:has([id*="inventario"]) .sub b,
+#content:has([id*="inventario"]) .meta b,
+#content:has([id*="inventario"]) .detalle b,
+#content:has([id*="inventario"]) small strong,
+#content:has([id*="inventario"]) .sub strong,
+#content:has([id*="inventario"]) .meta strong,
+#content:has([id*="inventario"]) .detalle strong {
+  color: #ffffff !important;
+  font-weight: 950 !important;
+}
+
+/* Tablas/listas de inventario: números y datos secundarios más legibles */
+#content:has([id*="inventario"]) table td,
+#content:has([id*="inventario"]) table th {
+  font-weight: 800 !important;
+}
+
+#content:has([id*="inventario"]) table th {
+  color: var(--text3) !important;
+  font-weight: 950 !important;
+  text-transform: uppercase;
+  letter-spacing: .35px;
+}
+
+/* Si el inventario usa filas tipo producto/card */
+#content:has([id*="inventario"]) .product-meta-readable,
+#content:has([id*="inventario"]) .detalle-legible,
+#content:has([id*="inventario"]) .compra-item-sub {
+  color: #d2daf4 !important;
+  font-weight: 900 !important;
+}
+
+/* Refuerzo general para cualquier detalle pequeño similar en todo el sistema */
+.detalle-legible,
+.product-meta-readable,
+.meta-readable,
+[class*="detalle"],
+[class*="meta"],
+[class*="sub"] {
+  font-weight: 900 !important;
+}
+
+.detalle-legible b,
+.product-meta-readable b,
+.meta-readable b,
+[class*="detalle"] b,
+[class*="meta"] b,
+[class*="sub"] b {
+  font-weight: 950 !important;
+}
+
+
+/* ══ INVENTARIO V26: STOCK MÁS LEGIBLE, SIN AZUL OSCURO ═══════ */
+/* El stock deja de verse azul fuerte y pasa a texto claro/negrita */
+#content:has([id*="inventario"]) [style*="color:var(--accent)"],
+#content:has([id*="inventario"]) [style*="color: var(--accent)"],
+#content:has([id*="inventario"]) [style*="color:var(--blue)"],
+#content:has([id*="inventario"]) [style*="color: var(--blue)"],
+#content:has([id*="inventario"]) [style*="color:#4f7ef8"],
+#content:has([id*="inventario"]) [style*="color: #4f7ef8"],
+#content:has([id*="inventario"]) .stock,
+#content:has([id*="inventario"]) .stock-value,
+#content:has([id*="inventario"]) .stock-real,
+#content:has([id*="inventario"]) .inventario-stock {
+  color: #ffffff !important;
+  font-weight: 950 !important;
+  text-shadow: 0 0 10px rgba(255,255,255,.08);
+}
+
+/* Si el stock aparece dentro de badges, que sea una etiqueta clara y no azul */
+#content:has([id*="inventario"]) .badge,
+#content:has([id*="inventario"]) [class*="badge"] {
+  color: #ffffff !important;
+  font-weight: 950 !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+}
+
+/* Números importantes en inventario: blanco suave, no azul */
+#content:has([id*="inventario"]) td:nth-child(n),
+#content:has([id*="inventario"]) td strong,
+#content:has([id*="inventario"]) td b {
+  font-weight: 900 !important;
+}
+
+/* Refuerzo específico para textos que contienen Stock */
+#content:has([id*="inventario"]) small,
+#content:has([id*="inventario"]) .sub,
+#content:has([id*="inventario"]) .meta,
+#content:has([id*="inventario"]) .detalle,
+#content:has([id*="inventario"]) [style*="font-size:11px"],
+#content:has([id*="inventario"]) [style*="font-size:12px"] {
+  color: #d7def5 !important;
+  font-weight: 900 !important;
+}
+
+/* En tablas, encabezado claro y valores más legibles */
+#content:has([id*="inventario"]) table th {
+  color: #cfd7f1 !important;
+  font-weight: 950 !important;
+}
+#content:has([id*="inventario"]) table td {
+  color: var(--text) !important;
+}
+
+/* Mantener colores de alerta solo para estados reales */
+#content:has([id*="inventario"]) .text-danger,
+#content:has([id*="inventario"]) .red,
+#content:has([id*="inventario"]) [style*="color:var(--red)"] {
+  color: var(--red) !important;
+}
+#content:has([id*="inventario"]) .text-success,
+#content:has([id*="inventario"]) .green,
+#content:has([id*="inventario"]) [style*="color:var(--green)"] {
+  color: var(--green) !important;
+}
+
+
+/* ══ INVENTARIO V27: CANTIDAD DE STOCK JUNTO AL CÓDIGO ═══════ */
+/* Corrige específicamente: Código · Stock: CANTIDAD */
+#content:has([id*="inventario"]) .inv-stock-cantidad,
+#content:has([id*="inventario"]) b.inv-stock-cantidad{
+  color:#ffffff !important;
+  font-weight:950 !important;
+  background:rgba(255,255,255,.10) !important;
+  border:1px solid rgba(255,255,255,.18) !important;
+  border-radius:8px !important;
+  padding:1px 7px !important;
+  margin-left:2px !important;
+  display:inline-block !important;
+  line-height:1.35 !important;
+  text-shadow:none !important;
+}
+
+/* Por si queda algún Stock con color accent2 sin clase */
+#content:has([id*="inventario"]) [style*="color:var(--accent2)"]{
+  color:#ffffff !important;
+  font-weight:950 !important;
+}
+
+
+/* ══ DASHBOARD V28: TARJETA MONTO EN STOCK MÁS PROLIJA ═══════ */
+/* Corrige la tarjeta donde Monto en stock queda forzado con Venta estimada / Margen */
+.kpi-card:has(.kpi-label),
+.card:has(.kpi-label) {
+  min-width: 0 !important;
+}
+
+/* En escritorio, permitir que la última tarjeta respire mejor */
+.dashboard-grid,
+.stats-grid,
+.kpi-grid {
+  align-items: stretch !important;
+}
+
+/* Si la tarjeta tiene varios datos internos, evitar que se aprieten */
+.kpi-card,
+.stat-card,
+.card {
+  min-width: 0;
+}
+
+/* Ajuste específico para textos chicos dentro de tarjetas KPI */
+.kpi-card small,
+.kpi-card .small,
+.stat-card small,
+.stat-card .small,
+.card small {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  font-weight: 850 !important;
+  color: #d4dcf5 !important;
+}
+
+/* Monto principal más claro y sin empujar los datos secundarios */
+.kpi-card .kpi-value,
+.stat-card .kpi-value,
+.card .kpi-value,
+.kpi-card [style*="font-size:28px"],
+.stat-card [style*="font-size:28px"],
+.kpi-card [style*="font-size:30px"],
+.stat-card [style*="font-size:30px"] {
+  line-height: 1.05 !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+/* Última tarjeta del dashboard: Monto en stock */
+#content > div:first-child .card:last-child,
+#content .dashboard-grid .card:last-child,
+#content .stats-grid .card:last-child,
+#content .kpi-grid .card:last-child {
+  overflow: hidden !important;
+}
+
+/* Mejor distribución de bloques internos en tarjetas anchas */
+#content > div:first-child .card:last-child > div,
+#content .dashboard-grid .card:last-child > div,
+#content .stats-grid .card:last-child > div,
+#content .kpi-grid .card:last-child > div {
+  min-width: 0 !important;
+}
+
+/* Datos secundarios de la tarjeta: que no queden apretados ni cortados */
+#content > div:first-child .card:last-child [style*="font-size:11px"],
+#content > div:first-child .card:last-child [style*="font-size:12px"],
+#content .dashboard-grid .card:last-child [style*="font-size:11px"],
+#content .dashboard-grid .card:last-child [style*="font-size:12px"],
+#content .stats-grid .card:last-child [style*="font-size:11px"],
+#content .stats-grid .card:last-child [style*="font-size:12px"],
+#content .kpi-grid .card:last-child [style*="font-size:11px"],
+#content .kpi-grid .card:last-child [style*="font-size:12px"] {
+  font-size: 12.5px !important;
+  line-height: 1.35 !important;
+  font-weight: 900 !important;
+  color: #d7def5 !important;
+  letter-spacing: .1px !important;
+}
+
+/* Cuando hay etiquetas tipo Venta estimada / Margen, que se vean como renglones */
+#content > div:first-child .card:last-child b,
+#content .dashboard-grid .card:last-child b,
+#content .stats-grid .card:last-child b,
+#content .kpi-grid .card:last-child b {
+  color: #ffffff !important;
+  font-weight: 950 !important;
+}
+
+/* Darle más ancho a la tarjeta de monto en stock si la grilla lo permite */
+@media(min-width:1000px){
+  #content > div:first-child,
+  #content .dashboard-grid,
+  #content .stats-grid,
+  #content .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  }
+  #content > div:first-child .card:last-child,
+  #content .dashboard-grid .card:last-child,
+  #content .stats-grid .card:last-child,
+  #content .kpi-grid .card:last-child {
+    min-width: 240px !important;
+  }
+}
+
+/* En pantallas medianas, que la tarjeta pueda ocupar más espacio */
+@media(min-width:1000px) and (max-width:1450px){
+  #content > div:first-child .card:last-child,
+  #content .dashboard-grid .card:last-child,
+  #content .stats-grid .card:last-child,
+  #content .kpi-grid .card:last-child {
+    grid-column: span 2 !important;
+  }
+}
+
+/* En móvil que se apile normal */
+@media(max-width:900px){
+  #content > div:first-child .card:last-child,
+  #content .dashboard-grid .card:last-child,
+  #content .stats-grid .card:last-child,
+  #content .kpi-grid .card:last-child {
+    grid-column: auto !important;
+  }
+}
+
+
+/* ══ DASHBOARD V29: MONTO EN STOCK REARMADO REALMENTE ════════ */
+#bg-stock-dashboard-card.bg-stock-card-pro{
+  padding:18px 20px !important;
+  overflow:visible !important;
+  min-width:320px !important;
+}
+#bg-stock-dashboard-card .bg-stock-main{
+  display:grid !important;
+  grid-template-columns:minmax(145px,1fr) minmax(130px,.8fr) !important;
+  gap:16px !important;
+  align-items:center !important;
+  width:100% !important;
+}
+#bg-stock-dashboard-card .bg-stock-costo{
+  color:var(--amber) !important;
+  font-size:28px !important;
+  line-height:1.05 !important;
+  font-weight:950 !important;
+  white-space:normal !important;
+}
+#bg-stock-dashboard-card .bg-stock-extra{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:8px !important;
+  padding-left:14px !important;
+  border-left:1px solid rgba(255,255,255,.14) !important;
+  min-width:0 !important;
+}
+#bg-stock-dashboard-card .bg-stock-extra-row{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:2px !important;
+  line-height:1.15 !important;
+  min-width:0 !important;
+}
+#bg-stock-dashboard-card .bg-stock-extra-row span{
+  color:#b7c0da !important;
+  font-size:11px !important;
+  font-weight:950 !important;
+  letter-spacing:.25px !important;
+}
+#bg-stock-dashboard-card .bg-stock-extra-row strong{
+  color:#ffffff !important;
+  font-size:13px !important;
+  font-weight:950 !important;
+  white-space:nowrap !important;
+}
+
+/* En escritorio chico, esta tarjeta ocupa 2 espacios para no aplastar datos */
+@media(min-width:1000px) and (max-width:1600px){
+  #bg-stock-dashboard-card.bg-stock-card-pro{
+    grid-column:span 2 !important;
+  }
+}
+
+/* En pantallas grandes puede quedar normal, pero con ancho mínimo bueno */
+@media(min-width:1601px){
+  #bg-stock-dashboard-card.bg-stock-card-pro{
+    min-width:330px !important;
+  }
+}
+
+@media(max-width:900px){
+  #bg-stock-dashboard-card.bg-stock-card-pro{
+    min-width:0 !important;
+  }
+  #bg-stock-dashboard-card .bg-stock-main{
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+  #bg-stock-dashboard-card .bg-stock-extra{
+    border-left:0 !important;
+    border-top:1px solid rgba(255,255,255,.14) !important;
+    padding-left:0 !important;
+    padding-top:10px !important;
+  }
+}
+
+
+/* ══ DASHBOARD V32: GRÁFICOS DIRECTOS REEMPLAZAN ÚLTIMAS VENTAS ═ */
+.bg-dashboard-graficos-card{
+  margin-top:14px !important;
+  margin-bottom:14px !important;
+  padding:16px !important;
+  overflow:hidden !important;
+}
+.bg-dash-graph-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:12px;
+}
+.bg-dash-graph-head h3{
+  margin:0;
+  font-size:17px;
+  font-weight:950;
+}
+.bg-dash-graph-head p{
+  margin:4px 0 0;
+  color:var(--text3);
+  font-size:12px;
+  font-weight:850;
+}
+.bg-dash-filter{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:170px;
+}
+.bg-dash-filter label{
+  font-size:10px;
+  color:var(--text3);
+  font-weight:950;
+  letter-spacing:.4px;
+  text-transform:uppercase;
+}
+.bg-dash-filter input{
+  min-height:34px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--bg);
+  color:var(--text);
+  padding:6px 9px;
+  font-weight:900;
+}
+.bg-dash-mini-summary{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-bottom:12px;
+}
+.bg-dash-mini-summary div{
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  padding:10px 12px;
+}
+.bg-dash-mini-summary span{
+  display:block;
+  color:var(--text3);
+  font-size:10.5px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.35px;
+  margin-bottom:4px;
+}
+.bg-dash-mini-summary b{
+  color:var(--text);
+  font-size:16px;
+  font-weight:950;
+}
+.bg-dash-graph-grid{
+  display:grid;
+  grid-template-columns:1.15fr .85fr;
+  gap:12px;
+}
+.bg-dash-graph-card{
+  background:rgba(255,255,255,.035);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  padding:12px;
+  min-width:0;
+}
+.bg-graph-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.bg-graph-title b{
+  font-size:13px;
+  font-weight:950;
+}
+.bg-graph-title span{
+  font-size:11px;
+  color:var(--text3);
+  font-weight:900;
+}
+.bg-chart-bars{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.bg-chart-row{
+  display:grid;
+  grid-template-columns:minmax(105px,150px) 1fr minmax(92px,115px);
+  gap:9px;
+  align-items:center;
+}
+.bg-chart-label b{
+  display:block;
+  color:var(--text);
+  font-size:12px;
+  font-weight:950;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.bg-chart-label span{
+  display:block;
+  color:var(--text3);
+  font-size:10.5px;
+  font-weight:850;
+}
+.bg-chart-track{
+  height:18px;
+  border-radius:999px;
+  background:rgba(255,255,255,.07);
+  overflow:hidden;
+}
+.bg-chart-fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--accent),var(--green));
+}
+.bg-chart-value{
+  text-align:right;
+  color:var(--green);
+  font-size:12px;
+  font-weight:950;
+  white-space:nowrap;
+}
+.bg-chart-empty{
+  padding:24px;
+  color:var(--text3);
+  font-size:13px;
+  font-weight:900;
+  text-align:center;
+  border:1px dashed rgba(255,255,255,.12);
+  border-radius:14px;
+}
+@media(max-width:1100px){
+  .bg-dash-graph-grid{grid-template-columns:1fr;}
+}
+@media(max-width:700px){
+  .bg-dash-graph-head{flex-direction:column;}
+  .bg-dash-filter{width:100%;}
+  .bg-dash-mini-summary{grid-template-columns:1fr;}
+  .bg-chart-row{grid-template-columns:1fr;gap:5px;}
+  .bg-chart-value{text-align:left;}
+}
+
 </style>
 <script id="bg-compras-usable-js">
 (function(){
@@ -10341,20 +11590,20 @@ async function revertirStockCompraReal(compraId, detalles){
           '</div>'+
           '<div style="flex:1;overflow-y:auto" id="compra-prod-list"></div>'+
         '</div>'+
-        '<div class="compra-order-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">'+
+        '<div class="compra-order-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;height:100%;min-height:0">'+
           '<div class="compra-order-head" style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700">Orden de compra</div>'+
           '<div class="compra-order-meta" style="padding:10px;border-bottom:1px solid var(--border)">'+
-            '<div class="form-grid" style="grid-template-columns:1fr 1fr">'+
-              '<div class="form-group"><label>Proveedor</label><select id="comp-prov"><option value="">Sin proveedor</option>'+((provCache||[]).map(function(p){return '<option value="'+safeHtml(p.id)+'">'+safeHtml(p.nombre)+'</option>';}).join(''))+'</select></div>'+
+            '<div class="form-grid" style="grid-template-columns:1.2fr .85fr 1fr 1fr;gap:8px 10px;align-items:end">'+
+              '<div class="form-group"><label>Proveedor</label><select id="comp-prov"><option value="">Sin proveedor</option>'+((provCache||[]).map(function(p){return '<option value="'+window.safeHtml(p.id)+'">'+window.safeHtml(p.nombre)+'</option>';}).join(''))+'</select></div>'+
               '<div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="'+fechaHoyPY()+'"></div>'+
               '<div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>'+
               '<div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>'+
-              '<div class="form-group" style="grid-column:1/-1"><label>Estado</label><select id="comp-estado"><option value="en_proceso">🕐 En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
+              '<div class="form-group"><label>Estado</label><select id="comp-estado"><option value="en_proceso">🕐 En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
             '</div>'+
           '</div>'+
           '<div style="flex:1;overflow-y:auto" id="ccomp-items"></div>'+
           '<div class="compra-footer" style="padding:14px 16px;border-top:1px solid var(--border)">'+
-            '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--accent2);margin-bottom:10px"><span>TOTAL</span><span id="comp-total">Gs. 0</span></div>'+
+            '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--accent2);margin-bottom:10px"><span>TOTAL</span><span id="comp-total" data-compra-total="1" class="compra-total-sync">Gs. 0</span></div>'+
             '<div class="form-group" style="margin-bottom:10px"><label>Notas</label><textarea id="comp-notas" rows="2"></textarea></div>'+
             '<button class="btn btn-primary" style="width:100%;justify-content:center" onclick="finalizarCompra()">✓ Registrar compra</button>'+
           '</div>'+
@@ -10377,18 +11626,18 @@ async function revertirStockCompraReal(compraId, detalles){
       return ((embCache&&embCache[p.id])||[]).some(function(e){return embalajeMatches(e,q);});
     }).slice(0,40);
     if(!results.length){
-      list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+safeHtml(q)+'</span></div>';
+      list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
       return;
     }
     list.innerHTML=results.map(function(p){
       var embs=(embCache&&embCache[p.id])||[];
       return '<div>'+
         '<div class="compra-result-row" onclick="addToCompra(\''+p.id+'\',null,currentCompraQtyPublic())">'+
-          '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+safeHtml(p.nombre)+'</div><div style="font-size:11px;color:var(--text2)">'+safeHtml(p.codigo_barra||'-')+' · Stock: '+(p.stock||0)+' · Costo unit.: '+fmtGs(p.precio_costo||0)+'</div></div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+window.safeHtml(p.nombre)+'</div><div style="font-size:11px;color:var(--text2)">'+window.safeHtml(p.codigo_barra||'-')+' · Stock: '+(p.stock||0)+' · Costo unit.: '+fmtGs(p.precio_costo||0)+'</div></div>'+
           '<div style="font-size:13px;color:var(--accent2);font-weight:800;white-space:nowrap">'+fmtGs(p.precio_costo||0)+'</div>'+
         '</div>'+
         embs.map(function(e){return '<div class="compra-result-row compra-pack-row" onclick="addToCompra(\''+p.id+'\',\''+e.id+'\',currentCompraQtyPublic())">'+
-          '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--teal);font-weight:800">↳ Pack x'+(e.cantidad||1)+(e.codigo_barra?' · '+safeHtml(e.codigo_barra):'')+'</div><div style="font-size:11px;color:var(--text2)">Suma '+(e.cantidad||1)+' uds al stock · costo unit. aprox. '+fmtGs(Math.round((Number(e.precio_costo)||0)/Math.max(1,Number(e.cantidad)||1)))+'</div></div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--teal);font-weight:800">↳ Pack x'+(e.cantidad||1)+(e.codigo_barra?' · '+window.safeHtml(e.codigo_barra):'')+'</div><div style="font-size:11px;color:var(--text2)">Suma '+(e.cantidad||1)+' uds al stock · costo unit. aprox. '+fmtGs(Math.round((Number(e.precio_costo)||0)/Math.max(1,Number(e.cantidad)||1)))+'</div></div>'+
           '<div style="font-size:12px;color:var(--teal);font-weight:800;white-space:nowrap">'+fmtGs(e.precio_costo||0)+'</div>'+
         '</div>';}).join('')+
       '</div>';
@@ -10431,35 +11680,140 @@ async function revertirStockCompraReal(compraId, detalles){
     var key=String(prodId)+'_'+String(embId||'unit');
     var ex=compraItems.find(function(c){return c.key===key;});
     if(ex) ex.cantidad+=qty;
-    else compraItems.push({key:key,producto_id:prodId,embalaje_id:embId||null,nombre:nombre,costo:costo,cantidad:qty,uds:uds});
+    else compraItems.push({key:key,producto_id:prodId,embalaje_id:embId||null,nombre:nombre,costo:costo,cantidad:qty,uds:uds,precio_venta:Number(prod.precio_venta||prod.precio||0)||0});
     renderCompraItems();
     clearCompraSearch();
   };
 
   window.renderCompraItems = renderCompraItems = function(){
     var el=gs('ccomp-items'); if(!el)return;
+
     if(!compraItems.length){
-      el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px">Todavía no agregaste productos.<br><b style="color:var(--text)">Buscá arriba y tocá el producto.</b></div>';
+      el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;font-weight:800">Todavía no agregaste productos.<br><b style="color:var(--text)">Buscá arriba y tocá el producto.</b></div>';
     }else{
       el.innerHTML=compraItems.map(function(item,i){
-        var uds=Math.max(1,Number(item.uds)||1), packs=Number(item.cantidad)||1, totalUds=packs*uds, costo=Number(item.costo)||0;
-        var costoUnit=Math.round(costo/uds);
-        return '<div class="compra-item-row">'+
-          '<div><div class="compra-item-name">'+safeHtml(item.nombre)+'</div><div class="compra-item-sub">+'+totalUds+' uds al stock'+(uds>1?' · costo unit. '+fmtGs(costoUnit):'')+'</div></div>'+
-          '<div class="compra-qty-box"><button class="compra-qty-btn" onclick="cQty('+i+',-1)">−</button><input type="number" value="'+packs+'" min="1" onchange="cQtySet('+i+',this.value)" style="width:48px;text-align:center;padding:4px"><button class="compra-qty-btn" onclick="cQty('+i+',1)">+</button></div>'+
-          '<div class="compra-cost-wrap"><div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div><input type="number" value="'+costo+'" onchange="cCosto('+i+',this.value)" style="width:100%;text-align:right;padding:4px"></div>'+
-          '<button onclick="cRemove('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button>'+
+        var uds=Math.max(1,Number(item.uds)||1);
+        var packs=Math.max(1,Number(item.cantidad)||1);
+        var totalUds=packs*uds;
+        var costo=Number(item.costo)||0;
+        var totalLinea=costo*packs;
+        var costoUnit=uds>1 ? Math.round(costo/uds) : costo;
+        var precioVenta=Number(item.precio_venta||0)||0;
+        var margen = costoUnit>0 ? ((precioVenta - costoUnit) / costoUnit) * 100 : 0;
+        margen = isFinite(margen) ? Math.round(margen*10)/10 : 0;
+
+        return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
+          '<div style="min-width:0">'+
+            '<div class="compra-item-name">'+window.safeHtml(item.nombre)+'</div>'+
+            '<div class="compra-item-sub detalle-legible">Cantidad: <b>'+packs+'</b> · +<b>'+totalUds+'</b> uds al stock · Costo ref.: <b>'+fmtGs(costoUnit)+'</b> · Precio venta: <b>'+fmtGs(precioVenta)+'</b> · Margen: <b>'+margen+'%</b> · Total: <b>'+fmtGs(totalLinea)+'</b></div>'+
+          '</div>'+
+          '<div class="compra-qty-box">'+
+            '<button class="compra-qty-btn" onclick="cQty('+i+',-1)">−</button>'+
+            '<input type="number" value="'+packs+'" min="1" onchange="cQtySet('+i+',this.value)" class="compra-input-cant">'+
+            '<button class="compra-qty-btn" onclick="cQty('+i+',1)">+</button>'+
+          '</div>'+
+          '<div class="compra-cost-wrap">'+
+            '<div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div>'+
+            '<input type="number" value="'+costo+'" step="0.01" onchange="cCosto('+i+',this.value)" class="compra-input-costo">'+
+          '</div>'+
+          '<div class="compra-cost-wrap compra-venta-wrap">'+
+            '<div class="compra-cost-label">Precio venta</div>'+
+            '<input type="number" value="'+precioVenta+'" step="1" onchange="cPrecioVenta('+i+',this.value)" class="compra-input-venta">'+
+          '</div>'+
+          '<div class="compra-cost-wrap compra-margen-wrap">'+
+            '<div class="compra-cost-label">% Margen</div>'+
+            '<input type="number" value="'+margen+'" step="0.1" onchange="cMargenVenta('+i+',this.value)" class="compra-input-margen">'+
+          '</div>'+
+          '<div class="compra-cost-wrap compra-total-wrap">'+
+            '<div class="compra-cost-label">Total</div>'+
+            '<input type="number" value="'+totalLinea+'" step="0.01" onchange="cTotal('+i+',this.value)" class="compra-input-total">'+
+          '</div>'+
+          '<button onclick="cRemove('+i+')" class="compra-remove-btn">✕</button>'+
         '</div>';
       }).join('');
     }
-    var total=compraItems.reduce(function(s,c){return s+(Number(c.costo)||0)*(Number(c.cantidad)||0);},0);
-    if(gs('comp-total'))gs('comp-total').textContent=fmtGs(total);
+    actualizarTotalesCompraFinal();
   };
 
-  window.cQty = cQty = function(i,d){if(!compraItems[i])return;compraItems[i].cantidad=Math.max(1,(parseInt(compraItems[i].cantidad)||1)+d);renderCompraItems();};
-  window.cQtySet = cQtySet = function(i,v){if(!compraItems[i])return;compraItems[i].cantidad=Math.max(1,parseInt(v)||1);renderCompraItems();};
-  window.cCosto = cCosto = function(i,v){if(!compraItems[i])return;compraItems[i].costo=parseFloat(v)||0;renderCompraItems();};
+  window.calcularTotalCompraActual = calcularTotalCompraActual = function(){
+    return (compraItems||[]).reduce(function(s,c){
+      var cant=Math.max(1,Number(c.cantidad)||1);
+      var costo=Number(c.costo)||0;
+      return s+(costo*cant);
+    },0);
+  };
+
+  window.actualizarTotalesCompraFinal = actualizarTotalesCompraFinal = function(){
+    var total=calcularTotalCompraActual();
+    ['comp-total','comp-total-top','comp-total-floating','comp-total-foot','ccomp-total','total-factura','compra-total','compra-total-factura'].forEach(function(id){
+      var el=gs(id);
+      if(el) el.textContent=fmtGs(total);
+    });
+    document.querySelectorAll('[data-compra-total="1"], .compra-total-sync').forEach(function(el){
+      el.textContent=fmtGs(total);
+    });
+  };
+
+  window.cQty = cQty = function(i,d){
+    if(!compraItems[i])return;
+    compraItems[i].cantidad=Math.max(1,(parseInt(compraItems[i].cantidad)||1)+d);
+    renderCompraItems();
+  };
+  window.cQtySet = cQtySet = function(i,v){
+    if(!compraItems[i])return;
+    compraItems[i].cantidad=Math.max(1,parseInt(v)||1);
+    renderCompraItems();
+  };
+  window.cCosto = cCosto = function(i,v){
+    if(!compraItems[i])return;
+    compraItems[i].costo=parseFloat(v)||0;
+    renderCompraItems();
+  };
+  window.cTotal = cTotal = function(i,v){
+    if(!compraItems[i])return;
+    var total=Math.max(0,parseFloat(v)||0);
+    var cant=Math.max(1,parseInt(compraItems[i].cantidad)||1);
+    compraItems[i].costo=total/cant;
+    renderCompraItems();
+  };
+  window.cPrecioVenta = cPrecioVenta = function(i,v){
+    if(!compraItems[i])return;
+    compraItems[i].precio_venta=Math.max(0,parseFloat(v)||0);
+    renderCompraItems();
+  };
+  window.cMargenVenta = cMargenVenta = function(i,v){
+    if(!compraItems[i])return;
+    var margen=parseFloat(v);
+    if(!isFinite(margen)) margen=0;
+    var uds=Math.max(1,Number(compraItems[i].uds)||1);
+    var costo=Number(compraItems[i].costo)||0;
+    var costoUnit=uds>1 ? (costo/uds) : costo;
+    compraItems[i].precio_venta=Math.round(costoUnit*(1+(margen/100)));
+    renderCompraItems();
+  };
   window.cRemove = cRemove = function(i){compraItems.splice(i,1);renderCompraItems();};
+
+
+  async function actualizarPreciosVentaCompra(){
+    try{
+      var cambios=(compraItems||[])
+        .filter(function(c){return c && c.producto_id && Number(c.precio_venta)>0;})
+        .map(function(c){return {id:c.producto_id,precio_venta:Number(c.precio_venta)||0};});
+
+      var vistos={};
+      cambios=cambios.filter(function(c){
+        if(vistos[c.id]) return false;
+        vistos[c.id]=true;
+        return true;
+      });
+
+      for(var i=0;i<cambios.length;i++){
+        await sb.from('bodega_productos').update({precio_venta:cambios[i].precio_venta}).eq('id',cambios[i].id);
+      }
+    }catch(e){
+      console.warn('No se pudieron actualizar algunos precios de venta', e);
+    }
+  }
 
   window.finalizarCompra = finalizarCompra = async function(){
     if(!compraItems.length){toast('No hay productos','err');return;}
@@ -10503,6 +11857,8 @@ async function revertirStockCompraReal(compraId, detalles){
       var insErr = (await sb.from('bodega_compras_detalle').insert(nuevosDetalles)).error;
       if(insErr){toast('Error guardando detalle: '+insErr.message,'err');return;}
 
+      await actualizarPreciosVentaCompra();
+
       if(estado2 === 'finalizado' && typeof impactarStock === 'function'){
         await impactarStock(id, compraItems);
       }
@@ -10531,6 +11887,7 @@ async function revertirStockCompraReal(compraId, detalles){
     });
     var detRes=await sb.from('bodega_compras_detalle').insert(detalles);
     if(detRes.error){toast('Error detalle: '+detRes.error.message,'err');return;}
+    await actualizarPreciosVentaCompra();
     if(estado==='finalizado')await impactarStock(cD.id,compraItems);
     toast('✓ Compra registrada ('+estado+'): '+fmtGs(total));
     await loadCaches(true);compraItems=[];renderCompras();
@@ -10843,6 +12200,336 @@ window.diagnosticarStockCompras = async function(){
 
   window.__bgDraftSystem = true;
   console.log('[BG] Sistema de borradores v2 activo');
+})();
+</script>
+
+
+<script id="bg-venta-auto-restore-fix-v20">
+(function(){
+  if(window.__bgVentaAutoRestoreFixV20) return;
+  window.__bgVentaAutoRestoreFixV20 = true;
+
+  var KEY_DRAFT = 'bg_draft_venta';
+  var KEY_PAGE  = 'bg_last_page';
+
+  function lsGetRaw(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSetRaw(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+  function lsGetJson(k){ try{ var v=localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+  function lsSetJson(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+  function hayVentaEnPantalla(){
+    return !!document.getElementById('venta-layout') ||
+           !!document.getElementById('venta-tbody') ||
+           !!document.getElementById('v-total');
+  }
+  function hayCarritoActual(){
+    try{ return Array.isArray(cart) && cart.length > 0; }catch(e){ return false; }
+  }
+  function guardarBorradorVentaAhora(){
+    try{
+      if(!hayCarritoActual()) return;
+      lsSetJson(KEY_DRAFT, {
+        cart: cart,
+        ventaTipo: (typeof ventaTipo !== 'undefined' ? ventaTipo : 'minorista'),
+        desc:    (document.getElementById('v-desc')||{}).value || '0',
+        cliente: (document.getElementById('v-cliente')||{}).value || '',
+        notas:   (document.getElementById('v-notas')||{}).value || '',
+        pay:     (typeof selectedPay !== 'undefined' ? selectedPay : 'efectivo'),
+        ts: Date.now()
+      });
+      lsSetRaw(KEY_PAGE, 'ventas');
+    }catch(e){}
+  }
+
+  function wrapGoTo(){
+    if(typeof window.goTo !== 'function' || window.goTo.__bgLastPageFix) return;
+    var old = window.goTo;
+    var wrapped = async function(page){
+      try{ if(page) lsSetRaw(KEY_PAGE, page); }catch(e){}
+      return old.apply(this, arguments);
+    };
+    try{ Object.keys(old).forEach(function(k){ wrapped[k]=old[k]; }); }catch(e){}
+    wrapped.__bgLastPageFix = true;
+    window.goTo = wrapped;
+  }
+
+  window.addEventListener('beforeunload', function(){
+    try{
+      if(hayVentaEnPantalla() || hayCarritoActual()){
+        lsSetRaw(KEY_PAGE, 'ventas');
+        guardarBorradorVentaAhora();
+      }
+    }catch(e){}
+  });
+
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'hidden'){
+      try{
+        if(hayVentaEnPantalla() || hayCarritoActual()){
+          lsSetRaw(KEY_PAGE, 'ventas');
+          guardarBorradorVentaAhora();
+        }
+      }catch(e){}
+    }
+  });
+
+  function intentarRestaurarVentaAlRecargar(){
+    try{
+      if(window.__bgVentaYaAutoRestaurada) return;
+      var last = lsGetRaw(KEY_PAGE);
+      var d = lsGetJson(KEY_DRAFT);
+      if(last !== 'ventas') return;
+      if(!d || !d.cart || !d.cart.length) return;
+
+      window.__bgVentaYaAutoRestaurada = true;
+
+      setTimeout(function(){
+        try{
+          if(typeof window.goTo === 'function') window.goTo('ventas');
+          setTimeout(function(){
+            if(typeof window.bgRestaurarBorradorVenta === 'function'){
+              window.bgRestaurarBorradorVenta();
+              var b=document.getElementById('bg-dvb');
+              if(b) b.remove();
+            }else{
+              try{ cart = d.cart || []; }catch(e){}
+              if(d.ventaTipo){ try{ ventaTipo=d.ventaTipo; }catch(e){} }
+              if(typeof renderVentas === 'function') renderVentas();
+              setTimeout(function(){
+                try{ cart = d.cart || []; }catch(e){}
+                var el;
+                if(d.pay && typeof selectPay === 'function') selectPay(d.pay);
+                if(d.desc    && (el=document.getElementById('v-desc')))    el.value=d.desc;
+                if(d.cliente && (el=document.getElementById('v-cliente'))) el.value=d.cliente;
+                if(d.notas   && (el=document.getElementById('v-notas')))   el.value=d.notas;
+                if(typeof renderVentaTable === 'function') renderVentaTable();
+                if(typeof updateVTotals === 'function') updateVTotals();
+              },250);
+            }
+          },450);
+        }catch(e){}
+      },900);
+    }catch(e){}
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){
+      wrapGoTo();
+      setTimeout(wrapGoTo, 500);
+      setTimeout(wrapGoTo, 1800);
+      setTimeout(intentarRestaurarVentaAlRecargar, 1800);
+      setTimeout(intentarRestaurarVentaAlRecargar, 3200);
+    });
+  }else{
+    wrapGoTo();
+    setTimeout(wrapGoTo, 500);
+    setTimeout(wrapGoTo, 1800);
+    setTimeout(intentarRestaurarVentaAlRecargar, 1800);
+    setTimeout(intentarRestaurarVentaAlRecargar, 3200);
+  }
+})();
+</script>
+
+
+<script id="bg-dashboard-arqueo-directo-v32">
+(function(){
+  if(window.__bgDashboardArqueoDirectoV32) return;
+  window.__bgDashboardArqueoDirectoV32 = true;
+
+  function n(v){ return Number(v)||0; }
+  function money(v){
+    try{ return fmtGs(Math.round(n(v))); }
+    catch(e){ return 'Gs. '+Math.round(n(v)).toLocaleString('es-PY'); }
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(m){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+  }
+  function ymActual(){
+    var d=new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  function lastDay(year, month){
+    return new Date(year, month, 0).getDate();
+  }
+  function mesRango(ym){
+    if(!/^\d{4}-\d{2}$/.test(ym||'')) ym=ymActual();
+    var y=Number(ym.slice(0,4)), m=Number(ym.slice(5,7));
+    var start=ym+'-01';
+    var end=ym+'-'+String(lastDay(y,m)).padStart(2,'0');
+    return {ym:ym,start:start,end:end};
+  }
+  function fechaPy(f){
+    f=String(f||'').slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(f)) return f || '-';
+    return f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(2,4);
+  }
+  function mesTxt(ym){
+    var a=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    if(!/^\d{4}-\d{2}$/.test(ym||'')) return ym || '-';
+    return a[Number(ym.slice(5,7))-1]+' '+ym.slice(2,4);
+  }
+  function totalVenta(v){
+    return n(v.total_final || v.total || v.monto || v.importe || v.total_venta);
+  }
+  function createdMs(v){
+    var t=Date.parse(v.created_at || v.fecha_hora || v.fecha || '');
+    return isFinite(t) ? t : 0;
+  }
+  function cajaStartMs(c){ return Date.parse(c.opened_at || c.fecha_apertura || c.created_at || c.fecha || '') || 0; }
+  function cajaEndMs(c){
+    var x=Date.parse(c.closed_at || c.fecha_cierre || '');
+    return isFinite(x) ? x : 0;
+  }
+
+  function bars(rows, isMes){
+    if(!rows.length){
+      return '<div class="bg-chart-empty">Sin datos para este filtro.</div>';
+    }
+    var max=Math.max.apply(null, rows.map(function(r){return Math.max(1,n(r.total));}));
+    return '<div class="bg-chart-bars">'+rows.map(function(r){
+      var pct=Math.max(4, Math.round((n(r.total)/max)*100));
+      var label=isMes ? mesTxt(r.ym) : r.label;
+      return '<div class="bg-chart-row">'+
+        '<div class="bg-chart-label"><b>'+esc(label)+'</b><span>'+r.cant+' ventas</span></div>'+
+        '<div class="bg-chart-track"><div class="bg-chart-fill" style="width:'+pct+'%"></div></div>'+
+        '<div class="bg-chart-value">'+money(r.total)+'</div>'+
+      '</div>';
+    }).join('')+'</div>';
+  }
+
+  function agruparVentasPorCajas(ventas, cajas, rango){
+    var usados={};
+    var grupos=[];
+
+    cajas.forEach(function(c){
+      var ini=cajaStartMs(c);
+      var fin=cajaEndMs(c) || Date.now();
+      if(!ini) return;
+      var rows=ventas.filter(function(v){
+        var t=createdMs(v);
+        return t && t>=ini && t<=fin;
+      });
+      if(!rows.length) return;
+      rows.forEach(function(v){ usados[v.id]=true; });
+      var fecha=String(c.fecha || c.opened_at || c.created_at || '').slice(0,10);
+      grupos.push({
+        label: fechaPy(fecha || rango.start),
+        fecha: fecha || rango.start,
+        total: rows.reduce(function(s,v){ return s+totalVenta(v); },0),
+        cant: rows.length
+      });
+    });
+
+    // Si hay ventas que no matchean con caja, agruparlas por día para no perder datos.
+    var porDia={};
+    ventas.forEach(function(v){
+      if(usados[v.id]) return;
+      var f=String(v.fecha || v.created_at || '').slice(0,10);
+      if(!f) f=rango.start;
+      if(!porDia[f]) porDia[f]={label:fechaPy(f),fecha:f,total:0,cant:0};
+      porDia[f].total += totalVenta(v);
+      porDia[f].cant += 1;
+    });
+
+    return grupos.concat(Object.values(porDia))
+      .sort(function(a,b){ return String(a.fecha).localeCompare(String(b.fecha)); });
+  }
+
+  async function cargarVentasMes(rango){
+    var q = await sb.from('bodega_ventas')
+      .select('id,fecha,created_at,total_final')
+      .gte('fecha', rango.start)
+      .lte('fecha', rango.end)
+      .order('created_at',{ascending:true});
+    if(q.error){
+      // fallback por created_at si fecha no coincide
+      q = await sb.from('bodega_ventas')
+        .select('id,fecha,created_at,total_final')
+        .gte('created_at', rango.start+'T00:00:00')
+        .lte('created_at', rango.end+'T23:59:59')
+        .order('created_at',{ascending:true});
+    }
+    return q.data || [];
+  }
+
+  async function cargarCajasMes(rango){
+    var q = await sb.from('bodega_caja')
+      .select('id,fecha,opened_at,closed_at,estado')
+      .gte('fecha', rango.start)
+      .lte('fecha', rango.end)
+      .order('opened_at',{ascending:true});
+    if(q.error){
+      return [];
+    }
+    return q.data || [];
+  }
+
+  async function cargarVentasPorMes(){
+    var desde;
+    try{
+      var d=new Date();
+      d.setMonth(d.getMonth()-11);
+      desde=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+    }catch(e){
+      desde='2026-01-01';
+    }
+    var q = await sb.from('bodega_ventas')
+      .select('fecha,total_final')
+      .gte('fecha', desde)
+      .order('fecha',{ascending:true});
+    if(q.error) return [];
+    var g={};
+    (q.data||[]).forEach(function(v){
+      var f=String(v.fecha||'').slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(f)) return;
+      var ym=f.slice(0,7);
+      if(!g[ym]) g[ym]={ym:ym,total:0,cant:0};
+      g[ym].total += totalVenta(v);
+      g[ym].cant += 1;
+    });
+    return Object.values(g).sort(function(a,b){ return a.ym.localeCompare(b.ym); }).slice(-12);
+  }
+
+  window.bgRenderDashboardArqueoCharts = async function(ym){
+    var host=document.getElementById('bg-dash-chart-content');
+    if(!host) return;
+
+    var rango=mesRango(ym || ymActual());
+    var input=document.getElementById('bg-dash-mes');
+    if(input && input.value!==rango.ym) input.value=rango.ym;
+
+    host.innerHTML='<div class="bg-chart-empty">Cargando gráficos...</div>';
+
+    try{
+      var res=await Promise.all([
+        cargarVentasMes(rango),
+        cargarCajasMes(rango),
+        cargarVentasPorMes()
+      ]);
+      var ventas=res[0], cajas=res[1], meses=res[2];
+      var arqueos=agruparVentasPorCajas(ventas,cajas,rango).slice(-18);
+
+      var total=arqueos.reduce(function(s,x){return s+x.total;},0);
+      var cant=arqueos.reduce(function(s,x){return s+x.cant;},0);
+      var ticket=cant ? total/cant : 0;
+
+      host.innerHTML =
+        '<div class="bg-dash-mini-summary">'+
+          '<div><span>Total filtro</span><b>'+money(total)+'</b></div>'+
+          '<div><span>Cantidad ventas</span><b>'+cant.toLocaleString('es-PY')+'</b></div>'+
+          '<div><span>Ticket promedio</span><b>'+money(ticket)+'</b></div>'+
+        '</div>'+
+        '<div class="bg-dash-graph-grid">'+
+          '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por arqueo / jornada</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+bars(arqueos,false)+'</div>'+
+          '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por mes</b><span>Últimos 12 meses</span></div>'+bars(meses,true)+'</div>'+
+        '</div>';
+    }catch(e){
+      console.error('Error cargando gráficos dashboard', e);
+      host.innerHTML='<div class="bg-chart-empty">No pude cargar los gráficos. Revisá la consola para ver el error.</div>';
+    }
+  };
 })();
 </script>
 
