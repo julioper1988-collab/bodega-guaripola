@@ -1120,6 +1120,29 @@ input::placeholder { color: var(--text2); opacity: .7; }
   font-size: 12px; color: var(--text2); font-weight: 500;
 }
 
+
+/* ── Detalle pago compras (historial) ── */
+.hc-pago-toggle {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 3px;
+  transition: color .15s, border-color .15s;
+}
+.hc-pago-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.hc-pago-toggle.open  { color: var(--accent); border-color: var(--accent); }
+.hc-pago-detalle {
+  font-size: 12px;
+  padding: 5px 0 2px;
+  line-height: 1.7;
+  min-width: 160px;
+}
+.hc-btns { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
 .estado-badge {
   display: inline-block; padding: 4px 11px;
   border-radius: 20px; font-size: 11px; font-weight: 700;
@@ -1431,6 +1454,23 @@ input[type=number] { -moz-appearance: textfield; }
   #vr-cobro-bar { display: flex !important; align-items: center !important; gap: 10px !important; padding: 8px 14px 12px !important; cursor: pointer !important; }
   #vr-cobro-bar .vr-total-mini { color: var(--accent) !important; }
   #vr-detail { display: none !important; }
+
+  /* ── Historial de compras compacto en móvil ── */
+  .hist-compras-table { min-width: unset !important; }
+  .hist-compra-row td { padding: 6px 8px !important; }
+  .hc-fecha { font-size: 11px !important; color: var(--text2); white-space: nowrap; }
+  .hc-fact  { font-size: 10px !important; }
+  .hc-total { font-size: 13px !important; white-space: nowrap; }
+  .hc-btns  { display: flex; flex-wrap: wrap; gap: 3px; }
+  .hc-btn   { min-height: 28px !important; padding: 3px 7px !important; font-size: 11px !important; }
+  .hc-pago-wrap { margin-top: 4px; }
+  .hc-pago-toggle {
+    background: none; border: 1px solid var(--border2);
+    color: var(--text2); font-size: 10px; padding: 2px 7px;
+    border-radius: 4px; cursor: pointer; margin-top: 2px;
+  }
+  .hc-pago-toggle.open { color: var(--accent); border-color: var(--accent); }
+  .hc-pago-detalle { font-size: 11px; padding: 4px 0 2px; line-height: 1.6; }
   #venta-right.vr-open #vr-detail { display: block !important; }
 }
 
@@ -1614,6 +1654,7 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
 <script>
 const {createClient}=supabase;
 let sb=null,cart=[],compraItems=[];
+// window.cart sincronizado via bgSyncCart() llamado desde renderVentaTable
 let prodCache=[],catCache=[],provCache=[],embCache={};
 let ventaTipo='minorista',prodPage=1,prodSearch='',prodCatFilter='';
 let acSelected=-1;
@@ -2728,6 +2769,24 @@ function addToVenta(prodId,embId,qty=1){
   renderVentaTable();
 }
 
+function bgSyncCart(){
+  // Sincroniza cart al borrador automático — llamado desde renderVentaTable
+  if(typeof localStorage === 'undefined') return;
+  try{
+    if(!cart || !cart.length){ return; }
+    var d = {
+      cart: cart,
+      ventaTipo: ventaTipo||'minorista',
+      desc:    (document.getElementById('v-desc')||{}).value||'0',
+      cliente: (document.getElementById('v-cliente')||{}).value||'',
+      notas:   (document.getElementById('v-notas')||{}).value||'',
+      pay:     typeof selectedPay!=='undefined'?selectedPay:'efectivo',
+      ts: Date.now()
+    };
+    localStorage.setItem('bg_draft_venta', JSON.stringify(d));
+  }catch(e){}
+}
+
 function renderVentaTable(){
   const tbody=gs('venta-tbody');if(!tbody)return;
   tbody.innerHTML=cart.map((item,i)=>`<tr>
@@ -2747,6 +2806,7 @@ function renderVentaTable(){
   </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
   if(gs('v-count'))gs('v-count').textContent=cart.length;
   updateVTotals();
+  try{ bgSyncCart(); }catch(e){}
 }
 function vQty(i,d){cart[i].cantidad=Math.max(1,cart[i].cantidad+d);renderVentaTable();}
 function vQtySet(i,v){cart[i].cantidad=Math.max(1,parseInt(v)||1);renderVentaTable();}
@@ -2768,7 +2828,7 @@ function updateVTotals(){
   const sub=cart.reduce((s,c)=>s+(c.subtotalCalculado ?? (c.precio*c.cantidad)),0);
   const desc=parseFloat(gs('v-desc')?.value)||0,total=Math.max(0,sub-desc);
   const importe=parseFloat(gs('v-importe')?.value)||0;
-  const vuelto=importe-total;
+  const vuelto=importe-total; // positivo=vuelto, negativo=faltante
   // Actualizar total en el panel desktop y en el detalle del drawer
   if(gs('v-total'))gs('v-total').textContent=fmtGs(total);
   if(gs('v-total-detail'))gs('v-total-detail').textContent=fmtGs(total);
@@ -2779,10 +2839,22 @@ function updateVTotals(){
   }
   if(gs('v-vuelto')){
     if(importe>0&&selectedPay==='efectivo'){
-      gs('v-vuelto').textContent=`Vuelto: ${fmtGs(Math.max(0,vuelto))}`;
+      if(vuelto>=0){
+        gs('v-vuelto').textContent=`Vuelto: ${fmtGs(vuelto)}`;
+        gs('v-vuelto').style.color='var(--green)';
+      } else {
+        gs('v-vuelto').textContent=`Faltante: ${fmtGs(Math.abs(vuelto))}`;
+        gs('v-vuelto').style.color='var(--red)';
+      }
       gs('v-vuelto').style.display='block';
-      gs('v-vuelto').style.color=vuelto<0?'var(--red)':'var(--green)';
-    }else gs('v-vuelto').style.display='none';
+    } else if(importe>0&&selectedPay==='parcial'){
+      const falta=total-importe;
+      gs('v-vuelto').textContent=falta>0?`→ Fiado: ${fmtGs(falta)}`:'';
+      gs('v-vuelto').style.color='var(--amber)';
+      gs('v-vuelto').style.display=falta>0?'block':'none';
+    } else {
+      gs('v-vuelto').style.display='none';
+    }
   }
 }
 
@@ -2962,6 +3034,24 @@ function addToCompra(prodId,embId,qty=1){
   else compraItems.push({key,producto_id:prodId,embalaje_id:embId||null,nombre,costo,cantidad:qty,uds});
   renderCompraItems();
 }
+function bgSyncCompra(){
+  if(typeof localStorage === 'undefined') return;
+  try{
+    if(!compraItems || !compraItems.length) return;
+    var d = {
+      compraItems: compraItems,
+      fecha:   (document.getElementById('comp-fecha')||{}).value||'',
+      prov:    (document.getElementById('comp-prov')||{}).value||'',
+      factura: (document.getElementById('comp-factura')||{}).value||'',
+      metpago: (document.getElementById('comp-metpago')||{}).value||'efectivo',
+      estado:  (document.getElementById('comp-estado')||{}).value||'en_proceso',
+      notas:   (document.getElementById('comp-notas')||{}).value||'',
+      ts: Date.now()
+    };
+    localStorage.setItem('bg_draft_compra', JSON.stringify(d));
+  }catch(e){}
+}
+
 function renderCompraItems(){
   const el=gs('ccomp-items');if(!el)return;
   el.innerHTML=compraItems.map((item,i)=>`<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px">
@@ -2976,6 +3066,7 @@ function renderCompraItems(){
   </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
   const total=compraItems.reduce((s,c)=>s+c.costo*c.cantidad,0);
   if(gs('comp-total'))gs('comp-total').textContent=fmtGs(total);
+  try{ bgSyncCompra(); }catch(e){}
 }
 function cQty(i,d){compraItems[i].cantidad=Math.max(1,compraItems[i].cantidad+d);renderCompraItems();}
 function cQtySet(i,v){compraItems[i].cantidad=Math.max(1,parseInt(v)||1);renderCompraItems();}
@@ -3375,6 +3466,14 @@ renderVentas = async function(){
     div.textContent='Fiado';
     payGrid.appendChild(div);
   }
+  if(payGrid && !gs('pay-parcial')){
+    const div2=document.createElement('div');
+    div2.className='pay-btn';
+    div2.id='pay-parcial';
+    div2.setAttribute('onclick',"selectPay('parcial')");
+    div2.innerHTML='<span style="font-size:10px;line-height:1.2">Parcial<br>+Fiado</span>';
+    payGrid.appendChild(div2);
+  }
 };
 
 const __selectPayOriginal = selectPay;
@@ -3382,6 +3481,16 @@ selectPay = function(p){
   __selectPayOriginal(p);
   const imp=gs('v-importe');
   if(imp && p==='fiado') imp.value=0;
+  // Etiqueta dinámica para parcial
+  const impLabel=document.querySelector('label[for="v-importe"]') ||
+    (() => { const el=gs('v-importe'); return el ? el.previousElementSibling : null; })();
+  if(impLabel){
+    if(p==='parcial') impLabel.textContent='Pago recibido ahora (resto → fiado)';
+    else impLabel.textContent='Importe recibido (Gs.)';
+  }
+  // Marcar/desmarcar botón parcial
+  const btnP=gs('pay-parcial');
+  if(btnP) btnP.classList.toggle('active', p==='parcial');
   updateVTotals();
 };
 
@@ -3496,22 +3605,36 @@ async function borrarCompra(id, silencioso=false){
 }
 
 async function editarCompra(id){
-  if(!(await bgConfirm('¿Cargar esta compra para editarla?<br><span style="font-size:12px;color:var(--text2)">Al guardar los cambios se reemplazará la compra anterior.</span>',{ title:'Editar compra', confirmText:'Cargar para editar', variant:'warning' }))) return;
+  // NO borrar la compra — cargarla en modo edición usando __compraEditando
   const {data:compra}=await sb.from('bodega_compras').select('*').eq('id',id).single();
   const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(nombre,precio_costo)').eq('compra_id',id);
   if(!compra || !det){toast('No se pudo abrir la compra','err');return;}
-  await borrarCompra(id,true);
-  await loadCaches(true);
-  compraItems=(det||[]).map(d=>({key:d.producto_id,producto_id:d.producto_id,embalaje_id:null,nombre:d.bodega_productos?.nombre||'Producto',costo:d.costo_unitario,cantidad:d.cantidad,uds:1}));
+
+  // Guardar referencia para que finalizarCompra haga UPDATE en vez de INSERT
+  window.__compraEditando = { id, compra, detalles: det||[] };
+
+  compraItems=(det||[]).map(d=>({
+    key: String(d.producto_id)+(d.embalaje_id||''),
+    producto_id:d.producto_id,
+    embalaje_id:d.embalaje_id||null,
+    nombre:d.bodega_productos?.nombre||'Producto',
+    costo:parseFloat(d.costo_unitario)||0,
+    cantidad:d.cantidad_embalajes!=null?parseInt(d.cantidad_embalajes):(parseInt(d.cantidad)||0),
+    uds:parseInt(d.uds_por_embalaje)||1
+  }));
+
   renderCompras();
-  if(gs('comp-fecha')) gs('comp-fecha').value=compra.fecha;
+  if(gs('comp-fecha')) gs('comp-fecha').value=compra.fecha||fechaHoyPY();
   if(gs('comp-prov')) gs('comp-prov').value=compra.proveedor_id||'';
   if(gs('comp-factura')) gs('comp-factura').value=compra.numero_factura||'';
   if(gs('comp-metpago')) gs('comp-metpago').value=compra.metodo_pago||'efectivo';
-  if(gs('comp-estado')) gs('comp-estado').value=compra.estado||'finalizado';
+  if(gs('comp-estado')) gs('comp-estado').value=compra.estado||'en_proceso';
   if(gs('comp-notas')) gs('comp-notas').value=compra.notas||'';
   renderCompraItems();
-  toast('Compra cargada para editar. Revisá y volvé a guardar.');
+
+  // Mostrar banner de edición si la función existe
+  try{ if(typeof compraEditBanner==='function') compraEditBanner(compra); }catch(e){}
+  toast('Compra cargada para editar. Los cambios se guardarán sobre la misma compra.');
 }
 
 
@@ -3769,6 +3892,7 @@ async function imprimirOrdenCompra(id){
     <div class="firma"><div>Preparado por</div><div>Recibido por</div></div>
   
 
+
 </body>
   </html>`;
 
@@ -3782,22 +3906,48 @@ async function imprimirOrdenCompra(id){
 
 renderHistorialCompras = async function(){
   const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  // Deduplicar por id para evitar duplicados visuales
+  const seenIds = new Set();
+  const rows = (data||[]).filter(c => {
+    if(!c.id || seenIds.has(c.id)) return false;
+    seenIds.add(c.id);
+    return true;
+  });
+  // Helper: detalle de pago según metodo_pago
+  function pagoDetalle(c){
+    const mp = (c.metodo_pago||'').toLowerCase();
+    const total = fmtGs(c.total);
+    if(mp === 'efectivo') return `<span style="color:var(--green)">💵 Efectivo: ${total}</span>`;
+    if(mp === 'transferencia') return `<span style="color:var(--accent)">🏦 Transferencia: ${total}</span>`;
+    if(mp === 'crédito' || mp === 'credito') return `<span style="color:var(--amber)">💳 Crédito: ${total}</span>`;
+    if(mp === 'cheque') return `<span style="color:var(--text2)">📄 Cheque: ${total}</span>`;
+    if(mp === 'qr') return `<span style="color:var(--accent2)">📱 QR: ${total}</span>`;
+    if(mp === 'debito') return `<span style="color:var(--accent)">💳 Débito: ${total}</span>`;
+    if(mp) return `<span style="color:var(--text2)">${mp}: ${total}</span>`;
+    return `<span style="color:var(--text2)">-</span>`;
+  }
   gs('content').innerHTML=`<div class="card">
     <div class="card-header"><h3>Historial de compras</h3></div>
     <div class="hist-table-wrap" style="overflow-x:auto">
-    <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead><tbody>
-    ${(data||[]).map(c=>`<tr>
-      <td data-label="Fecha">${fmtDate(c.fecha)}</td>
-      <td data-label="Proveedor">${c.bodega_proveedores?.nombre||'-'}</td>
-      <td data-label="Factura" style="font-size:11px;color:var(--text2)">${c.numero_factura||'-'}</td>
-      <td data-label="Estado"><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
-      <td data-label="Total" style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">Ver</button>
-        <button class="btn btn-secondary btn-sm" onclick="imprimirOrdenCompra('${c.id}')">Orden/PDF</button>
-        ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
-        <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="borrarCompra('${c.id}')">Borrar</button>
+    <table class="hist-compras-table"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead><tbody>
+    ${rows.map(c=>`<tr class="hist-compra-row">
+      <td data-label="Fecha" class="hc-fecha">${fmtDate(c.fecha)}</td>
+      <td data-label="Proveedor" class="hc-prov">${c.bodega_proveedores?.nombre||'-'}</td>
+      <td data-label="Factura" class="hc-fact" style="font-size:11px;color:var(--text2)">${c.numero_factura||'-'}</td>
+      <td data-label="Estado" class="hc-estado"><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
+      <td data-label="Total" class="hc-total" style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
+      <td class="hc-acciones">
+        <div class="hc-btns">
+          <button class="btn btn-secondary btn-sm hc-btn" onclick="verCompra('${c.id}')">Ver</button>
+          <button class="btn btn-secondary btn-sm hc-btn" onclick="imprimirOrdenCompra('${c.id}')">Orden/PDF</button>
+          ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm hc-btn" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
+          <button class="btn btn-secondary btn-sm hc-btn" onclick="editarCompra('${c.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm hc-btn" onclick="borrarCompra('${c.id}')">Borrar</button>
+        </div>
+        <div class="hc-pago-wrap">
+          <button class="hc-pago-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">💰 Ver pago</button>
+          <div class="hc-pago-detalle" style="display:none">${pagoDetalle(c)}</div>
+        </div>
       </td>
     </tr>`).join('')}
     </tbody></table>
@@ -6889,7 +7039,35 @@ initMobileShell();
         <td data-label="Subtotal">${fmtGs(v.total)}</td>
         <td data-label="Desc." style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
         <td data-label="Total" style="font-weight:600;color:${v.metodo_pago==='fiado'?'var(--amber)':'var(--green)'}">${fmtGs(v.total_final)}</td>
-        <td data-label="Pago" style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':h(v.metodo_pago||'-')}</td>
+        <td data-label="Pago" style="font-size:12px">
+          ${(()=>{
+            const mp=(v.metodo_pago||'').toLowerCase();
+            const ef=Number(v.monto_efectivo)||0;
+            const tr=Number(v.monto_transferencia)||0;
+            const ot=Number(v.monto_otro)||0;
+            if(mp==='fiado') return '<span style="color:var(--amber);font-weight:700">Fiado</span>';
+            if(mp==='parcial'){
+              const diff=Number(v.total_final)-ef;
+              return '<div style="line-height:1.6">'
+                +'<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span><br>'
+                +'<span style="color:var(--amber)">📋 Fiado: '+fmtGs(diff)+'</span>'
+                +'</div>';
+            }
+            if(mp==='mixto'){
+              let parts=[];
+              if(ef>0) parts.push('<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span>');
+              if(tr>0) parts.push('<span style="color:var(--accent)">🏦 '+fmtGs(tr)+'</span>');
+              if(ot>0) parts.push('<span style="color:var(--accent2)">💳 '+fmtGs(ot)+'</span>');
+              return '<div style="line-height:1.6">'+(parts.length?parts.join('<br>'):'<span style="color:var(--text2)">Mixto</span>')+'</div>';
+            }
+            if(mp==='efectivo') return '<span style="color:var(--green)">💵 '+fmtGs(v.total_final)+'</span>';
+            if(mp==='transferencia') return '<span style="color:var(--accent)">🏦 '+fmtGs(v.total_final)+'</span>';
+            if(mp==='qr') return '<span style="color:var(--accent2)">📱 QR '+fmtGs(v.total_final)+'</span>';
+            if(mp==='debito') return '<span style="color:var(--accent)">💳 Déb. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='credito') return '<span style="color:var(--amber)">💳 Créd. '+fmtGs(v.total_final)+'</span>';
+            return h(v.metodo_pago||'-');
+          })()}
+        </td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
@@ -7066,6 +7244,7 @@ initMobileShell();
     </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
     if(gs('v-count'))gs('v-count').textContent=cart.length;
     updateVTotals();
+    try{ bgSyncCart(); }catch(e){}
   };
   window.vQty=vQty=function(i,d){
     if(!cart[i])return;
@@ -8121,7 +8300,70 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div class="card" style="margin-bottom:14px">
           <div class="card-header"><h3>DETALLE DE PAGO</h3></div>
-          <table><tbody>${(typeof bgPaymentRows==='function'?bgPaymentRows(v):'')}</tbody></table>
+          <div style="padding:12px 14px">
+          ${(()=>{
+            const mp = (v.metodo_pago||'').toLowerCase();
+            const ef = Number(v.monto_efectivo)||0;
+            const tr = Number(v.monto_transferencia)||0;
+            const ot = Number(v.monto_otro)||0;
+            const total = Number(v.total_final)||0;
+            const iconColor = (ico,col,lbl,monto) =>
+              `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--text2);font-size:13px">${ico} ${lbl}</span>
+                <span style="font-weight:700;font-size:14px;color:${col}">${fmtGs(monto)}</span>
+              </div>`;
+            if(mp==='fiado')
+              return iconColor('📋','var(--amber)','Fiado',total);
+            if(mp==='mixto'){
+              let rows='<div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:700">PAGO MIXTO</div>';
+              if(ef>0) rows+=iconColor('💵','var(--green)','Efectivo',ef);
+              if(tr>0) rows+=iconColor('🏦','var(--accent)','Transferencia',tr);
+              if(ot>0) rows+=iconColor('💳','var(--accent2)','Otro (QR/Déb./Créd.)',ot);
+              rows+=`<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:900">
+                <span style="font-size:13px">TOTAL</span>
+                <span style="color:var(--green);font-size:15px">${fmtGs(total)}</span>
+              </div>`;
+              return rows;
+            }
+            if(mp==='parcial'){
+              const fiadoDiff = total - ef;
+              let rows = iconColor('💵','var(--green)','Total venta',total);
+              rows += iconColor('🤝','var(--text2)','Recibido en efectivo',ef);
+              rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--amber);font-size:13px">📋 Fiado (resta)</span>
+                <span style="font-weight:700;font-size:14px;color:var(--amber)">${fmtGs(fiadoDiff)}</span>
+              </div>`;
+              return rows;
+            }
+            if(mp==='efectivo'){
+              const recibido = ef > 0 ? ef : total;
+              const diff = recibido - total;
+              let rows = iconColor('💵','var(--green)','Total venta',total);
+              if(ef > 0 && Math.abs(diff) > 0){
+                rows += iconColor('🤝','var(--text2)','Recibido',recibido);
+                if(diff > 0){
+                  // Pagó de más → devolver vuelto
+                  rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
+                    <span style="color:var(--accent2);font-size:13px">↩ Vuelto</span>
+                    <span style="font-weight:700;font-size:14px;color:var(--accent2)">${fmtGs(diff)}</span>
+                  </div>`;
+                } else {
+                  // Pagó de menos → faltante (registrar como deuda/parcial)
+                  rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
+                    <span style="color:var(--red);font-size:13px">⚠️ Faltante</span>
+                    <span style="font-weight:700;font-size:14px;color:var(--red)">${fmtGs(Math.abs(diff))}</span>
+                  </div>`;
+                }
+              }
+              return rows;
+            }
+            if(mp==='transferencia') return iconColor('🏦','var(--accent)','Transferencia',total);
+            if(mp==='qr')            return iconColor('📱','var(--accent2)','QR',total);
+            if(mp==='debito')        return iconColor('💳','var(--accent)','Débito',total);
+            if(mp==='credito')       return iconColor('💳','var(--amber)','Crédito',total);
+            return iconColor('💰','var(--text)',v.metodo_pago||'-',total);
+          })()}
+          </div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -8232,10 +8474,55 @@ async function revertirStockCompraReal(compraId, detalles){
       if(!cli.nombre && cNom) cli.nombre = cNom;
     }
 
-    // Validar fiado
+    // Validar fiado y parcial
     if(selectedPay==='fiado' && !cli.id && !cli.nombre){
       toast('Para vender fiado elegí o creá un cliente','err');
       return;
+    }
+    if(selectedPay==='parcial'){
+      if(!cli.id && !cli.nombre){
+        toast('Para pago parcial elegí o escribí el nombre del cliente','err');
+        return;
+      }
+      if(importe<=0){
+        toast('Ingresá el monto que pagó el cliente ahora','err');
+        return;
+      }
+      if(importe>=totalFinal){
+        toast('El importe cubre el total — usá Efectivo directamente','err');
+        return;
+      }
+    }
+
+    // Efectivo con faltante → preguntar si registrar la diferencia como fiado
+    if(selectedPay==='efectivo' && importe > 0 && importe < totalFinal){
+      const faltante = totalFinal - importe;
+      const confirmar = await bgConfirm(
+        `El cliente pagó <b>${fmtGs(importe)}</b> de un total de <b>${fmtGs(totalFinal)}</b>.<br><br>` +
+        `<span style="color:var(--amber);font-weight:700">Faltante: ${fmtGs(faltante)}</span><br><br>` +
+        `¿Registrar los <b>${fmtGs(faltante)}</b> como fiado del cliente?`,
+        {
+          title: '⚠️ Pago incompleto',
+          confirmText: 'Sí, registrar fiado',
+          cancelText: 'No, cobrar igual',
+          variant: 'warning'
+        }
+      );
+      if(confirmar){
+        // Convertir automáticamente a modo parcial
+        if(!cli.id && !cli.nombre){
+          toast('Para registrar el fiado escribí el nombre del cliente','err');
+          gs('v-cliente')?.focus();
+          return;
+        }
+        // Marcar como parcial internamente para que se cree el fiado
+        window.__pagoFaltanteComoParcial = { faltante, importePagado: importe };
+      } else {
+        // Cobrar sin fiado — el faltante queda registrado en el detalle de pago
+        window.__pagoFaltanteComoParcial = null;
+      }
+    } else {
+      window.__pagoFaltanteComoParcial = null;
     }
 
     // Construir productos con datos completos de embalaje
@@ -8272,7 +8559,7 @@ async function revertirStockCompraReal(compraId, detalles){
       p_metodo_pago:         selectedPay,
       p_productos:           productos,
       p_notas:               gs('v-notas')?.value||null,
-      p_monto_efectivo:      selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
+      p_monto_efectivo:      selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:((selectedPay==='efectivo'||selectedPay==='parcial')?importe:0),
       p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
       p_monto_otro:          selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
     });
@@ -8300,10 +8587,50 @@ async function revertirStockCompraReal(compraId, detalles){
       if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
     }
 
+    // Pago parcial: registrar fiado solo por la diferencia
+    if(selectedPay==='parcial'){
+      const fiadoDiff = totalFinal - importe;
+      const {error:fE2}=await sb.from('bodega_fiados').insert({
+        venta_id:       ventaId,
+        cliente_id:     cli.id||null,
+        cliente_nombre: cli.nombre,
+        monto_total:    fiadoDiff,
+        monto_pagado:   0,
+        saldo:          fiadoDiff,
+        estado:         'pendiente',
+        fecha:          fechaHoyPY(),
+        notas:          `Pago parcial: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`
+      });
+      if(fE2) toast('Venta guardada, pero falló el fiado parcial: '+fE2.message,'err');
+    }
+
+    // Efectivo con faltante confirmado como fiado
+    if(selectedPay==='efectivo' && window.__pagoFaltanteComoParcial){
+      const { faltante } = window.__pagoFaltanteComoParcial;
+      const {error:fE3}=await sb.from('bodega_fiados').insert({
+        venta_id:       ventaId,
+        cliente_id:     cli.id||null,
+        cliente_nombre: cli.nombre||'Ocasional',
+        monto_total:    faltante,
+        monto_pagado:   0,
+        saldo:          faltante,
+        estado:         'pendiente',
+        fecha:          fechaHoyPY(),
+        notas:          `Faltante de pago: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`
+      });
+      if(fE3) toast('Venta guardada, pero falló el registro del faltante como fiado: '+fE3.message,'err');
+      window.__pagoFaltanteComoParcial = null;
+    }
+
     const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : '';
+    const esFaltanteRegistrado = selectedPay==='efectivo' && importe>0 && importe<totalFinal;
     toast(selectedPay==='fiado'
       ? `✓ Fiado registrado: ${fmtGs(totalFinal)}${nTag}`
-      : `✓ Cobrado: ${fmtGs(totalFinal)}${nTag}`);
+      : selectedPay==='parcial'
+        ? `✓ Cobrado ${fmtGs(importe)} · Fiado: ${fmtGs(totalFinal-importe)}${nTag}`
+        : esFaltanteRegistrado
+          ? `✓ Cobrado ${fmtGs(importe)} · Fiado: ${fmtGs(totalFinal-importe)}${nTag}`
+          : `✓ Cobrado: ${fmtGs(totalFinal)}${nTag}`);
     _dashCache=null;
     await loadCaches(true);
 
@@ -8360,14 +8687,14 @@ async function revertirStockCompraReal(compraId, detalles){
         descuento:  Math.round(desc),
         total_final:Math.round(totalFinal),
         cliente_nombre: cli.nombre||null,
-        cliente_id:     cli.id||null,
         fecha:          fechaHoyPY(),
         monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:(selectedPay==='efectivo'?importe:0),
         monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+        monto_otro: selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0),
       };
 
       const {error:vErr}=await sb.from('bodega_ventas').update(ventaUpdate).eq('id',ventaId);
-      if(vErr) throw vErr;
+      if(vErr){ console.error('Error al actualizar bodega_ventas:',vErr); throw vErr; }
 
       /* Reconstruir stock: revertir detalle anterior */
       const {data:detAnt}=await sb.from('bodega_ventas_detalle').select('*').eq('venta_id',ventaId);
@@ -8382,20 +8709,15 @@ async function revertirStockCompraReal(compraId, detalles){
 
       await sb.from('bodega_ventas_detalle').delete().eq('venta_id',ventaId);
 
-      /* Insertar nuevos detalles con datos de embalaje */
+      /* Insertar nuevos detalles — solo campos que acepta la tabla */
       const detallesNuevos = cart.map(c=>{
         const cantUds = (Number(c.cantidad)||0) * (Number(c.uds)||1);
         const sub = c.subtotalCalculado ?? (c.precio * c.cantidad);
         return {
-          venta_id:          ventaId,
-          producto_id:       c.producto_id,
-          cantidad:          cantUds,               // total en unidades
-          precio_unitario:   cantUds>0 ? sub/cantUds : 0,
-          subtotal:          Math.round(sub),
-          es_embalaje:       (c.uds||1) > 1,
-          uds_por_embalaje:  c.uds||1,
-          embalaje_id:       c.embalaje_id||null,
-          cantidad_embalajes: (c.uds||1) > 1 ? c.cantidad : null
+          venta_id:        ventaId,
+          producto_id:     c.producto_id,
+          cantidad:        cantUds,
+          precio_unitario: cantUds>0 ? sub/cantUds : 0
         };
       });
       const {error:dErr}=await sb.from('bodega_ventas_detalle').insert(detallesNuevos);
@@ -10141,6 +10463,60 @@ async function revertirStockCompraReal(compraId, detalles){
 
   window.finalizarCompra = finalizarCompra = async function(){
     if(!compraItems.length){toast('No hay productos','err');return;}
+
+    // ── Si hay una compra en edición, ACTUALIZAR en vez de insertar ──
+    const edit = window.__compraEditando;
+    if(edit && edit.id){
+      const id = edit.id;
+      var total2=compraItems.reduce(function(s,c){return s+(Number(c.costo)||0)*(Number(c.cantidad)||0);},0);
+      var estado2=gs('comp-estado').value;
+      var compraUpd={
+        fecha:gs('comp-fecha').value,
+        proveedor_id:gs('comp-prov').value||null,
+        numero_factura:gs('comp-factura').value||null,
+        total:total2,
+        metodo_pago:gs('comp-metpago').value,
+        estado:estado2,
+        notas:gs('comp-notas').value||null
+      };
+
+      // Revertir stock si estaba finalizado
+      if(edit.compra && edit.compra.estado === 'finalizado'){
+        if(typeof revertirStockCompraReal === 'function'){
+          await revertirStockCompraReal(id, edit.detalles || []);
+        }
+      }
+
+      var uErr = (await sb.from('bodega_compras').update(compraUpd).eq('id', id)).error;
+      if(uErr){toast('Error actualizando compra: '+uErr.message,'err');return;}
+
+      await sb.from('bodega_compras_detalle').delete().eq('compra_id', id);
+
+      var nuevosDetalles=compraItems.map(function(c){
+        var uds=Math.max(1,Number(c.uds)||1);
+        var cantUds=(Number(c.cantidad)||0)*uds;
+        var costoUnit=(Number(c.costo)||0)/uds;
+        return {compra_id:id,producto_id:c.producto_id,cantidad:cantUds,costo_unitario:costoUnit,
+          embalaje_id:c.embalaje_id||null,uds_por_embalaje:uds,
+          cantidad_embalajes:uds>1?parseInt(c.cantidad)||null:null};
+      });
+      var insErr = (await sb.from('bodega_compras_detalle').insert(nuevosDetalles)).error;
+      if(insErr){toast('Error guardando detalle: '+insErr.message,'err');return;}
+
+      if(estado2 === 'finalizado' && typeof impactarStock === 'function'){
+        await impactarStock(id, compraItems);
+      }
+
+      window.__compraEditando = null;
+      compraItems = [];
+      toast('✓ Compra editada correctamente');
+      await loadCaches(true);
+      if(typeof renderHistorialCompras === 'function') renderHistorialCompras();
+      else renderCompras();
+      return;
+    }
+
+    // ── Nueva compra (sin edición activa) ──
     var total=compraItems.reduce(function(s,c){return s+(Number(c.costo)||0)*(Number(c.cantidad)||0);},0);
     var estado=gs('comp-estado').value;
     var compra={fecha:gs('comp-fecha').value,proveedor_id:gs('comp-prov').value||null,numero_factura:gs('comp-factura').value||null,total:total,metodo_pago:gs('comp-metpago').value,estado:estado,notas:gs('comp-notas').value||null};
@@ -10163,5 +10539,312 @@ async function revertirStockCompraReal(compraId, detalles){
   try{ if(typeof pages!=='undefined'){ pages.compras=renderCompras; } if(typeof titles!=='undefined'){titles.compras='Nueva compra';} }catch(e){}
 })();
 </script>
+
+<script>
+/* ── Diagnóstico de stock duplicado por compras ── */
+window.diagnosticarStockCompras = async function(){
+  if(!sb){ alert('No hay conexión a Supabase'); return; }
+
+  // 1. Traer todas las compras finalizadas del mes actual
+  const hoy = new Date();
+  const primerDia = hoy.getFullYear()+'-'+(String(hoy.getMonth()+1).padStart(2,'0'))+'-01';
+
+  const {data:compras} = await sb
+    .from('bodega_compras')
+    .select('id,fecha,total,estado,proveedor_id,bodega_proveedores(nombre),numero_factura')
+    .gte('fecha', primerDia)
+    .eq('estado','finalizado')
+    .order('fecha',{ascending:false});
+
+  // 2. Traer todos los ajustes de stock tipo 'entrada' de compras del mes
+  const {data:ajustes} = await sb
+    .from('bodega_ajustes_stock')
+    .select('id,producto_id,cantidad,referencia_id,referencia_tipo,created_at,bodega_productos(nombre)')
+    .eq('referencia_tipo','compra')
+    .gte('created_at', primerDia+'T00:00:00')
+    .order('created_at',{ascending:false});
+
+  // 3. Agrupar ajustes por referencia_id (= compra_id)
+  const ajustesPorCompra = {};
+  (ajustes||[]).forEach(a => {
+    if(!ajustesPorCompra[a.referencia_id]) ajustesPorCompra[a.referencia_id] = [];
+    ajustesPorCompra[a.referencia_id].push(a);
+  });
+
+  // 4. Detectar compras que tienen ajustes de stock aplicados
+  const reporte = (compras||[]).map(c => ({
+    id: c.id,
+    fecha: c.fecha,
+    proveedor: c.bodega_proveedores?.nombre || '(sin proveedor)',
+    factura: c.numero_factura || '-',
+    total: c.total,
+    ajustes_stock: (ajustesPorCompra[c.id]||[]).length,
+    productos_impactados: [...new Set((ajustesPorCompra[c.id]||[]).map(a=>a.bodega_productos?.nombre||a.producto_id))]
+  }));
+
+  // 5. Construir HTML del reporte
+  const rows = reporte.map(r => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;font-size:12px">${r.fecha}</td>
+      <td style="padding:6px 8px;font-size:12px">${r.proveedor}</td>
+      <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${r.factura}</td>
+      <td style="padding:6px 8px;font-size:12px;color:var(--amber);font-weight:700">${fmtGs(r.total)}</td>
+      <td style="padding:6px 8px;text-align:center">
+        <span style="background:${r.ajustes_stock>0?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${r.ajustes_stock>0?'var(--green)':'var(--red)'};padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700">
+          ${r.ajustes_stock} movs.
+        </span>
+      </td>
+      <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${r.productos_impactados.slice(0,3).join(', ')+(r.productos_impactados.length>3?' +más':'')}</td>
+    </tr>
+  `).join('');
+
+  const totalComprasDB = (compras||[]).reduce((s,c)=>s+(Number(c.total)||0),0);
+  const comprasSinStock = reporte.filter(r=>r.ajustes_stock===0);
+  const comprasConStock = reporte.filter(r=>r.ajustes_stock>0);
+
+  openModal('🔍 Diagnóstico de stock — Compras del mes', `
+    <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <div style="background:rgba(99,102,241,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
+        <div style="font-size:11px;color:var(--text2)">Compras finalizadas</div>
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${(compras||[]).length}</div>
+      </div>
+      <div style="background:rgba(34,197,94,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
+        <div style="font-size:11px;color:var(--text2)">Con stock aplicado</div>
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${comprasConStock.length}</div>
+      </div>
+      <div style="background:rgba(239,68,68,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
+        <div style="font-size:11px;color:var(--text2)">Sin movimiento de stock</div>
+        <div style="font-size:20px;font-weight:800;color:var(--red)">${comprasSinStock.length}</div>
+      </div>
+      <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
+        <div style="font-size:11px;color:var(--text2)">Total en DB (dashboard)</div>
+        <div style="font-size:16px;font-weight:800;color:var(--amber)">${fmtGs(totalComprasDB)}</div>
+      </div>
+    </div>
+    ${comprasSinStock.length>0?`<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b style="color:var(--red)">⚠️ Estas compras finalizadas NO tienen movimientos de stock registrados:</b><br>
+      ${comprasSinStock.map(r=>`<span style="color:var(--text2)">${r.fecha} · ${r.proveedor} · ${fmtGs(r.total)}</span>`).join('<br>')}
+      <br><span style="color:var(--text2);font-size:11px">Puede ser que el stock se aplicó pero el ajuste no se registró, o que sea un registro fantasma.</span>
+    </div>`:''}
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text2)">FECHA</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text2)">PROVEEDOR</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text2)">FACTURA</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text2)">TOTAL</th>
+        <th style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text2)">STOCK</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:var(--text2)">PRODUCTOS</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text2)">
+      ℹ️ "Movs." = cantidad de registros en <b>bodega_ajustes_stock</b> con referencia a esa compra.<br>
+      Si una compra tiene 0 movs. y está "Finalizado", el stock puede no haberse aplicado.<br>
+      Si aparecen 2 compras distintas de Distribuidora Gloria con el mismo total, ambas cuentan en el dashboard pero solo la que tenga movs. afectó el stock.
+    </div>
+  `, null, '');
+};
+</script>
+
+<script>
+(function(){
+  /* ═══ BORRADORES AUTOMÁTICOS v3 ═══
+     - Guarda cart/compraItems cada 3s en localStorage
+     - Intercepta clicks del menú con fase de captura
+     - Muestra banner de recuperación al recargar
+  */
+
+  var DV = 'bg_draft_venta';
+  var DC = 'bg_draft_compra';
+
+  function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+  function lsGet(k){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){return null;} }
+  function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
+
+  // cart y compraItems son variables de scope cerrado — acceder via eval seguro
+  function getCart(){
+    // Leer desde localStorage que bgSyncCart() mantiene actualizado
+    try{
+      var d = localStorage.getItem('bg_draft_venta');
+      if(d){ var p=JSON.parse(d); return (p&&p.cart&&p.cart.length)?p.cart:[]; }
+    }catch(e){}
+    return [];
+  }
+  function getCompraItems(){
+    try{
+      var d = localStorage.getItem('bg_draft_compra');
+      if(d){ var p=JSON.parse(d); return (p&&p.compraItems&&p.compraItems.length)?p.compraItems:[]; }
+    }catch(e){}
+    return [];
+  }
+
+  function guardarVenta(){
+    var c=getCart(); if(!c.length) return;
+    lsSet(DV,{
+      cart:c,
+      ventaTipo: (typeof ventaTipo!=='undefined'?ventaTipo:'minorista'),
+      desc:    (document.getElementById('v-desc')||{}).value||'0',
+      cliente: (document.getElementById('v-cliente')||{}).value||'',
+      notas:   (document.getElementById('v-notas')||{}).value||'',
+      pay:     (typeof selectedPay!=='undefined'?selectedPay:'efectivo'),
+      ts: Date.now()
+    });
+  }
+
+  function guardarCompra(){
+    var c=getCompraItems(); if(!c.length) return;
+    lsSet(DC,{
+      compraItems:c,
+      fecha:   (document.getElementById('comp-fecha')||{}).value||'',
+      prov:    (document.getElementById('comp-prov')||{}).value||'',
+      factura: (document.getElementById('comp-factura')||{}).value||'',
+      metpago: (document.getElementById('comp-metpago')||{}).value||'efectivo',
+      estado:  (document.getElementById('comp-estado')||{}).value||'en_proceso',
+      notas:   (document.getElementById('comp-notas')||{}).value||'',
+      ts: Date.now()
+    });
+  }
+
+  // Auto-guardar cada 3 segundos
+  setInterval(function(){ guardarVenta(); guardarCompra(); }, 3000);
+
+  // Limpiar al confirmar venta/compra
+  function patchFinalizar(){
+    if(typeof window.finalizarVenta==='function' && !window.finalizarVenta.__dpv){
+      var ov=window.finalizarVenta;
+      window.finalizarVenta=async function(){ var r=await ov.apply(this,arguments); lsDel(DV); return r; };
+      window.finalizarVenta.__dpv=true;
+    }
+    if(typeof window.finalizarCompra==='function' && !window.finalizarCompra.__dpc){
+      var oc=window.finalizarCompra;
+      window.finalizarCompra=async function(){ var r=await oc.apply(this,arguments); lsDel(DC); return r; };
+      window.finalizarCompra.__dpc=true;
+    }
+  }
+  setTimeout(patchFinalizar, 2000);
+  setTimeout(patchFinalizar, 5000);
+
+  // Restaurar venta
+  window.bgRestaurarBorradorVenta = function(){
+    var d=lsGet(DV); if(!d||!d.cart||!d.cart.length){ if(typeof toast==='function') toast('No hay borrador de venta','err'); return; }
+    var cartGuardado=d.cart, mins=Math.round((Date.now()-d.ts)/60000);
+    lsDel(DV);
+    if(d.ventaTipo){ try{ ventaTipo=d.ventaTipo; }catch(e){} }
+    // renderVentas() resetea cart=[] — por eso asignamos DESPUÉS en el setTimeout
+    if(typeof renderVentas==='function') renderVentas();
+    setTimeout(function(){
+      try{ cart=cartGuardado; }catch(e){}
+      if(d.pay && typeof selectPay==='function') selectPay(d.pay);
+      var el;
+      if(d.desc    && (el=document.getElementById('v-desc')))    el.value=d.desc;
+      if(d.cliente && (el=document.getElementById('v-cliente'))) el.value=d.cliente;
+      if(d.notas   && (el=document.getElementById('v-notas')))   el.value=d.notas;
+      if(typeof renderVentaTable==='function') renderVentaTable();
+      if(typeof updateVTotals==='function') updateVTotals();
+      if(typeof toast==='function') toast('✅ Venta restaurada ('+mins+' min · '+cartGuardado.length+' productos)');
+    }, 400);
+  };
+
+  // Restaurar compra
+  window.bgRestaurarBorradorCompra = function(){
+    var d=lsGet(DC); if(!d||!d.compraItems||!d.compraItems.length){ if(typeof toast==='function') toast('No hay borrador de compra','err'); return; }
+    try{ compraItems=d.compraItems; }catch(e){}
+    if(typeof renderCompras==='function') renderCompras();
+    setTimeout(function(){
+      var el;
+      if(d.fecha   && (el=document.getElementById('comp-fecha')))    el.value=d.fecha;
+      if(d.prov    && (el=document.getElementById('comp-prov')))     el.value=d.prov;
+      if(d.factura && (el=document.getElementById('comp-factura')))  el.value=d.factura;
+      if(d.metpago && (el=document.getElementById('comp-metpago')))  el.value=d.metpago;
+      if(d.estado  && (el=document.getElementById('comp-estado')))   el.value=d.estado;
+      if(d.notas   && (el=document.getElementById('comp-notas')))    el.value=d.notas;
+      if(typeof renderCompraItems==='function') renderCompraItems();
+    }, 400);
+    var mins=Math.round((Date.now()-d.ts)/60000);
+    if(typeof toast==='function') toast('Compra restaurada ('+mins+' min \u00b7 '+d.compraItems.length+' productos)');
+    lsDel(DC);
+  };
+
+  // Interceptar clicks del menú en fase de captura
+  document.addEventListener('click', function(e){
+    var cv=getCart(), cc=getCompraItems();
+    if(!cv.length && !cc.length) return;
+
+    var link = e.target.closest('a[data-page]');
+    if(!link) return;
+
+    var destino = link.getAttribute('data-page')||'';
+    if(!destino) return;
+    // No interrumpir si va a ventas/compras (donde están los datos)
+    if(destino==='ventas' || destino==='compras' || destino==='historial-compras') return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    guardarVenta(); guardarCompra();
+
+    var msg = '';
+    if(cv.length && cc.length)
+      msg = 'Ten\u00e9s <b>'+cv.length+'</b> producto(s) en ventas y <b>'+cc.length+'</b> en compras sin guardar.';
+    else if(cv.length)
+      msg = 'Ten\u00e9s <b>'+cv.length+' producto(s)</b> en el carrito de venta sin cobrar.';
+    else
+      msg = 'Ten\u00e9s <b>'+cc.length+' producto(s)</b> en la compra sin guardar.';
+    msg += '<br><br><span style="color:var(--text2);font-size:12px">El borrador se guard\u00f3. Pod\u00e9s recuperarlo al volver.</span>';
+
+    bgConfirm(msg, {
+      title: '\u26a0\ufe0f Datos sin guardar',
+      confirmText: 'Salir igual',
+      cancelText: 'Quedarme',
+      variant: 'warning'
+    }).then(function(ok){
+      if(ok && typeof window.goTo==='function') window.goTo(destino);
+    });
+  }, true);
+
+  // Banners de recuperación al cargar
+  function mostrarBanners(){
+    var dv=lsGet(DV), dc=lsGet(DC);
+    if(dv && dv.cart && dv.cart.length){
+      var mins=Math.round((Date.now()-dv.ts)/60000);
+      var el=document.createElement('div');
+      el.id='bg-dvb';
+      el.style.cssText='position:fixed;bottom:80px;right:16px;z-index:9999;background:var(--bg2,#1e1e2e);border:2px solid var(--accent,#6366f1);border-radius:10px;padding:10px 14px;max-width:260px;box-shadow:0 4px 20px rgba(0,0,0,.5);font-size:13px';
+      el.innerHTML='<div style="font-weight:700;color:var(--accent,#6366f1);margin-bottom:4px">\uD83D\uDD04 Borrador de venta</div>'+
+        '<div style="color:var(--text2,#888);font-size:12px;margin-bottom:8px">'+dv.cart.length+' producto(s) \u00b7 hace '+mins+' min</div>'+
+        '<div style="display:flex;gap:6px">'+
+        '<button onclick="bgRestaurarBorradorVenta();var b=document.getElementById(\'bg-dvb\');if(b)b.remove()" style="flex:1;padding:5px 8px;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">Restaurar</button>'+
+        '<button onclick="localStorage.removeItem(\'bg_draft_venta\');var b=document.getElementById(\'bg-dvb\');if(b)b.remove()" style="padding:5px 8px;background:none;color:var(--text2,#888);border:1px solid var(--border2,#444);border-radius:6px;cursor:pointer;font-size:12px">Descartar</button>'+
+        '</div>';
+      document.body.appendChild(el);
+    }
+    if(dc && dc.compraItems && dc.compraItems.length){
+      var mins2=Math.round((Date.now()-dc.ts)/60000);
+      var bot=(dv&&dv.cart&&dv.cart.length)?'170px':'80px';
+      var el2=document.createElement('div');
+      el2.id='bg-dcb';
+      el2.style.cssText='position:fixed;bottom:'+bot+';right:16px;z-index:9999;background:var(--bg2,#1e1e2e);border:2px solid var(--amber,#f59e0b);border-radius:10px;padding:10px 14px;max-width:260px;box-shadow:0 4px 20px rgba(0,0,0,.5);font-size:13px';
+      el2.innerHTML='<div style="font-weight:700;color:var(--amber,#f59e0b);margin-bottom:4px">\uD83D\uDD04 Borrador de compra</div>'+
+        '<div style="color:var(--text2,#888);font-size:12px;margin-bottom:8px">'+dc.compraItems.length+' producto(s) \u00b7 hace '+mins2+' min</div>'+
+        '<div style="display:flex;gap:6px">'+
+        '<button onclick="bgRestaurarBorradorCompra();var b=document.getElementById(\'bg-dcb\');if(b)b.remove()" style="flex:1;padding:5px 8px;background:var(--amber,#f59e0b);color:#111;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">Restaurar</button>'+
+        '<button onclick="localStorage.removeItem(\'bg_draft_compra\');var b=document.getElementById(\'bg-dcb\');if(b)b.remove()" style="padding:5px 8px;background:none;color:var(--text2,#888);border:1px solid var(--border2,#444);border-radius:6px;cursor:pointer;font-size:12px">Descartar</button>'+
+        '</div>';
+      document.body.appendChild(el2);
+    }
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(mostrarBanners,1500); });
+  } else {
+    setTimeout(mostrarBanners,1500);
+  }
+
+  window.__bgDraftSystem = true;
+  console.log('[BG] Sistema de borradores v2 activo');
+})();
+</script>
+
 </body>
 </html>
