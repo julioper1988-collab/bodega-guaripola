@@ -12533,5 +12533,338 @@ window.diagnosticarStockCompras = async function(){
 })();
 </script>
 
+
+<script id="bg-fix-editar-compra-precio-venta-v33">
+(function(){
+  if(window.__bgFixEditarCompraPrecioVentaV33) return;
+  window.__bgFixEditarCompraPrecioVentaV33 = true;
+
+  function num(v){ return Number(v)||0; }
+  function int(v){ return parseInt(v)||0; }
+
+  async function cargarProductosParaDetalles(detalles){
+    var ids = Array.from(new Set((detalles||[]).map(function(d){return d.producto_id;}).filter(Boolean)));
+    var mapa = {};
+
+    try{
+      if(Array.isArray(window.prodCache)){
+        window.prodCache.forEach(function(p){
+          if(p && p.id) mapa[p.id]=p;
+        });
+      }else if(typeof prodCache !== 'undefined' && Array.isArray(prodCache)){
+        prodCache.forEach(function(p){
+          if(p && p.id) mapa[p.id]=p;
+        });
+      }
+    }catch(e){}
+
+    var faltan = ids.filter(function(id){ return !mapa[id]; });
+    if(faltan.length){
+      try{
+        var q = await sb.from('bodega_productos')
+          .select('id,nombre,precio_costo,precio_venta,codigo_barra')
+          .in('id', faltan);
+        (q.data||[]).forEach(function(p){
+          if(p && p.id) mapa[p.id]=p;
+        });
+      }catch(e){}
+    }
+
+    return mapa;
+  }
+
+  function costoParaEditar(detalle, producto){
+    var uds = Math.max(1, int(detalle.uds_por_embalaje) || 1);
+    var cantEmb = detalle.cantidad_embalajes != null
+      ? Math.max(1, int(detalle.cantidad_embalajes))
+      : (uds > 1 ? Math.max(1, Math.round((int(detalle.cantidad)||0) / uds)) : Math.max(1, int(detalle.cantidad)||1));
+
+    var costoUnitDetalle = num(detalle.costo_unitario);
+    var subtotal = num(detalle.subtotal);
+
+    // Si existe subtotal guardado, es el dato más confiable.
+    if(subtotal > 0 && cantEmb > 0){
+      return subtotal / cantEmb;
+    }
+
+    // En las versiones nuevas, costo_unitario queda guardado por unidad.
+    // Para mostrar y editar compra por embalaje, reconstruimos costo del pack.
+    if(uds > 1){
+      return costoUnitDetalle * uds;
+    }
+
+    return costoUnitDetalle || num(producto && producto.precio_costo);
+  }
+
+  window.editarCompra = async function(id){
+    try{
+      var compraRes = await sb.from('bodega_compras').select('*').eq('id', id).single();
+      if(compraRes.error || !compraRes.data){
+        toast('No se pudo abrir la compra para editar','err');
+        return;
+      }
+
+      // Consulta simple: evita que falle por relación y evita que vuelva vacío por select anidado.
+      var detRes = await sb.from('bodega_compras_detalle')
+        .select('*')
+        .eq('compra_id', id)
+        .order('created_at', {ascending:true});
+
+      if(detRes.error){
+        // Fallback sin order por si created_at no existe en detalle.
+        detRes = await sb.from('bodega_compras_detalle')
+          .select('*')
+          .eq('compra_id', id);
+      }
+
+      var detalles = detRes.data || [];
+      var productos = await cargarProductosParaDetalles(detalles);
+
+      var compra = compraRes.data;
+      window.__compraEditando = { id:id, compra:compra, detalles:detalles };
+
+      // Primero abrir pantalla de nueva compra. Esa pantalla puede resetear compraItems.
+      if(typeof renderCompras === 'function') renderCompras();
+
+      setTimeout(function(){
+        try{
+          if(typeof compraEditBanner === 'function') compraEditBanner(compra);
+
+          var el;
+          if((el=document.getElementById('comp-fecha')))   el.value = compra.fecha || fechaHoyPY();
+          if((el=document.getElementById('comp-prov')))    el.value = compra.proveedor_id || '';
+          if((el=document.getElementById('comp-factura'))) el.value = compra.numero_factura || '';
+          if((el=document.getElementById('comp-metpago'))) el.value = compra.metodo_pago || 'efectivo';
+          if((el=document.getElementById('comp-estado')))  el.value = compra.estado || 'en_proceso';
+          if((el=document.getElementById('comp-notas')))   el.value = compra.notas || '';
+
+          compraItems = (detalles||[]).map(function(d){
+            var p = productos[d.producto_id] || {};
+            var uds = Math.max(1, int(d.uds_por_embalaje) || 1);
+            var cantTotal = int(d.cantidad);
+            var cantEmb = d.cantidad_embalajes != null
+              ? Math.max(1, int(d.cantidad_embalajes))
+              : (uds > 1 ? Math.max(1, Math.round(cantTotal / uds)) : Math.max(1, cantTotal || 1));
+
+            var nombre = p.nombre || 'Producto';
+            if(uds > 1){
+              nombre = nombre + ' (x' + uds + ')';
+            }
+
+            return {
+              key: String(d.producto_id) + (d.embalaje_id || ''),
+              producto_id: d.producto_id,
+              embalaje_id: d.embalaje_id || null,
+              nombre: nombre,
+              costo: costoParaEditar(d, p),
+              cantidad: cantEmb,
+              uds: uds,
+              precio_venta: num(p.precio_venta),
+              subtotalManual: null,
+              controlado: false
+            };
+          });
+
+          if(typeof renderCompraItems === 'function') renderCompraItems();
+
+          if(!compraItems.length){
+            toast('Compra abierta, pero no encontré productos en el detalle. Revisá si esa compra se guardó sin detalle.','err');
+          }else{
+            toast('Compra abierta para editar con productos y precio de venta actual.');
+          }
+        }catch(e){
+          console.error('Error pintando compra para editar', e);
+          toast('Error mostrando la compra para editar','err');
+        }
+      }, 180);
+
+    }catch(e){
+      console.error('Error editarCompra v33', e);
+      toast('No se pudo abrir la compra para editar','err');
+    }
+  };
+})();
+</script>
+
+
+<script id="bg-fix-editar-compra-detalle-multibusqueda-v34">
+(function(){
+  if(window.__bgFixEditarCompraDetalleV34) return;
+  window.__bgFixEditarCompraDetalleV34 = true;
+
+  function num(v){ return Number(v)||0; }
+  function int(v){ return parseInt(v)||0; }
+
+  async function buscarDetallesCompra(compraId){
+    var intentos = [
+      {tabla:'bodega_compras_detalle', campo:'compra_id'},
+      {tabla:'bodega_compra_detalle', campo:'compra_id'},
+      {tabla:'bodega_compras_items', campo:'compra_id'},
+      {tabla:'bodega_compra_items', campo:'compra_id'},
+      {tabla:'compras_detalle', campo:'compra_id'},
+      {tabla:'compra_detalle', campo:'compra_id'},
+      {tabla:'bodega_compras_detalle', campo:'id_compra'},
+      {tabla:'bodega_compra_detalle', campo:'id_compra'}
+    ];
+
+    var errores = [];
+
+    for(var i=0;i<intentos.length;i++){
+      var it=intentos[i];
+      try{
+        var q = await sb.from(it.tabla).select('*').eq(it.campo, compraId);
+        if(q.error){
+          errores.push(it.tabla+'.'+it.campo+': '+q.error.message);
+          continue;
+        }
+        if(q.data && q.data.length){
+          console.log('Detalle de compra encontrado en', it.tabla, it.campo, q.data);
+          return {data:q.data, tabla:it.tabla, campo:it.campo};
+        }
+      }catch(e){
+        errores.push(it.tabla+'.'+it.campo+': '+(e.message||e));
+      }
+    }
+
+    console.warn('No se encontraron detalles de compra. Intentos:', errores);
+    return {data:[], tabla:null, campo:null, errores:errores};
+  }
+
+  async function cargarProductos(detalles){
+    var ids = Array.from(new Set((detalles||[]).map(function(d){
+      return d.producto_id || d.id_producto || d.product_id;
+    }).filter(Boolean)));
+
+    var mapa = {};
+    try{
+      var cache = Array.isArray(window.prodCache) ? window.prodCache :
+                  (typeof prodCache !== 'undefined' && Array.isArray(prodCache) ? prodCache : []);
+      cache.forEach(function(p){ if(p && p.id) mapa[p.id]=p; });
+    }catch(e){}
+
+    var faltan = ids.filter(function(id){ return !mapa[id]; });
+    if(faltan.length){
+      try{
+        var q = await sb.from('bodega_productos')
+          .select('id,nombre,codigo_barra,precio_costo,precio_venta,stock')
+          .in('id', faltan);
+        (q.data||[]).forEach(function(p){ if(p && p.id) mapa[p.id]=p; });
+      }catch(e){}
+    }
+    return mapa;
+  }
+
+  function getProdId(d){
+    return d.producto_id || d.id_producto || d.product_id || null;
+  }
+  function getEmbId(d){
+    return d.embalaje_id || d.id_embalaje || null;
+  }
+  function getUds(d){
+    return Math.max(1,
+      int(d.uds_por_embalaje) ||
+      int(d.unidades_por_embalaje) ||
+      int(d.unidades_pack) ||
+      int(d.uds_pack) ||
+      1
+    );
+  }
+  function getCantidadEmb(d, uds){
+    if(d.cantidad_embalajes != null) return Math.max(1, int(d.cantidad_embalajes));
+    if(d.cantidad_packs != null) return Math.max(1, int(d.cantidad_packs));
+    if(d.cantidad_compra != null) return Math.max(1, int(d.cantidad_compra));
+    var cantidadTotal = int(d.cantidad) || int(d.unidades) || 1;
+    return uds > 1 ? Math.max(1, Math.round(cantidadTotal / uds)) : Math.max(1, cantidadTotal);
+  }
+  function getCostoMostrar(d, p, uds, cantEmb){
+    var subtotal = num(d.subtotal || d.total || d.total_linea);
+    if(subtotal > 0 && cantEmb > 0) return subtotal / cantEmb;
+
+    var costoUnit = num(d.costo_unitario || d.precio_costo || d.costo || d.costo_unidad);
+    if(costoUnit > 0){
+      // Si es embalaje, normalmente el detalle guarda costo unitario por unidad.
+      return uds > 1 ? costoUnit * uds : costoUnit;
+    }
+
+    var pc = num(p && (p.precio_costo || p.costo));
+    return uds > 1 ? pc * uds : pc;
+  }
+
+  window.editarCompra = async function(id){
+    try{
+      var c = await sb.from('bodega_compras').select('*').eq('id', id).single();
+      if(c.error || !c.data){
+        toast('No se pudo abrir la compra','err');
+        console.error('Error cabecera compra', c.error);
+        return;
+      }
+
+      var compra = c.data;
+      var det = await buscarDetallesCompra(id);
+      var detalles = det.data || [];
+      var productos = await cargarProductos(detalles);
+
+      window.__compraEditando = {id:id, compra:compra, detalles:detalles, tablaDetalle:det.tabla};
+
+      if(typeof renderCompras === 'function') renderCompras();
+
+      setTimeout(function(){
+        try{
+          if(typeof compraEditBanner === 'function') compraEditBanner(compra);
+
+          var el;
+          if((el=document.getElementById('comp-fecha')))   el.value = compra.fecha || fechaHoyPY();
+          if((el=document.getElementById('comp-prov')))    el.value = compra.proveedor_id || '';
+          if((el=document.getElementById('comp-factura'))) el.value = compra.numero_factura || compra.factura || '';
+          if((el=document.getElementById('comp-metpago'))) el.value = compra.metodo_pago || 'efectivo';
+          if((el=document.getElementById('comp-estado')))  el.value = compra.estado || 'en_proceso';
+          if((el=document.getElementById('comp-notas')))   el.value = compra.notas || '';
+
+          compraItems = detalles.map(function(d){
+            var pid = getProdId(d);
+            var p = productos[pid] || {};
+            var uds = getUds(d);
+            var cantEmb = getCantidadEmb(d, uds);
+            var nombre = d.nombre_producto || d.producto_nombre || p.nombre || 'Producto';
+            if(uds > 1 && !/\(x\d+\)/i.test(nombre)) nombre += ' (x'+uds+')';
+
+            return {
+              key: String(pid || '') + String(getEmbId(d)||''),
+              producto_id: pid,
+              embalaje_id: getEmbId(d),
+              nombre: nombre,
+              costo: getCostoMostrar(d, p, uds, cantEmb),
+              cantidad: cantEmb,
+              uds: uds,
+              precio_venta: num(p.precio_venta || d.precio_venta),
+              subtotalManual: null,
+              controlado: false
+            };
+          });
+
+          if(typeof renderCompraItems === 'function') renderCompraItems();
+
+          if(!compraItems.length){
+            var msg = 'Compra abierta, pero no encontré productos del detalle. ';
+            msg += det.errores && det.errores.length ? 'Revisá consola: no coincidió la tabla/campo de detalle.' : 'Puede estar guardada sin detalle.';
+            toast(msg,'err');
+            console.warn('Compra sin detalles cargados', {compra:compra, detalleResultado:det});
+          }else{
+            toast('Compra abierta con '+compraItems.length+' productos.');
+          }
+        }catch(e){
+          console.error('Error pintando detalle compra', e);
+          toast('Error mostrando productos de la compra','err');
+        }
+      }, 250);
+
+    }catch(e){
+      console.error('Error editarCompra v34', e);
+      toast('No se pudo editar la compra','err');
+    }
+  };
+})();
+</script>
+
 </body>
 </html>
