@@ -5792,10 +5792,11 @@ initMobileShell();
     top.appendChild(b);
   }
   function initUsuariosNav(){
+    titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
     if(gs('nav-usuarios')) return;
     const nav=document.querySelector('#sidebar nav'); if(!nav) return;
     const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico">👥</span> Usuarios';
-    nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
+    nav.appendChild(a);
   }
   function mostrarLoginUsuarios(usuarios){
     const opts=usuarios.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
