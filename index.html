@@ -4421,11 +4421,23 @@ initMobileShell();
         <div class="scanner-actions"><button class="btn btn-secondary" onclick="stopBarcodeScanner();closeModal()">Cerrar</button></div>
       </div>`,null,'');
     const video=gs('scanner-video');
-    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false};
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'},torch:false},audio:false};
     try{
       // Safari/iPhone no suele tener BarcodeDetector. Por eso primero probamos ZXing.
       if(window.ZXing && ZXing.BrowserMultiFormatReader){
-        scanReader=new ZXing.BrowserMultiFormatReader();
+        // Configurar hints para lectura desde cualquier ángulo
+        const hints = new Map();
+        const formats = [
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.DATA_MATRIX
+        ];
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.ALSO_INVERTED, true);
+        scanReader=new ZXing.BrowserMultiFormatReader(hints, 400);
         scanControls=await scanReader.decodeFromConstraints(constraints, video, (result, err)=>{
           if(result && result.text){ applyScannedBarcode(context,result.text); }
         });
@@ -4631,11 +4643,22 @@ initMobileShell();
     parent.appendChild(holder);
 
     const video=gs('inline-scanner-video');
-    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false};
+    const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'},torch:false},audio:false};
 
     try{
       if(window.ZXing && ZXing.BrowserMultiFormatReader){
-        inlineReader=new ZXing.BrowserMultiFormatReader();
+        const hints2 = new Map();
+        const formats2 = [
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A,  ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.DATA_MATRIX
+        ];
+        hints2.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats2);
+        hints2.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints2.set(ZXing.DecodeHintType.ALSO_INVERTED, true);
+        inlineReader=new ZXing.BrowserMultiFormatReader(hints2, 400);
         inlineControls=await inlineReader.decodeFromConstraints(constraints, video, (result, err)=>{
           if(result && result.text){ applyInlineBarcode(targetId,mode,result.text); }
         });
