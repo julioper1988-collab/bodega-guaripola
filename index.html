@@ -2999,7 +2999,21 @@ async function finalizarVenta(){
   _dashCache=null;
   await loadCaches(true);
   cart=[];
-  renderVentas(); // renderVentas cargará el próximo número real
+  // Reset sin rerenderizar para evitar pestañeo
+  ventaNum = ventaNum + 1;
+  const spanNum=gs('v-num-comp'); if(spanNum) spanNum.textContent='#'+ventaNum;
+  const tbody=gs('venta-tbody'); if(tbody) tbody.innerHTML='';
+  const vcount=gs('v-count'); if(vcount) vcount.textContent='0';
+  const vcountBar=gs('v-count-bar'); if(vcountBar) vcountBar.textContent='0 productos · tocá para cobrar';
+  const vtotal=gs('v-total'); if(vtotal) vtotal.textContent='Gs. 0';
+  const vtotalD=gs('v-total-detail'); if(vtotalD) vtotalD.textContent='Gs. 0';
+  const vvuelto=gs('v-vuelto'); if(vvuelto) vvuelto.style.display='none';
+  const vdesc=gs('v-desc'); if(vdesc) vdesc.value=0;
+  const vimporte=gs('v-importe'); if(vimporte) vimporte.value=0;
+  const vnotas=gs('v-notas'); if(vnotas) vnotas.value='';
+  const vclientebox=gs('v-cliente-box'); if(vclientebox) vclientebox.innerHTML=typeof clienteSelectHTML==='function'?clienteSelectHTML():'';
+  if(typeof selectPay==='function') selectPay('efectivo');
+  setTimeout(()=>gs('v-search')?.focus(),50);
 }
 
 // ─── HISTORIAL VENTAS ─────────────────────────────────────────
@@ -3565,6 +3579,8 @@ renderVentas = async function(){
     div2.innerHTML='<span style="font-size:10px;line-height:1.2">Parcial<br>+Fiado</span>';
     payGrid.appendChild(div2);
   }
+  // Foco siempre al buscador al terminar de montar el módulo
+  setTimeout(()=>gs('v-search')?.focus(),150);
 };
 
 const __selectPayOriginal = selectPay;
@@ -3583,6 +3599,8 @@ selectPay = function(p){
   const btnP=gs('pay-parcial');
   if(btnP) btnP.classList.toggle('active', p==='parcial');
   updateVTotals();
+  // Devolver foco al buscador tras cambiar método
+  setTimeout(()=>gs('v-search')?.focus(),50);
 };
 
 // finalizarVenta → versión unificada al final del archivo
