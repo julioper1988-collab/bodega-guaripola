@@ -2,8 +2,21 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Bodega Guaripola</title>
+
+<!-- ── PWA: instalable en Android, iOS y desktop ── -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Guaripola">
+<meta name="application-name" content="Guaripola">
+<meta name="theme-color" content="#0f1117">
+<meta name="description" content="Sistema de gestión Bodega Guaripola">
+<link rel="manifest" href="manifest.json">
+<!-- Icono para iOS (no usa manifest) -->
+<link rel="apple-touch-icon" href="icon-192.png">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script id="bg-safehtml-global-fix">
 window.safeHtml = window.safeHtml || function(s){
@@ -12864,6 +12877,21 @@ window.diagnosticarStockCompras = async function(){
     }
   };
 })();
+</script>
+
+<!-- ── Registro del Service Worker (PWA) ── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js')
+      .then(function(reg) {
+        console.log('[PWA] Service Worker registrado:', reg.scope);
+      })
+      .catch(function(err) {
+        console.warn('[PWA] Service Worker falló:', err);
+      });
+  });
+}
 </script>
 
 </body>
