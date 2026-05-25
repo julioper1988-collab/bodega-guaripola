@@ -1572,7 +1572,7 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
 </style>
 <body>
 
-<div id="setup">
+<div id="setup" style="display:none">
   <div class="setup-card">
     <h2>⚙️ Configuración inicial</h2>
     <p>Ingresá los datos de tu proyecto Supabase para conectar el sistema.</p>
@@ -1585,7 +1585,7 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
   </div>
 </div>
 
-<div id="loading"><div class="spinner"></div><span style="color:var(--text2);font-size:13px">Cargando...</span></div>
+<div id="loading" style="display:none"><div class="spinner"></div><span style="color:var(--text2);font-size:13px">Cargando...</span></div>
 
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
@@ -4960,9 +4960,9 @@ initMobileShell();
 
 // ─── ARRANQUE ─────────────────────────────────────────────────
 (async function(){
-  const url=lsGet('bg_url'),key=lsGet('bg_key');
-  if(url&&key){document.getElementById('setup').style.display='none';await initSB(url,key);}
-  else document.getElementById('loading').style.display='none';
+  const url='https://sdpysvowvwucjfnyosuf.supabase.co', key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcHlzdm93dnd1Y2pmbnlvc3VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNjMxNjUsImV4cCI6MjA4NjgzOTE2NX0.-03XyWwC2X0V4Dp4dtCq5oxcvYInBMGRccZSAq5nDQ8';
+  document.getElementById('setup').style.display='none';
+  await initSB(url,key);
 })();
 
 
