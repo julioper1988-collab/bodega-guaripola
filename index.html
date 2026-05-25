@@ -1211,7 +1211,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
 }
 #venta-search-row {
   display: grid;
-  grid-template-columns: 140px 1fr 100px;
+  grid-template-columns: 1fr 100px;
   gap: 8px; align-items: end;
 }
 #venta-table-wrap { flex: 1; overflow-y: auto; }
@@ -2394,6 +2394,28 @@ document.addEventListener('keydown', function(e){
   if(document.activeElement && document.activeElement.type==='number'){
     if(e.key==='ArrowUp'||e.key==='ArrowDown') e.preventDefault();
   }
+
+  // ── Atajos globales de caja ──
+  const enVentas = !!gs('venta-layout');
+  if(e.key==='F4'||e.key==='F5'||e.key==='F6'){
+    e.preventDefault();
+    if(!enVentas) return;
+    const metodo = e.key==='F4'?'efectivo': e.key==='F5'?'qr':'fiado';
+    if(typeof selectPay==='function') selectPay(metodo);
+    if(typeof finalizarVenta==='function') finalizarVenta();
+    return;
+  }
+  // Escape: cerrar autocomplete si está abierto, sino cerrar modal si hay
+  if(e.key==='Escape'){
+    const ac=gs('v-ac-list');
+    if(ac && ac.style.display!=='none'){
+      ac.style.display='none';
+      return;
+    }
+    // cerrar modal si está abierto
+    const overlay=document.querySelector('.overlay.show');
+    if(overlay && typeof closeModal==='function'){ closeModal(); return; }
+  }
 });
 
 /* ── CALCULADORA INLINE PARA CAMPOS NUMÉRICOS ─────── */
@@ -2584,16 +2606,12 @@ function renderVentas(){
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
         </div>
         <div id="venta-search-row">
-          <div class="form-group">
-            <label>Código de barras</label>
-            <input id="v-cod" placeholder="Escanear o escribir..." onkeydown="onCodKeydown(event)" autocomplete="off">
-          </div>
-          <div class="form-group autocomplete-wrap">
-            <label>Buscar producto</label>
-            <input id="v-search" placeholder="Nombre del producto..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
+          <div class="form-group autocomplete-wrap" style="flex:1">
+            <label>Buscar producto <span style="font-size:10px;color:var(--text2);font-weight:400">&nbsp;· escaneá, escribí nombre o código · <kbd style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:10px">+3</kbd> Enter = cantidad 3</span></label>
+            <input id="v-search" placeholder="Nombre, código de barras, o +cantidad..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
             <div class="autocomplete-list" id="v-ac-list" style="display:none"></div>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width:100px">
             <label>Cantidad</label>
             <input id="v-qty" type="number" value="1" min="1" style="text-align:center">
           </div>
@@ -2696,7 +2714,7 @@ function renderVentas(){
       </div>
     </div>
   </div>`;
-  setTimeout(()=>gs('v-cod')?.focus(),100);
+  setTimeout(()=>gs('v-search')?.focus(),100);
   // Iniciar drawer en móvil
   if(window.innerWidth <= 900) vrInit();
 }
@@ -2733,37 +2751,34 @@ function selectPay(p){
 }
 function setVTipo(tipo){ventaTipo=tipo;renderVentas();}
 
-function onCodKeydown(e){
-  if(e.key==='Enter'){
-    const cod=gs('v-cod').value.trim();
-    if(!cod)return;
-    // buscar en productos y embalajes
-    let prod=prodCache.find(p=>p.codigo_barra===cod);
-    let embFound=null;
-    if(!prod){
-      for(const pid in embCache){
-        const emb=embCache[pid].find(em=>em.codigo_barra===cod);
-        if(emb){prod=prodCache.find(p=>p.id===pid);embFound=emb;break;}
-      }
-    }
-    if(!prod){toast('Producto no encontrado','err');gs('v-cod').select();return;}
-    const qty=parseInt(gs('v-qty').value)||1;
-    addToVenta(prod.id,embFound?.id||null,qty);
-    gs('v-cod').value='';gs('v-qty').value=1;gs('v-cod').focus();
-  }
-}
+function onCodKeydown(e){ /* legacy: reemplazado por onAcKeydown unificado */ }
 
 function onVSearch(q){
   acSelected=-1;
-  if(!q||q.length<2){gs('v-ac-list').style.display='none';return;}
+  const list=gs('v-ac-list');
+  // Modo cantidad: +N
+  if(/^\+\d*$/.test(q)){
+    list.style.display='none';
+    return;
+  }
+  if(!q||q.length<1){list.style.display='none';return;}
   acResults=[];
-  prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase())||(p.codigo_barra||'').includes(q)).slice(0,12).forEach(p=>{
+  const isBarcode=/^\d+$/.test(q);
+  const filtered=isBarcode
+    ? prodCache.filter(p=>(p.codigo_barra||'').startsWith(q)||(p.codigo_barra||'')===q)
+    : prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase()));
+  // Si es código y hay coincidencia exacta, no mostrar lista (se agrega en Enter)
+  if(isBarcode && filtered.length===1 && filtered[0].codigo_barra===q){
+    list.style.display='none';
+    return;
+  }
+  filtered.slice(0,12).forEach(p=>{
     acResults.push({prodId:p.id,embId:null,label:p.nombre,sub:`Stock: ${p.stock} · ${fmtGs(ventaTipo==='mayorista'&&p.precio_mayorista>0?p.precio_mayorista:p.precio_venta)}`,ispack:false});
     (embCache[p.id]||[]).forEach(e=>{
       acResults.push({prodId:p.id,embId:e.id,label:`${p.nombre} — Pack x${e.cantidad}`,sub:`${e.codigo_barra||''} · ${fmtGs(ventaTipo==='mayorista'&&e.precio_mayorista>0?e.precio_mayorista:e.precio_venta)} · mueve ${e.cantidad} uds`,ispack:true});
     });
   });
-  const list=gs('v-ac-list');
+  if(!acResults.length){list.style.display='none';return;}
   list.innerHTML=acResults.map((r,i)=>`<div class="ac-item" onclick="selectAcItem(${i})">
     <div class="ac-name" style="${r.ispack?'color:var(--teal)':''}">↳ ${r.ispack?'':' '}${r.label}</div>
     <div class="ac-sub">${r.sub}</div>
@@ -2773,14 +2788,47 @@ function onVSearch(q){
 
 function onAcKeydown(e,inputId){
   const list=gs('v-ac-list');
+  const q=(gs('v-search')?.value||'').trim();
+
+  if(e.key==='Enter'){
+    e.preventDefault();
+    // Modo +N: setear cantidad y limpiar
+    if(/^\+\d+$/.test(q)){
+      const n=parseInt(q.slice(1));
+      if(n>0){const qi=gs('v-qty');if(qi){qi.value=n;}}
+      gs('v-search').value='';
+      gs('v-ac-list').style.display='none';
+      gs('v-search').focus();
+      return;
+    }
+    // Código de barras exacto
+    if(/^\d+$/.test(q)){
+      let prod=prodCache.find(p=>p.codigo_barra===q);
+      let embFound=null;
+      if(!prod){
+        for(const pid in embCache){
+          const emb=embCache[pid].find(em=>em.codigo_barra===q);
+          if(emb){prod=prodCache.find(p=>p.id===pid);embFound=emb;break;}
+        }
+      }
+      if(prod){
+        const qty=parseInt(gs('v-qty')?.value)||1;
+        addToVenta(prod.id,embFound?.id||null,qty);
+        gs('v-search').value='';gs('v-ac-list').style.display='none';
+        gs('v-qty').value=1;gs('v-search').focus();
+        return;
+      }
+      if(!acResults.length){toast('Producto no encontrado','err');gs('v-search').select();return;}
+    }
+    // Autocomplete: seleccionar
+    if(acSelected>=0)selectAcItem(acSelected);
+    else if(acResults.length===1)selectAcItem(0);
+    return;
+  }
+
   if(!acResults.length)return;
   if(e.key==='ArrowDown'){acSelected=Math.min(acSelected+1,acResults.length-1);highlightAc();e.preventDefault();}
   else if(e.key==='ArrowUp'){acSelected=Math.max(acSelected-1,0);highlightAc();e.preventDefault();}
-  else if(e.key==='Enter'){
-    if(acSelected>=0)selectAcItem(acSelected);
-    else if(acResults.length===1)selectAcItem(0);
-    e.preventDefault();
-  }
   else if(e.key==='Escape'){list.style.display='none';}
 }
 function highlightAc(){
@@ -2788,10 +2836,10 @@ function highlightAc(){
 }
 function selectAcItem(i){
   const r=acResults[i];
-  const qty=parseInt(gs('v-qty').value)||1;
+  const qty=parseInt(gs('v-qty')?.value)||1;
   addToVenta(r.prodId,r.embId,qty);
   gs('v-search').value='';gs('v-ac-list').style.display='none';
-  gs('v-qty').value=1;gs('v-cod').focus();
+  gs('v-qty').value=1;gs('v-search').focus();
 }
 
 function addToVenta(prodId,embId,qty=1){
@@ -4360,7 +4408,7 @@ initMobileShell();
       toast('⚠️ '+prod.nombre+': stock disponible '+prod.stock+' uds');
     }
     addToVenta(prod.id,embFound?.id||null,qty);
-    if(gs('v-cod')) gs('v-cod').value='';
+    if(gs('v-search')) gs('v-search').value=''; if(gs('v-ac-list')) gs('v-ac-list').style.display='none';
     if(gs('v-search')) gs('v-search').value='';
     toast('Agregado: '+prod.nombre);
   };
@@ -4494,7 +4542,7 @@ initMobileShell();
   renderVentas = async function(){
     await __renderVentasScan();
     injectScanStyles();
-    const cod=gs('v-cod');
+    const cod=gs('v-search');
     if(cod && !document.getElementById('btn-scan-venta')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cod.parentNode.insertBefore(wrap,cod);wrap.appendChild(cod);
@@ -4504,11 +4552,7 @@ initMobileShell();
   try{pages.ventas=renderVentas;}catch(e){}
 
   onCodKeydown = function(e){
-    if(e.key==='Enter'){
-      const cod=gs('v-cod').value.trim(); if(!cod) return;
-      addByBarcodeVenta(cod);
-      gs('v-cod').focus();
-    }
+    // legacy: no-op, ahora maneja onAcKeydown unificado
   };
 
   onVSearch = function(q){
