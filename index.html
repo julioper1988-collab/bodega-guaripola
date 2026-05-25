@@ -2,28 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bodega Guaripola</title>
-
-<!-- ── PWA: instalable en Android, iOS y desktop ── -->
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Guaripola">
-<meta name="application-name" content="Guaripola">
-<meta name="theme-color" content="#0f1117">
-<meta name="description" content="Sistema de gestión Bodega Guaripola">
-<link rel="manifest" href="manifest.json">
-<!-- Icono para iOS (no usa manifest) -->
-<link rel="apple-touch-icon" href="icon-192.png">
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script id="bg-safehtml-global-fix">
-window.safeHtml = window.safeHtml || function(s){
+// ── Función única global de escape HTML ──
+function escapeHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
   });
-};
+}
+window.safeHtml = escapeHtml;
 </script>
 
 <script>
@@ -31,7 +20,7 @@ window.safeHtml = window.safeHtml || function(s){
 
 // ─── INVENTARIO Y BLOQUEO DE STOCK PARA USUARIO NO ADMIN ───
 (function(){
-  const htmlInv = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  // htmlInv → usar escapeHtml global
   let invItems = [];
   let invSearch = '';
   let invEditing = false;
@@ -206,7 +195,7 @@ window.safeHtml = window.safeHtml || function(s){
           recientes.map(it=>`
             <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);opacity:.7">
               <div style="flex:1">
-                <div style="font-weight:800;font-size:14px">${htmlInv(it.nombre)}</div>
+                <div style="font-weight:800;font-size:14px">${escapeHtml(it.nombre)}</div>
                 <div style="font-size:12px;color:var(--text2)">Stock sistema: <b>${it.stock_sistema}</b></div>
               </div>
               <button class="btn btn-secondary btn-sm" onclick="addInvItem('${it.producto_id}')">+ Depósito</button>
@@ -232,15 +221,15 @@ window.safeHtml = window.safeHtml || function(s){
     }
 
     if(!results.length){
-      el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text2)">Sin resultados para "<b>${htmlInv(q)}</b>"</div>`;
+      el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text2)">Sin resultados para "<b>${escapeHtml(q)}</b>"</div>`;
       return;
     }
 
     el.innerHTML=results.map(p=>`
       <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="invAgregarYLimpiar('${p.id}')">
         <div style="flex:1">
-          <div style="font-weight:800;font-size:15px">${htmlInv(p.nombre)}</div>
-          <div style="font-size:12px;color:var(--text2)">${htmlInv(p.codigo_barra||'-')} · Stock: <b class="inv-stock-cantidad">${p.stock||0}</b></div>
+          <div style="font-weight:800;font-size:15px">${escapeHtml(p.nombre)}</div>
+          <div style="font-size:12px;color:var(--text2)">${escapeHtml(p.codigo_barra||'-')} · Stock: <b class="inv-stock-cantidad">${p.stock||0}</b></div>
         </div>
         <button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="event.stopPropagation();invAgregarYLimpiar('${p.id}')">+ Contar</button>
       </div>`).join('');
@@ -320,7 +309,7 @@ window.safeHtml = window.safeHtml || function(s){
       const color=dif===0?'var(--text2)':dif>0?'var(--green)':'var(--red)';
       const deps=it.depositos.map((d,di)=>`
         <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
-          <input value="${htmlInv(d.nombre)}" placeholder="Depósito ${di+1}"
+          <input value="${escapeHtml(d.nombre)}" placeholder="Depósito ${di+1}"
             style="flex:1;font-size:13px;min-height:36px"
             oninput="invSetDepNombre(${i},${di},this.value)">
           <input id="inv-dep-${it.producto_id}-${di}" type="number" inputmode="numeric"
@@ -334,8 +323,8 @@ window.safeHtml = window.safeHtml || function(s){
         <div style="padding:12px;border-bottom:2px solid var(--border);background:var(--bg2)">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
             <div>
-              <div style="font-weight:800;font-size:15px">${htmlInv(it.nombre)}</div>
-              <div style="font-size:12px;color:var(--text2)">${htmlInv(it.codigo_barra||'-')} · Sistema: <b>${it.stock_sistema}</b> · Total contado: <b style="color:${color}">${total}</b> · Dif: <b style="color:${color}">${dif>0?'+':''}${dif}</b></div>
+              <div style="font-weight:800;font-size:15px">${escapeHtml(it.nombre)}</div>
+              <div style="font-size:12px;color:var(--text2)">${escapeHtml(it.codigo_barra||'-')} · Sistema: <b>${it.stock_sistema}</b> · Total contado: <b style="color:${color}">${total}</b> · Dif: <b style="color:${color}">${dif>0?'+':''}${dif}</b></div>
             </div>
             <button class="btn btn-danger btn-sm" onclick="removeInvItem(${i})" style="flex-shrink:0">🗑</button>
           </div>
@@ -424,7 +413,7 @@ window.safeHtml = window.safeHtml || function(s){
         return Math.abs(contado-sistema)/sistema > 0.30;
       });
       if(grandes.length>0){
-        const nombres=grandes.slice(0,3).map(it=>htmlInv(it.nombre)).join(', ')+(grandes.length>3?' y '+(grandes.length-3)+' más':'');
+        const nombres=grandes.slice(0,3).map(it=>escapeHtml(it.nombre)).join(', ')+(grandes.length>3?' y '+(grandes.length-3)+' más':'');
         if(!(await bgConfirm('Hay productos con diferencia mayor al 30% respecto al stock del sistema:<br><br><strong style="color:var(--red)">' + nombres + '</strong><br><br>¿Confirmás el ajuste de stock?', { title:'Diferencia grande detectada', confirmText:'Sí, ajustar igual', cancelText:'Revisar primero', variant:'danger' }))) return;
       } else {
         if(!(await bgConfirm('Esto ajustará el stock de cada producto con los valores contados.<br><span style="font-size:12px;color:var(--text2)">Suma de todos los depósitos como stock real.</span>', { title:'Guardar inventario', confirmText:'Guardar y ajustar stock', variant:'primary' }))) return;
@@ -463,12 +452,12 @@ window.safeHtml = window.safeHtml || function(s){
   window.renderHistorialInventarios = async function(){
     const {data,error}=await sb.from('bodega_inventarios').select('*').order('created_at',{ascending:false}).limit(80);
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe bodega_inventarios. Ejecutá el SQL de inventario.</div>`;return;}
-    const rows=(data||[]).map(i=>{ const du=Number(i.diferencia_total||0); const dm=Number(i.diferencia_monto||0); return `<tr><td>${fmtDate(i.fecha)}</td><td>${htmlInv(i.estado)}</td><td>${htmlInv(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
+    const rows=(data||[]).map(i=>{ const du=Number(i.diferencia_total||0); const dm=Number(i.diferencia_monto||0); return `<tr><td>${fmtDate(i.fecha)}</td><td>${escapeHtml(i.estado)}</td><td>${escapeHtml(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
     gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Historial de inventarios</h3><button class="btn btn-primary" onclick="renderInventario()">+ Nuevo inventario</button></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Responsable</th><th>Productos</th><th>Dif. unidades</th><th>Dif. Gs.</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   };
   window.verInventario = async function(id){
     const {data}=await sb.from('bodega_inventario_detalle').select('*,bodega_productos(nombre,codigo_barra)').eq('inventario_id',id).order('created_at',{ascending:true});
-    const rows=(data||[]).map(d=>{ const du=Number(d.diferencia||0); const dm=Number(d.diferencia_monto||0); return `<tr><td>${htmlInv(d.bodega_productos?.nombre||'-')}</td><td>${htmlInv(d.bodega_productos?.codigo_barra||'-')}</td><td>${d.stock_sistema}</td><td>${d.stock_contado}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td>${fmtGs(Number(d.costo_unitario||0))}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td></tr>`; }).join('');
+    const rows=(data||[]).map(d=>{ const du=Number(d.diferencia||0); const dm=Number(d.diferencia_monto||0); return `<tr><td>${escapeHtml(d.bodega_productos?.nombre||'-')}</td><td>${escapeHtml(d.bodega_productos?.codigo_barra||'-')}</td><td>${d.stock_sistema}</td><td>${d.stock_contado}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td>${fmtGs(Number(d.costo_unitario||0))}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td></tr>`; }).join('');
     openModal('Detalle de inventario',`<div style="overflow-x:auto"><table><thead><tr><th>Producto</th><th>Código</th><th>Stock sistema</th><th>Contado</th><th>Dif. unidades</th><th>Costo</th><th>Dif. Gs.</th></tr></thead><tbody>${rows}</tbody></table></div>`,null,'');
   };
 
@@ -1736,11 +1725,7 @@ const fmtDate=d=>{
   if(!y||!m||!day) return d;
   return `${parseInt(day)}/${parseInt(m)}/${String(y).slice(-2)}`;
 };
-function escapeHtml(value){
-  return String(value ?? '').replace(/[&<>'"]/g, function(ch){
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]);
-  });
-}
+// escapeHtml definida globalmente en bg-safehtml-global-fix
 
 function embEsc(value){
   return escapeHtml(value);
@@ -4588,10 +4573,6 @@ initMobileShell();
 (function(){
   let inlineReader=null, inlineControls=null, inlineStream=null, inlineTimer=null, inlineBusy=false;
 
-  function escapeHtml(s){
-    return String(s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-  }
-
   window.stopInlineBarcodeScanner = function(){
     try{ if(inlineControls && inlineControls.stop) inlineControls.stop(); }catch(e){}
     try{ if(inlineReader && inlineReader.reset) inlineReader.reset(); }catch(e){}
@@ -5572,7 +5553,6 @@ initMobileShell();
 
 // ─── OPTIMIZACIÓN CAJA/ARQUEO + USUARIOS/MÓDULOS ─────────────
 (function(){
-  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const moneyVal = id => Number(gs(id)?.value || 0) || 0;
   let cajaVistaActual = 'actual';
   let cajaFechaActual = '';
@@ -5851,7 +5831,6 @@ initMobileShell();
 
 // ─── CAJA POR TURNOS / HISTORIAL SEPARADO (FIX MULTI-APERTURA) ───
 (function(){
-  const escapeHtml2 = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const moneyVal2 = id => Number(gs(id)?.value || 0) || 0;
   // Exponer como window para que los onclick del HTML puedan acceder
   if(window.cajaTabTurno===undefined) window.cajaTabTurno='actual';
@@ -5869,7 +5848,7 @@ initMobileShell();
   function cajaTurnoTitulo(c){
     if(!c) return 'Sin caja abierta';
     const n = c.numero_caja ? `Caja #${c.numero_caja}` : 'Caja';
-    const turno = c.nombre_turno ? ` · ${escapeHtml2(c.nombre_turno)}` : '';
+    const turno = c.nombre_turno ? ` · ${escapeHtml(c.nombre_turno)}` : '';
     return `${n}${turno}`;
   }
 
@@ -5983,7 +5962,7 @@ initMobileShell();
         ${cajaInputRows('edit-ap', vals)}
         <div class="form-group" style="margin-top:12px">
           <label>Notas de apertura</label>
-          <textarea id="edit-ap-notas" rows="2">${escapeHtml2(caja.notas_apertura||'')}</textarea>
+          <textarea id="edit-ap-notas" rows="2">${escapeHtml(caja.notas_apertura||'')}</textarea>
         </div>
         <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">💾 Guardar importe inicial</button>
       </div>
@@ -6007,7 +5986,7 @@ initMobileShell();
   function cajaGastosTurnoHTML(caja, gastos){
     const cerrado=caja.estado==='cerrada';
     const rows=(gastos.items||[]).map(g=>`<tr>
-      <td>${escapeHtml2(g.descripcion||'Gasto')}</td>
+      <td>${escapeHtml(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
       <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`}</td>
@@ -6069,9 +6048,9 @@ initMobileShell();
           <input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}" oninput="actualizarTotalConteo('ci')">
         </div>
         <div class="form-group"><label>Gastos varios</label><input type="number" value="${gastosTotal}" disabled></div>
-        <div class="form-group"><label>Usuario cierre</label><input id="ci-usuario" value="${escapeHtml2(caja.usuario_cierre||'')}" placeholder="Ej: Julio, cajera"></div>
+        <div class="form-group"><label>Usuario cierre</label><input id="ci-usuario" value="${escapeHtml(caja.usuario_cierre||'')}" placeholder="Ej: Julio, cajera"></div>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${escapeHtml2(caja.notas_cierre||'')}</textarea></div>
+      <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${escapeHtml(caja.notas_cierre||'')}</textarea></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
         <button class="btn btn-primary" onclick="cerrarCajaTurno('${caja.id}',${esperado})">${cerrado?'Guardar edición de cierre':'Cerrar caja'}</button>
         <button class="btn btn-secondary" onclick="imprimirArqueo('${caja.id}')">Imprimir/PDF</button>
@@ -6243,7 +6222,7 @@ initMobileShell();
     cajaHistFecha=hasta;
     const desde=gs('hist-desde')?.value || fechaLocalParaguay(new Date(new Date(hasta+'T00:00:00').getTime()-1000*60*60*24*30));
     const {data,error}=await sb.from('bodega_caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('opened_at',{ascending:false}).limit(200);
-    const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml2(error.message)}</td></tr>`:(data||[]).map(c=>{
+    const rows=error?`<tr><td colspan="10" class="alert-error">Error: ${escapeHtml(error.message)}</td></tr>`:(data||[]).map(c=>{
       const totalContado=c.total_contado||(Number(c.efectivo_contado||0)+Number(c.qr_contado||0)+Number(c.transferencia_contado||0)+Number(c.debito_contado||0)+Number(c.credito_contado||0));
       return `<tr>
         <td>${fmtDate(c.fecha)}</td>
@@ -6295,9 +6274,9 @@ initMobileShell();
     const gastos=await obtenerGastosCaja(caja.fecha,id);
     const den=caja.denominaciones_cierre||{};
     const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
-    const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml2(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
+    const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml2(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
   };
 
@@ -12877,21 +12856,6 @@ window.diagnosticarStockCompras = async function(){
     }
   };
 })();
-</script>
-
-<!-- ── Registro del Service Worker (PWA) ── -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js')
-      .then(function(reg) {
-        console.log('[PWA] Service Worker registrado:', reg.scope);
-      })
-      .catch(function(err) {
-        console.warn('[PWA] Service Worker falló:', err);
-      });
-  });
-}
 </script>
 
 </body>
