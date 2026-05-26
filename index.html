@@ -10,6 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Guaripola">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script id="bg-safehtml-global-fix">
 // ── Función única global de escape HTML ──
@@ -1199,7 +1204,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
 }
 #venta-search-row {
   display: grid;
-  grid-template-columns: 140px 1fr 100px;
+  grid-template-columns: 1fr 90px;
   gap: 8px; align-items: end;
 }
 #venta-table-wrap { flex: 1; overflow-y: auto; }
@@ -2382,6 +2387,19 @@ document.addEventListener('keydown', function(e){
   if(document.activeElement && document.activeElement.type==='number'){
     if(e.key==='ArrowUp'||e.key==='ArrowDown') e.preventDefault();
   }
+  // ── Atajos de teclado módulo ventas ──
+  // Solo si estamos en la pantalla de ventas
+  if(!document.getElementById('venta-layout')) return;
+  // No disparar si el foco está en un input de texto (excepto v-search y v-qty)
+  const tag = document.activeElement?.tagName;
+  const activeId = document.activeElement?.id;
+  const enInput = (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') && activeId!=='v-search' && activeId!=='v-qty';
+  if(enInput) return;
+
+  if(e.key==='F4'){ e.preventDefault(); if(typeof selectPay==='function') selectPay('efectivo'); if(typeof finalizarVenta==='function') finalizarVenta(); }
+  if(e.key==='F5'){ e.preventDefault(); if(typeof selectPay==='function') selectPay('qr'); if(typeof finalizarVenta==='function') finalizarVenta(); }
+  if(e.key==='F6'){ e.preventDefault(); if(typeof selectPay==='function') selectPay('fiado'); if(typeof finalizarVenta==='function') finalizarVenta(); }
+  if(e.key==='F3'){ e.preventDefault(); if(typeof openClienteModal==='function') openClienteModal(); }
 });
 
 /* ── CALCULADORA INLINE PARA CAMPOS NUMÉRICOS ─────── */
@@ -2572,16 +2590,13 @@ function renderVentas(){
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
         </div>
         <div id="venta-search-row">
-          <div class="form-group">
-            <label>Código de barras</label>
-            <input id="v-cod" placeholder="Escanear o escribir..." onkeydown="onCodKeydown(event)" autocomplete="off">
-          </div>
           <div class="form-group autocomplete-wrap">
-            <label>Buscar producto</label>
-            <input id="v-search" placeholder="Nombre del producto..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
+            <label>Buscar producto (nombre, código o +5 Enter para cantidad)</label>
+            <input id="v-search" placeholder="Buscar por nombre, código de barras, o +5 para cantidad..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
+            <input id="v-cod" style="display:none" autocomplete="off">
             <div class="autocomplete-list" id="v-ac-list" style="display:none"></div>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="max-width:100px">
             <label>Cantidad</label>
             <input id="v-qty" type="number" value="1" min="1" style="text-align:center">
           </div>
@@ -2684,7 +2699,7 @@ function renderVentas(){
       </div>
     </div>
   </div>`;
-  setTimeout(()=>gs('v-cod')?.focus(),100);
+  setTimeout(()=>gs('v-search')?.focus(),100);
   // Iniciar drawer en móvil
   if(window.innerWidth <= 900) vrInit();
 }
@@ -2737,7 +2752,7 @@ function onCodKeydown(e){
     if(!prod){toast('Producto no encontrado','err');gs('v-cod').select();return;}
     const qty=parseInt(gs('v-qty').value)||1;
     addToVenta(prod.id,embFound?.id||null,qty);
-    gs('v-cod').value='';gs('v-qty').value=1;gs('v-cod').focus();
+    gs('v-cod').value='';gs('v-qty').value=1;gs('v-search').focus();
   }
 }
 
@@ -2745,7 +2760,7 @@ function onVSearch(q){
   acSelected=-1;
   if(!q||q.length<2){gs('v-ac-list').style.display='none';return;}
   acResults=[];
-  prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase())||(p.codigo_barra||'').includes(q)).slice(0,12).forEach(p=>{
+  prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase())||(p.codigo_barra||'').includes(q)||(p.codigo_barra||'')===(q.trim())).slice(0,12).forEach(p=>{
     acResults.push({prodId:p.id,embId:null,label:p.nombre,sub:`Stock: ${p.stock} · ${fmtGs(ventaTipo==='mayorista'&&p.precio_mayorista>0?p.precio_mayorista:p.precio_venta)}`,ispack:false});
     (embCache[p.id]||[]).forEach(e=>{
       acResults.push({prodId:p.id,embId:e.id,label:`${p.nombre} — Pack x${e.cantidad}`,sub:`${e.codigo_barra||''} · ${fmtGs(ventaTipo==='mayorista'&&e.precio_mayorista>0?e.precio_mayorista:e.precio_venta)} · mueve ${e.cantidad} uds`,ispack:true});
@@ -2761,6 +2776,28 @@ function onVSearch(q){
 
 function onAcKeydown(e,inputId){
   const list=gs('v-ac-list');
+  if(e.key==='Enter'){
+    const val=(gs(inputId)?.value||'').trim();
+    // Atajo +5 Enter: pone cantidad 5 y vuelve al buscador
+    const plusMatch=val.match(/^\+(\d+)$/);
+    if(plusMatch){
+      if(gs('v-qty')) gs('v-qty').value=parseInt(plusMatch[1])||1;
+      gs(inputId).value='';
+      list.style.display='none';
+      gs('v-search')?.focus();
+      e.preventDefault();
+      return;
+    }
+    // Si no hay resultados del autocomplete, buscar como codigo de barras
+    if(!acResults.length){
+      if(val) addByBarcodeVenta(val);
+      gs(inputId).value='';
+      list.style.display='none';
+      gs('v-search')?.focus();
+      e.preventDefault();
+      return;
+    }
+  }
   if(!acResults.length)return;
   if(e.key==='ArrowDown'){acSelected=Math.min(acSelected+1,acResults.length-1);highlightAc();e.preventDefault();}
   else if(e.key==='ArrowUp'){acSelected=Math.max(acSelected-1,0);highlightAc();e.preventDefault();}
@@ -2779,7 +2816,7 @@ function selectAcItem(i){
   const qty=parseInt(gs('v-qty').value)||1;
   addToVenta(r.prodId,r.embId,qty);
   gs('v-search').value='';gs('v-ac-list').style.display='none';
-  gs('v-qty').value=1;gs('v-cod').focus();
+  gs('v-qty').value=1;gs('v-search').focus();
 }
 
 function addToVenta(prodId,embId,qty=1){
@@ -4513,7 +4550,7 @@ initMobileShell();
     if(e.key==='Enter'){
       const cod=gs('v-cod').value.trim(); if(!cod) return;
       addByBarcodeVenta(cod);
-      gs('v-cod').focus();
+      gs('v-search').focus();
     }
   };
 
