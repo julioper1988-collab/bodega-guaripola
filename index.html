@@ -613,51 +613,48 @@ window.safeHtml = escapeHtml;
    BODEGA GUARIPOLA — DARK PROFESSIONAL THEME
    ═══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
   /* ── Backgrounds ── */
-  --bg:        #0c0d0f;
-  --bg2:       #111316;
-  --bg3:       #16191d;
-  --bg4:       #1e2126;
+  --bg:        #0f1117;
+  --bg2:       #1a1d27;
+  --bg3:       #13151e;
+  --bg4:       #222638;
 
   /* ── Borders ── */
-  --border:    rgba(255,255,255,0.07);
-  --border2:   rgba(255,255,255,0.12);
+  --border:    #2a2e3f;
+  --border2:   #363a50;
 
   /* ── Text ── */
-  --text:      #f3f4f6;
-  --text2:     #8a8e95;
-  --text3:     #c9ccd1;
+  --text:      #e8eaf0;
+  --text2:     #7c839e;
+  --text3:     #b0b8d0;
 
   /* ── Brand / Accent ── */
-  --accent:    #ffffff;
-  --accent2:   #c9ccd1;
-  --accent-bg: rgba(255,255,255,0.06);
-  --accent-glow: 0 0 20px rgba(255,255,255,0.08);
+  --accent:    #4f7ef8;
+  --accent2:   #3a63d4;
+  --accent-bg: rgba(79,126,248,.12);
+  --accent-glow: 0 0 20px rgba(79,126,248,.25);
 
   /* ── Semantic ── */
-  --green:     #7ddf9a;
-  --green-bg:  rgba(125,223,154,.1);
-  --red:       #ff8a7a;
-  --red-bg:    rgba(255,138,122,.1);
-  --amber:     #e5c46b;
-  --amber-bg:  rgba(229,196,107,.1);
-  --teal:      #5db8d4;
-  --teal-bg:   rgba(93,184,212,.1);
-  --purple:    #c084fc;
+  --green:     #22c55e;
+  --green-bg:  rgba(34,197,94,.1);
+  --red:       #f43f5e;
+  --red-bg:    rgba(244,63,94,.1);
+  --amber:     #f59e0b;
+  --amber-bg:  rgba(245,158,11,.1);
+  --teal:      #14b8a6;
+  --teal-bg:   rgba(20,184,166,.1);
+  --purple:    #a855f7;
 
   /* ── Misc ── */
   --radius:    8px;
-  --radius-lg: 14px;
+  --radius-lg: 12px;
   --sidebar:   230px;
-  --shadow:    0 2px 8px rgba(0,0,0,.5);
-  --shadow-md: 0 4px 20px rgba(0,0,0,.6);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,.7);
-  --chip:      rgba(255,255,255,0.06);
-  --chiph:     rgba(255,255,255,0.10);
-  --glow:      0 1px 0 rgba(255,255,255,0.04) inset;
+  --shadow:    0 2px 8px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 20px rgba(0,0,0,.5);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,.6);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -665,16 +662,13 @@ window.safeHtml = escapeHtml;
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-feature-settings: "ss01","cv11","tnum";
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
+  line-height: 1.5;
   display: block;
   height: 100vh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 /* Móvil: flex para que el sidebar lateral funcione */
 @media (max-width: 900px) {
@@ -684,31 +678,27 @@ body {
 /* ══ SIDEBAR / TOPNAV ══════════════════════════════════════════ */
 :root { --sidebar: 230px; --sidebar-collapsed: 56px; }
 
-/* ── Mono utility ── */
-.mono, .font-mono { font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; font-feature-settings: "tnum","ss01"; letter-spacing: -0.02em; font-size: 0.92em; }
-
 /* Desktop: barra superior fija */
 #sidebar {
   position: fixed;
   top: 0; left: 0; right: 0;
   width: 100%;
-  height: 46px;
+  height: 28px;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0;
-  padding: 0 16px;
+  padding: 0 10px;
   z-index: 400;
   overflow: hidden;
-  background: rgba(12,13,15,0.92);
-  backdrop-filter: saturate(140%) blur(18px);
-  -webkit-backdrop-filter: saturate(140%) blur(18px);
+  background: #1a1d2a;
   border-right: none;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
   flex-shrink: 0;
 }
 #main {
-  padding-top: 46px;
+  padding-top: 28px;
   width: 100%;
   height: 100vh;
   display: flex;
@@ -730,7 +720,6 @@ body {
     transition: left .25s cubic-bezier(.4,0,.2,1) !important;
     border-right: 1px solid var(--border) !important;
     border-bottom: none !important;
-    backdrop-filter: none !important;
   }
   #sidebar.open { left: 0 !important; }
   #main { padding-top: 0 !important; height: 100dvh !important; width: 100% !important; }
@@ -740,32 +729,32 @@ body {
 
 /* ── Logo en la barra superior ── */
 #sidebar .logo {
-  height: 46px;
-  padding: 0 14px 0 0;
+  height: 28px;
+  padding: 0 12px 0 0;
   border-bottom: none;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid rgba(255,255,255,.1);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
-  margin-right: 6px;
+  margin-right: 4px;
   white-space: nowrap;
   overflow: hidden;
   min-height: unset;
 }
 #sidebar .logo .logo-icon {
-  width: 20px; height: 20px;
-  background: #fff;
+  width: 16px; height: 16px;
+  background: var(--accent);
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 8px; font-weight: 900;
-  color: #0c0d0f;
+  font-size: 7px; font-weight: 900;
+  color: #fff;
   flex-shrink: 0;
   letter-spacing: -.5px;
 }
 #sidebar .logo .logo-text { opacity: 1; }
-#sidebar .logo h1 { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.9); white-space: nowrap; letter-spacing: -0.02em; }
+#sidebar .logo h1 { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.9); white-space: nowrap; }
 #sidebar .logo p  { display: none; }
 
 /* ── Nav horizontal ── */
@@ -776,48 +765,45 @@ body {
   display: flex; flex-direction: row; align-items: center;
   gap: 0;
   scrollbar-width: none;
-  height: 46px;
+  height: 28px;
 }
 #sidebar nav::-webkit-scrollbar { display: none; }
 #sidebar nav a {
   display: inline-flex; align-items: center;
   gap: 0;
-  padding: 0 10px;
-  height: 46px;
+  padding: 0 9px;
+  height: 28px;
   margin: 0;
   border-radius: 0;
   font-size: 12px; font-weight: 500;
-  color: rgba(255,255,255,.55);
+  color: rgba(255,255,255,.72);
   white-space: nowrap;
   flex-shrink: 0;
   position: static;
   overflow: visible;
-  transition: color .15s, background .15s;
 }
 /* Solo texto, sin íconos */
 #sidebar nav a .ico,
 #sidebar nav a svg { display: none; }
 #sidebar nav a span:not(.ico) { opacity: 1; display: inline; }
-#sidebar nav a:hover { background: var(--chip); color: rgba(255,255,255,.9); }
+#sidebar nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
 #sidebar nav a.active {
-  background: var(--chip);
+  background: rgba(79,126,248,.25);
   color: #fff; font-weight: 600;
-  border-bottom: 2px solid rgba(255,255,255,.6);
 }
 #sidebar nav a.active::before { display: none; }
 
 /* ── Config al final ── */
 #sidebar .cfg-btn {
   border-top: none;
-  border-left: 1px solid var(--border);
-  padding: 0 12px;
-  height: 46px;
+  border-left: 1px solid rgba(255,255,255,.1);
+  padding: 0 10px;
+  height: 28px;
   flex-shrink: 0;
   font-size: 11px;
   display: flex; align-items: center; gap: 5px;
-  color: rgba(255,255,255,.4);
+  color: rgba(255,255,255,.45);
   white-space: nowrap; overflow: hidden;
-  transition: color .15s;
 }
 #sidebar .cfg-btn span { opacity: 1; }
 #sidebar .cfg-btn svg { width: 11px; height: 11px; }
@@ -840,16 +826,17 @@ body {
 
 /* ══ TOPBAR ══════════════════════════════════════════════════════ */
 #topbar {
-  height: 44px;
+  height: 46px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center;
   padding: 0 20px; gap: 12px; flex-shrink: 0;
+  box-shadow: 0 1px 0 var(--border);
 }
 #topbar h2 {
-  font-size: 14px; font-weight: 600;
+  font-size: 15px; font-weight: 700;
   flex: 1; color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -.1px;
 }
 
 /* ══ CONTENT ══════════════════════════════════════════════════════ */
@@ -875,18 +862,18 @@ body {
   box-shadow: var(--shadow-md);
 }
 .stat-card .label {
-  font-size: 10px; color: var(--text2);
-  text-transform: uppercase; letter-spacing: 0.1em;
-  font-weight: 500;
+  font-size: 11px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .7px;
+  font-weight: 600;
 }
 .stat-card .value {
-  font-size: 22px; font-weight: 500;
-  margin-top: 6px; letter-spacing: -0.03em;
+  font-size: 24px; font-weight: 800;
+  margin-top: 6px; letter-spacing: -.5px;
   color: var(--text);
 }
 .stat-card .sub {
-  font-size: 11px; color: var(--text2);
-  margin-top: 4px; font-weight: 400;
+  font-size: 12px; color: var(--text2);
+  margin-top: 4px; font-weight: 500;
 }
 
 /* ══ BADGE ════════════════════════════════════════════════════════ */
@@ -903,56 +890,54 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--glow);
+  box-shadow: var(--shadow);
   margin-bottom: 16px;
 }
 .card-header {
   display: flex; align-items: center;
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   gap: 10px; background: var(--bg2);
 }
 .card-header h3 {
-  font-size: 13px; font-weight: 500;
+  font-size: 14px; font-weight: 700;
   flex: 1; color: var(--text);
-  letter-spacing: -0.01em;
 }
 
 /* ══ TABLES ══════════════════════════════════════════════════════ */
 table { width: 100%; border-collapse: collapse; }
 thead th {
-  background: var(--bg2);
-  padding: 9px 14px;
-  text-align: left; font-size: 10px; font-weight: 500;
+  background: var(--bg3);
+  padding: 10px 14px;
+  text-align: left; font-size: 11px; font-weight: 700;
   color: var(--text2); text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: .6px;
   border-bottom: 1px solid var(--border);
 }
-tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
-tbody tr:hover { background: var(--bg3); }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:hover { background: rgba(79,126,248,.06); }
 tbody td {
-  padding: 10px 14px; font-size: 12px;
-  color: var(--text3);
+  padding: 11px 14px; font-size: 13px;
+  color: var(--text);
 }
 tbody tr:last-child { border-bottom: none; }
 
 /* ══ BUTTONS ══════════════════════════════════════════════════════ */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: var(--radius);
-  border: 1px solid var(--border2); cursor: pointer;
-  font-size: 12px; font-weight: 500;
+  padding: 8px 16px; border-radius: var(--radius);
+  border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600;
   transition: all .15s; font-family: inherit;
-  letter-spacing: -0.01em;
-  background: var(--chip); color: var(--text3);
+  letter-spacing: .1px;
 }
-.btn:hover { background: var(--chiph); color: var(--text); }
 .btn-primary {
-  background: #fff; color: #0c0d0f;
-  border-color: transparent;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 2px 8px rgba(79,126,248,.3);
 }
 .btn-primary:hover {
-  background: rgba(255,255,255,.88);
+  background: var(--accent2);
+  box-shadow: 0 4px 12px rgba(79,126,248,.4);
   transform: translateY(-1px);
 }
 .btn-secondary {
@@ -960,9 +945,9 @@ tbody tr:last-child { border-bottom: none; }
   border: 1px solid var(--border);
 }
 .btn-secondary:hover {
-  background: var(--chiph);
-  border-color: var(--border2);
-  color: var(--text);
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .btn-danger {
   background: transparent; color: var(--red);
@@ -972,11 +957,10 @@ tbody tr:last-child { border-bottom: none; }
   background: var(--red-bg);
   border-color: var(--red);
 }
-.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
 .btn-green {
-  background: var(--green); color: #0c0d0f;
-  border-color: transparent;
-  font-weight: 600;
+  background: var(--green); color: #fff;
+  box-shadow: 0 2px 8px rgba(34,197,94,.25);
 }
 .btn-green:hover { opacity: .88; transform: translateY(-1px); }
 
@@ -993,18 +977,17 @@ tbody tr:last-child { border-bottom: none; }
 }
 input, select, textarea {
   background: var(--bg3);
-  border: 1px solid var(--border2);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  padding: 8px 11px; font-size: 13px;
+  padding: 9px 11px; font-size: 14px;
   outline: none; width: 100%;
   transition: border-color .15s, box-shadow .15s;
   font-family: inherit;
-  letter-spacing: -0.01em;
 }
 input:focus, select:focus, textarea:focus {
-  border-color: rgba(255,255,255,.3);
-  box-shadow: 0 0 0 3px rgba(255,255,255,.05);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,126,248,.15);
   background: var(--bg2);
 }
 select option { background: var(--bg2); color: var(--text); }
@@ -1033,7 +1016,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   padding: 18px 22px;
   border-bottom: 1px solid var(--border);
 }
-.modal-header h3 { flex: 1; font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: -0.02em; }
+.modal-header h3 { flex: 1; font-size: 16px; font-weight: 700; color: var(--text); }
 .modal-header .close {
   background: none; border: none;
   color: var(--text2); font-size: 20px;
@@ -1099,16 +1082,15 @@ input::placeholder { color: var(--text2); opacity: .7; }
   flex-direction: column; gap: 8px;
 }
 .toast-msg {
-  background: var(--bg3);
+  background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius);
-  padding: 10px 16px;
-  font-size: 12px; font-weight: 500;
+  padding: 12px 18px;
+  font-size: 13px; font-weight: 600;
   animation: slideIn .2s ease;
   box-shadow: var(--shadow-md);
   color: var(--text);
-  min-width: 200px;
-  letter-spacing: -0.01em;
+  min-width: 220px;
 }
 .toast-msg.ok { border-left: 4px solid var(--green); }
 .toast-msg.err { border-left: 4px solid var(--red); }
@@ -1211,7 +1193,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
 }
 #venta-search-row {
   display: grid;
-  grid-template-columns: 1fr 100px;
+  grid-template-columns: 140px 1fr 100px;
   gap: 8px; align-items: end;
 }
 #venta-table-wrap { flex: 1; overflow-y: auto; }
@@ -2394,28 +2376,6 @@ document.addEventListener('keydown', function(e){
   if(document.activeElement && document.activeElement.type==='number'){
     if(e.key==='ArrowUp'||e.key==='ArrowDown') e.preventDefault();
   }
-
-  // ── Atajos globales de caja ──
-  const enVentas = !!gs('venta-layout');
-  if(e.key==='F4'||e.key==='F5'||e.key==='F6'){
-    e.preventDefault();
-    if(!enVentas) return;
-    const metodo = e.key==='F4'?'efectivo': e.key==='F5'?'qr':'fiado';
-    if(typeof selectPay==='function') selectPay(metodo);
-    if(typeof finalizarVenta==='function') finalizarVenta();
-    return;
-  }
-  // Escape: cerrar autocomplete si está abierto, sino cerrar modal si hay
-  if(e.key==='Escape'){
-    const ac=gs('v-ac-list');
-    if(ac && ac.style.display!=='none'){
-      ac.style.display='none';
-      return;
-    }
-    // cerrar modal si está abierto
-    const overlay=document.querySelector('.overlay.show');
-    if(overlay && typeof closeModal==='function'){ closeModal(); return; }
-  }
 });
 
 /* ── CALCULADORA INLINE PARA CAMPOS NUMÉRICOS ─────── */
@@ -2606,12 +2566,16 @@ function renderVentas(){
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
         </div>
         <div id="venta-search-row">
-          <div class="form-group autocomplete-wrap" style="flex:1">
-            <label>Buscar producto <span style="font-size:10px;color:var(--text2);font-weight:400">&nbsp;· escaneá, escribí nombre o código · <kbd style="background:var(--bg4);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:10px">+3</kbd> Enter = cantidad 3</span></label>
-            <input id="v-search" placeholder="Nombre, código de barras, o +cantidad..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
+          <div class="form-group">
+            <label>Código de barras</label>
+            <input id="v-cod" placeholder="Escanear o escribir..." onkeydown="onCodKeydown(event)" autocomplete="off">
+          </div>
+          <div class="form-group autocomplete-wrap">
+            <label>Buscar producto</label>
+            <input id="v-search" placeholder="Nombre del producto..." oninput="onVSearch(this.value)" onkeydown="onAcKeydown(event,'v-search')" autocomplete="off">
             <div class="autocomplete-list" id="v-ac-list" style="display:none"></div>
           </div>
-          <div class="form-group" style="width:100px">
+          <div class="form-group">
             <label>Cantidad</label>
             <input id="v-qty" type="number" value="1" min="1" style="text-align:center">
           </div>
@@ -2714,7 +2678,7 @@ function renderVentas(){
       </div>
     </div>
   </div>`;
-  setTimeout(()=>gs('v-search')?.focus(),100);
+  setTimeout(()=>gs('v-cod')?.focus(),100);
   // Iniciar drawer en móvil
   if(window.innerWidth <= 900) vrInit();
 }
@@ -2751,34 +2715,37 @@ function selectPay(p){
 }
 function setVTipo(tipo){ventaTipo=tipo;renderVentas();}
 
-function onCodKeydown(e){ /* legacy: reemplazado por onAcKeydown unificado */ }
+function onCodKeydown(e){
+  if(e.key==='Enter'){
+    const cod=gs('v-cod').value.trim();
+    if(!cod)return;
+    // buscar en productos y embalajes
+    let prod=prodCache.find(p=>p.codigo_barra===cod);
+    let embFound=null;
+    if(!prod){
+      for(const pid in embCache){
+        const emb=embCache[pid].find(em=>em.codigo_barra===cod);
+        if(emb){prod=prodCache.find(p=>p.id===pid);embFound=emb;break;}
+      }
+    }
+    if(!prod){toast('Producto no encontrado','err');gs('v-cod').select();return;}
+    const qty=parseInt(gs('v-qty').value)||1;
+    addToVenta(prod.id,embFound?.id||null,qty);
+    gs('v-cod').value='';gs('v-qty').value=1;gs('v-cod').focus();
+  }
+}
 
 function onVSearch(q){
   acSelected=-1;
-  const list=gs('v-ac-list');
-  // Modo cantidad: +N
-  if(/^\+\d*$/.test(q)){
-    list.style.display='none';
-    return;
-  }
-  if(!q||q.length<1){list.style.display='none';return;}
+  if(!q||q.length<2){gs('v-ac-list').style.display='none';return;}
   acResults=[];
-  const isBarcode=/^\d+$/.test(q);
-  const filtered=isBarcode
-    ? prodCache.filter(p=>(p.codigo_barra||'').startsWith(q)||(p.codigo_barra||'')===q)
-    : prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase()));
-  // Si es código y hay coincidencia exacta, no mostrar lista (se agrega en Enter)
-  if(isBarcode && filtered.length===1 && filtered[0].codigo_barra===q){
-    list.style.display='none';
-    return;
-  }
-  filtered.slice(0,12).forEach(p=>{
+  prodCache.filter(p=>p.nombre.toLowerCase().includes(q.toLowerCase())||(p.codigo_barra||'').includes(q)).slice(0,12).forEach(p=>{
     acResults.push({prodId:p.id,embId:null,label:p.nombre,sub:`Stock: ${p.stock} · ${fmtGs(ventaTipo==='mayorista'&&p.precio_mayorista>0?p.precio_mayorista:p.precio_venta)}`,ispack:false});
     (embCache[p.id]||[]).forEach(e=>{
       acResults.push({prodId:p.id,embId:e.id,label:`${p.nombre} — Pack x${e.cantidad}`,sub:`${e.codigo_barra||''} · ${fmtGs(ventaTipo==='mayorista'&&e.precio_mayorista>0?e.precio_mayorista:e.precio_venta)} · mueve ${e.cantidad} uds`,ispack:true});
     });
   });
-  if(!acResults.length){list.style.display='none';return;}
+  const list=gs('v-ac-list');
   list.innerHTML=acResults.map((r,i)=>`<div class="ac-item" onclick="selectAcItem(${i})">
     <div class="ac-name" style="${r.ispack?'color:var(--teal)':''}">↳ ${r.ispack?'':' '}${r.label}</div>
     <div class="ac-sub">${r.sub}</div>
@@ -2788,47 +2755,14 @@ function onVSearch(q){
 
 function onAcKeydown(e,inputId){
   const list=gs('v-ac-list');
-  const q=(gs('v-search')?.value||'').trim();
-
-  if(e.key==='Enter'){
-    e.preventDefault();
-    // Modo +N: setear cantidad y limpiar
-    if(/^\+\d+$/.test(q)){
-      const n=parseInt(q.slice(1));
-      if(n>0){const qi=gs('v-qty');if(qi){qi.value=n;}}
-      gs('v-search').value='';
-      gs('v-ac-list').style.display='none';
-      gs('v-search').focus();
-      return;
-    }
-    // Código de barras exacto
-    if(/^\d+$/.test(q)){
-      let prod=prodCache.find(p=>p.codigo_barra===q);
-      let embFound=null;
-      if(!prod){
-        for(const pid in embCache){
-          const emb=embCache[pid].find(em=>em.codigo_barra===q);
-          if(emb){prod=prodCache.find(p=>p.id===pid);embFound=emb;break;}
-        }
-      }
-      if(prod){
-        const qty=parseInt(gs('v-qty')?.value)||1;
-        addToVenta(prod.id,embFound?.id||null,qty);
-        gs('v-search').value='';gs('v-ac-list').style.display='none';
-        gs('v-qty').value=1;gs('v-search').focus();
-        return;
-      }
-      if(!acResults.length){toast('Producto no encontrado','err');gs('v-search').select();return;}
-    }
-    // Autocomplete: seleccionar
-    if(acSelected>=0)selectAcItem(acSelected);
-    else if(acResults.length===1)selectAcItem(0);
-    return;
-  }
-
   if(!acResults.length)return;
   if(e.key==='ArrowDown'){acSelected=Math.min(acSelected+1,acResults.length-1);highlightAc();e.preventDefault();}
   else if(e.key==='ArrowUp'){acSelected=Math.max(acSelected-1,0);highlightAc();e.preventDefault();}
+  else if(e.key==='Enter'){
+    if(acSelected>=0)selectAcItem(acSelected);
+    else if(acResults.length===1)selectAcItem(0);
+    e.preventDefault();
+  }
   else if(e.key==='Escape'){list.style.display='none';}
 }
 function highlightAc(){
@@ -2836,10 +2770,10 @@ function highlightAc(){
 }
 function selectAcItem(i){
   const r=acResults[i];
-  const qty=parseInt(gs('v-qty')?.value)||1;
+  const qty=parseInt(gs('v-qty').value)||1;
   addToVenta(r.prodId,r.embId,qty);
   gs('v-search').value='';gs('v-ac-list').style.display='none';
-  gs('v-qty').value=1;gs('v-search').focus();
+  gs('v-qty').value=1;gs('v-cod').focus();
 }
 
 function addToVenta(prodId,embId,qty=1){
@@ -2999,42 +2933,12 @@ async function finalizarVenta(){
   _dashCache=null;
   await loadCaches(true);
   cart=[];
-  // Reset sin rerenderizar para evitar pestañeo
-  ventaNum = ventaNum + 1;
-  const spanNum=gs('v-num-comp'); if(spanNum) spanNum.textContent='#'+ventaNum;
-  const tbody=gs('venta-tbody'); if(tbody) tbody.innerHTML='';
-  const vcount=gs('v-count'); if(vcount) vcount.textContent='0';
-  const vcountBar=gs('v-count-bar'); if(vcountBar) vcountBar.textContent='0 productos · tocá para cobrar';
-  const vtotal=gs('v-total'); if(vtotal) vtotal.textContent='Gs. 0';
-  const vtotalD=gs('v-total-detail'); if(vtotalD) vtotalD.textContent='Gs. 0';
-  const vvuelto=gs('v-vuelto'); if(vvuelto) vvuelto.style.display='none';
-  const vdesc=gs('v-desc'); if(vdesc) vdesc.value=0;
-  const vimporte=gs('v-importe'); if(vimporte) vimporte.value=0;
-  const vnotas=gs('v-notas'); if(vnotas) vnotas.value='';
-  const vclientebox=gs('v-cliente-box'); if(vclientebox) vclientebox.innerHTML=typeof clienteSelectHTML==='function'?clienteSelectHTML():'';
-  if(typeof selectPay==='function') selectPay('efectivo');
-  setTimeout(()=>gs('v-search')?.focus(),50);
+  renderVentas(); // renderVentas cargará el próximo número real
 }
 
 // ─── HISTORIAL VENTAS ─────────────────────────────────────────
-async function renderHistorialVentas(){
-  const {data}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
-  gs('content').innerHTML=`<div class="card">
-    <div class="card-header"><h3>Historial de ventas</h3></div>
-    <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th></th></tr></thead><tbody>
-      ${(data||[]).map(v=>`<tr>
-        <td>${fmtDate(fechaVentaPY(v))}</td>
-        <td><span class="badge-cat" style="background:rgba(99,102,241,.15);color:var(--accent2)">${v.tipo}</span></td>
-        <td>${v.cliente_nombre||'-'}</td>
-        <td>${fmtGs(v.total)}</td>
-        <td style="color:var(--red)">${v.descuento>0?fmtGs(v.descuento):'-'}</td>
-        <td style="font-weight:600;color:var(--green)">${fmtGs(v.total_final)}</td>
-        <td style="font-size:12px">${v.metodo_pago||'-'}</td>
-        <td><button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">👁</button></td>
-      </tr>`).join('')}
-    </tbody></table>
-  </div>`;
-}
+// renderHistorialVentas con paginación — definida más abajo en el script de parches
+async function renderHistorialVentas(page){ /* sobreescrita más abajo */ }
 async function verVenta(id){
   const {data}=await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre)').eq('venta_id',id);
   openModal('Detalle de venta',`<table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead><tbody>
@@ -3579,8 +3483,6 @@ renderVentas = async function(){
     div2.innerHTML='<span style="font-size:10px;line-height:1.2">Parcial<br>+Fiado</span>';
     payGrid.appendChild(div2);
   }
-  // Foco siempre al buscador al terminar de montar el módulo
-  setTimeout(()=>gs('v-search')?.focus(),150);
 };
 
 const __selectPayOriginal = selectPay;
@@ -3599,17 +3501,43 @@ selectPay = function(p){
   const btnP=gs('pay-parcial');
   if(btnP) btnP.classList.toggle('active', p==='parcial');
   updateVTotals();
-  // Devolver foco al buscador tras cambiar método
-  setTimeout(()=>gs('v-search')?.focus(),50);
 };
 
 // finalizarVenta → versión unificada al final del archivo
 
 // Historial de ventas con Ver / Editar / Borrar.
-renderHistorialVentas = async function(){
-  const {data}=await sb.from('bodega_ventas').select('*').order('created_at',{ascending:false}).limit(100);
+let _histVentaPage = 1;
+let _histVentaFechaDesde = '';
+let _histVentaFechaHasta = '';
+const HIST_VENTA_LIM = 30;
+
+renderHistorialVentas = async function(page){
+  _histVentaPage = page || 1;
+  const from = (_histVentaPage - 1) * HIST_VENTA_LIM;
+  const to   = from + HIST_VENTA_LIM - 1;
+
+  let q = sb.from('bodega_ventas').select('*', {count:'exact'}).order('created_at',{ascending:false});
+  if(_histVentaFechaDesde) q = q.gte('fecha', _histVentaFechaDesde);
+  if(_histVentaFechaHasta) q = q.lte('fecha', _histVentaFechaHasta);
+  q = q.range(from, to);
+
+  const {data, count} = await q;
+  const total = count || 0;
+  const totalPags = Math.ceil(total / HIST_VENTA_LIM);
+
   gs('content').innerHTML=`<div class="card">
-    <div class="card-header"><h3>Historial de ventas</h3></div>
+    <div class="card-header"><h3>Historial de ventas</h3><span class="badge">${total} registros</span></div>
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="margin:0">
+        <label style="font-size:11px">Desde</label>
+        <input type="date" id="hv-desde" value="${_histVentaFechaDesde}" onchange="_histVentaFechaDesde=this.value;renderHistorialVentas(1)">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label style="font-size:11px">Hasta</label>
+        <input type="date" id="hv-hasta" value="${_histVentaFechaHasta}" onchange="_histVentaFechaHasta=this.value;renderHistorialVentas(1)">
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="_histVentaFechaDesde='';_histVentaFechaHasta='';renderHistorialVentas(1)">Limpiar filtro</button>
+    </div>
     <table><thead><tr><th>N°</th><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Subtotal</th><th>Desc.</th><th>Total</th><th>Pago</th><th>Acciones</th></tr></thead><tbody>
     ${(data||[]).map(v=>{
       const hora=fmtHoraVenta(v);
@@ -3629,7 +3557,13 @@ renderHistorialVentas = async function(){
         </td>
       </tr>`;
     }).join('')}
-    </tbody></table></div>`;
+    </tbody></table>
+    <div class="paginator">
+      <span>Pág. ${_histVentaPage} de ${totalPags||1} · ${total} ventas</span>
+      ${_histVentaPage>1?`<button class="btn btn-secondary btn-sm" onclick="renderHistorialVentas(${_histVentaPage-1})">← Ant.</button>`:''}
+      ${_histVentaPage<totalPags?`<button class="btn btn-secondary btn-sm" onclick="renderHistorialVentas(${_histVentaPage+1})">Sig. →</button>`:''}
+    </div>
+  </div>`;
 };
 
 async function borrarVenta(id, silencioso=false){
@@ -4426,7 +4360,7 @@ initMobileShell();
       toast('⚠️ '+prod.nombre+': stock disponible '+prod.stock+' uds');
     }
     addToVenta(prod.id,embFound?.id||null,qty);
-    if(gs('v-search')) gs('v-search').value=''; if(gs('v-ac-list')) gs('v-ac-list').style.display='none';
+    if(gs('v-cod')) gs('v-cod').value='';
     if(gs('v-search')) gs('v-search').value='';
     toast('Agregado: '+prod.nombre);
   };
@@ -4560,7 +4494,7 @@ initMobileShell();
   renderVentas = async function(){
     await __renderVentasScan();
     injectScanStyles();
-    const cod=gs('v-search');
+    const cod=gs('v-cod');
     if(cod && !document.getElementById('btn-scan-venta')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cod.parentNode.insertBefore(wrap,cod);wrap.appendChild(cod);
@@ -4570,7 +4504,11 @@ initMobileShell();
   try{pages.ventas=renderVentas;}catch(e){}
 
   onCodKeydown = function(e){
-    // legacy: no-op, ahora maneja onAcKeydown unificado
+    if(e.key==='Enter'){
+      const cod=gs('v-cod').value.trim(); if(!cod) return;
+      addByBarcodeVenta(cod);
+      gs('v-cod').focus();
+    }
   };
 
   onVSearch = function(q){
@@ -5872,11 +5810,10 @@ initMobileShell();
     top.appendChild(b);
   }
   function initUsuariosNav(){
-    titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
     if(gs('nav-usuarios')) return;
     const nav=document.querySelector('#sidebar nav'); if(!nav) return;
     const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico">👥</span> Usuarios';
-    nav.appendChild(a);
+    nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
   }
   function mostrarLoginUsuarios(usuarios){
     const opts=usuarios.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
@@ -6731,7 +6668,6 @@ initMobileShell();
           <td>${repMoney(efectivo)}</td>
           <td>${repMoney(transf)}</td>
           <td>${repMoney(qr)}</td>
-          <td>${repMoney(c.qr_contado)}</td>
           <td>${repMoney(deb)}</td>
           <td>${repMoney(cred)}</td>
           <td>${repMoney(fiado)}</td>
@@ -6741,7 +6677,7 @@ initMobileShell();
           <td style="font-weight:700;color:${(isNaN(dif)?0:dif)>=0?'var(--green)':'var(--red)'}">${repMoney(isNaN(dif)?((Number(c.efectivo_contado)||0)-esperado):dif)}</td>
         </tr>`;
       }).join('');
-      document.getElementById('rep-panel-arqueos').innerHTML=repCard('Reporte de arqueos / turnos','<tr><th>Fecha / Caja</th><th>Estado</th><th>Horario</th><th>Apertura</th><th>V. efectivo</th><th>Transfer.</th><th>QR esperado</th><th>QR contado</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Gastos</th><th>Efectivo esperado</th><th>Contado</th><th>Diferencia</th></tr>',arqueoRows,'No hay arqueos en ese rango.');
+      document.getElementById('rep-panel-arqueos').innerHTML=repCard('Reporte de arqueos / turnos','<tr><th>Fecha / Caja</th><th>Estado</th><th>Horario</th><th>Apertura</th><th>V. efectivo</th><th>Transfer.</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Gastos</th><th>Efectivo esperado</th><th>Contado</th><th>Diferencia</th></tr>',arqueoRows,'No hay arqueos en ese rango.');
       if(loading) loading.style.display='none';
       const active=document.querySelector('.rep-tab.active')?.id?.replace('rep-tab-','') || 'resumen';
       repSetTab(active);
@@ -7149,7 +7085,7 @@ initMobileShell();
     const metodo=gs('hv-metodo')?.value||window.__hvMetodo||'';
     window.__hvDesde=desde; window.__hvHasta=hasta; window.__hvMetodo=metodo;
     window.__hvPage=page;
-    const lim=50, offset=(page-1)*lim;
+    const lim=30, offset=(page-1)*lim;
 
     let q=sb.from('bodega_ventas').select('*',{count:'exact'})
       .gte('fecha',desde).lte('fecha',hasta)
