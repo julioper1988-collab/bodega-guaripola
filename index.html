@@ -5872,6 +5872,7 @@ initMobileShell();
     const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')">🗑</button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
     gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
+  window.renderUsuarios = renderUsuarios;
   function modsToText(u){ if(u.rol==='admin') return 'Todos'; const m=u.modulos||{}; return MODS.filter(([k])=>m[k]).map(x=>x[1]).join(', ')||'-'; }
   window.openUsuarioModal=async function(id=null){
     let u=null; if(id){const {data}=await sb.from('bodega_usuarios').select('*').eq('id',id).single();u=data;}
