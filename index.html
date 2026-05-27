@@ -5803,7 +5803,8 @@ initMobileShell();
   let usuarioActual=null, usuariosDisponibles=false;
   const oldGoTo = window.goTo;
   window.goTo = async function(page){
-    if(!usuarioPuede(page)){ toast('Este usuario no tiene acceso a este módulo','err'); return; }
+    // usuarios siempre accesible (solo admins lo ven en el menú)
+    if(page !== 'usuarios' && !usuarioPuede(page)){ toast('Este usuario no tiene acceso a este módulo','err'); return; }
     return oldGoTo(page);
   };
   function usuarioPuede(page){
@@ -6449,61 +6450,32 @@ initMobileShell();
     const hDesde=document.getElementById('rep-hora-desde')?.value||'';
     const hHasta=document.getElementById('rep-hora-hasta')?.value||'';
     const tieneHora=!!(hDesde||hHasta);
-
-    // Calcular rango de timestamps para filtrar detalles sin IN()
-    const desdeTsUTC=new Date(`${desde}T${hDesde||'00:00'}:00-03:00`).toISOString();
-    const hastaTsUTC=new Date(`${hasta}T${hHasta||'23:59'}:59-03:00`).toISOString();
-
     let ventasQ=sb.from('bodega_ventas')
       .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
       .order('created_at',{ascending:false}).limit(5000);
     if(tieneHora){
+      // Filtrar por created_at con timestamp exacto (PY = UTC-3)
+      const desdeTsUTC=new Date(`${desde}T${hDesde||'00:00'}:00-03:00`).toISOString();
+      const hastaTsUTC=new Date(`${hasta}T${hHasta||'23:59'}:59-03:00`).toISOString();
       ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
     } else {
       ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
     }
-
-    // Detalles: filtrar por rango de created_at de bodega_ventas via inner join
-    // Esto evita el IN() con cientos de IDs que rompe la URL
-    const detQ=sb.from('bodega_ventas_detalle')
-      .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo),bodega_ventas!inner(fecha,created_at)')
-      .gte('bodega_ventas.fecha', desde)
-      .lte('bodega_ventas.fecha', hasta)
-      .limit(20000);
-
-    const [ventasRes, detRes] = await Promise.all([ventasQ, detQ]);
+    const ventasRes=await ventasQ;
     if(ventasRes.error) throw ventasRes.error;
-    if(detRes.error){
-      // Fallback: si el inner join falla (ej: RLS), usar el IN() pero en chunks de 200
-      console.warn('[Reportes] Inner join falló, usando chunks:', detRes.error.message);
-      const ventasTodas2=ventasRes.data||[];
-      const ventasCliente2=ventasTodas2.filter(v=>repMatch(v.cliente_nombre||'Ocasional',clienteQ));
-      const ids=ventasCliente2.map(v=>v.id);
-      let detalles2=[];
-      const CHUNK=200;
-      for(let i=0;i<ids.length;i+=CHUNK){
-        const chunk=ids.slice(i,i+CHUNK);
-        const r=await sb.from('bodega_ventas_detalle')
-          .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)')
-          .in('venta_id',chunk).limit(5000);
-        if(!r.error) detalles2=detalles2.concat(r.data||[]);
-      }
-      detalles2=detalles2.filter(d=>repMatch(repProductName(d),productoQ));
-      const ventaConProducto2=new Set(detalles2.map(d=>d.venta_id));
-      const ventasFiltradas2=productoQ?ventasCliente2.filter(v=>ventaConProducto2.has(v.id)):ventasCliente2;
-      const ventasMap2={};
-      ventasCliente2.forEach(v=>ventasMap2[v.id]=v);
-      return {ventasTodas:ventasTodas2,ventasCliente:ventasCliente2,ventasFiltradas:ventasFiltradas2,ventasMap:ventasMap2,detalles:detalles2};
-    }
-
     const ventasTodas=ventasRes.data||[];
-    // Limpiar el join de bodega_ventas de cada detalle (no lo necesitamos en el objeto)
-    const detallesBrutos=(detRes.data||[]).map(d=>{ const {bodega_ventas:_,...rest}=d; return rest; });
-    const ventasCliente=ventasTodas.filter(v=>repMatch(v.cliente_nombre||'Ocasional',clienteQ));
-    const ventasClienteIds=new Set(ventasCliente.map(v=>v.id));
-    let detalles=detallesBrutos.filter(d=>ventasClienteIds.has(d.venta_id)&&repMatch(repProductName(d),productoQ));
+    const ventasCliente=ventasTodas.filter(v=>repMatch(v.cliente_nombre || 'Ocasional', clienteQ));
+    const ids=ventasCliente.map(v=>v.id);
+    let detalles=[];
+    if(ids.length){
+      const detRes=await sb.from('bodega_ventas_detalle')
+        .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)')
+        .in('venta_id',ids).limit(15000);
+      if(detRes.error) throw detRes.error;
+      detalles=(detRes.data||[]).filter(d=>repMatch(repProductName(d), productoQ));
+    }
     const ventaConProducto=new Set(detalles.map(d=>d.venta_id));
-    const ventasFiltradas=productoQ?ventasCliente.filter(v=>ventaConProducto.has(v.id)):ventasCliente;
+    const ventasFiltradas=productoQ ? ventasCliente.filter(v=>ventaConProducto.has(v.id)) : ventasCliente;
     const ventasMap={};
     ventasCliente.forEach(v=>ventasMap[v.id]=v);
     return {ventasTodas,ventasCliente,ventasFiltradas,ventasMap,detalles};
@@ -10364,7 +10336,7 @@ async function revertirStockCompraReal(compraId, detalles){
         if(typeof renderCompras==='function') pages.compras=renderCompras;
         if(typeof renderHistorialCompras==='function') pages['historial-compras']=renderHistorialCompras;
         if(typeof renderReportes==='function') pages.reportes=renderReportes;
-        if(typeof renderUsuarios==='function') pages.usuarios=renderUsuarios;
+        if(typeof renderUsuarios==='function'){ pages.usuarios=renderUsuarios; titles.usuarios='Usuarios'; }
       }
     }catch(e){console.warn('No se pudo registrar páginas del menú',e)}
   }
@@ -10392,7 +10364,7 @@ async function revertirStockCompraReal(compraId, detalles){
       btn.onclick=function(ev){ev.preventDefault();ev.stopPropagation();var group=btn.closest('.mac-menu-group');var was=group.classList.contains('open');closeSubs();if(!was)group.classList.add('open')};
     });
     menu.querySelectorAll('a[data-page]').forEach(function(a){
-      a.onclick=function(ev){ev.preventDefault();ev.stopPropagation();registerKnownPages();closeSubs();if(typeof window.goTo==='function')window.goTo(a.getAttribute('data-page'));};
+      a.onclick=function(ev){ev.preventDefault();ev.stopPropagation();registerKnownPages();closeSubs();var pg=a.getAttribute('data-page');if(typeof window.goTo==='function')window.goTo(pg).catch&&window.goTo(pg);};
     });
   }
   function mark(page){
