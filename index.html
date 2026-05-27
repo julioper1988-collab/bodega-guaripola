@@ -7487,7 +7487,7 @@ initMobileShell();
 
   async function hayCajaAbiertaParaVender(){
     try{
-      if(!sb){ return false; }
+      if(!sb){ return _cajaDesdeCache(); }
       const {data,error} = await sb
         .from('bodega_caja')
         .select('id,fecha,numero_caja,nombre_turno,opened_at,estado')
@@ -7495,16 +7495,31 @@ initMobileShell();
         .order('opened_at',{ascending:false})
         .limit(1);
       if(error){
-        console.error('Error verificando caja abierta:', error);
-        toast('No pude verificar si la caja está abierta. Revisá Supabase.', 'err');
-        return false;
+        console.warn('Sin conexión, usando caja cacheada:', error);
+        return _cajaDesdeCache();
       }
-      return Array.isArray(data) && data.length > 0 ? data[0] : false;
+      const caja = Array.isArray(data) && data.length > 0 ? data[0] : false;
+      // Guardar en cache si hay caja abierta, limpiar si no
+      if(caja) lsSet('bg_caja_activa', JSON.stringify(caja));
+      else lsSet('bg_caja_activa', '');
+      return caja;
     }catch(e){
-      console.error(e);
-      toast('Error verificando caja abierta: '+(e.message||e), 'err');
-      return false;
+      console.warn('Error verificando caja, usando cache:', e);
+      return _cajaDesdeCache();
     }
+  }
+
+  function _cajaDesdeCache(){
+    try{
+      const raw = lsGet('bg_caja_activa');
+      if(!raw) return false;
+      const caja = JSON.parse(raw);
+      if(caja && caja.id && caja.estado === 'abierta'){
+        console.log('[Offline] Usando caja cacheada:', caja.numero_caja||caja.id);
+        return caja;
+      }
+      return false;
+    }catch(e){ return false; }
   }
 
   window.hayCajaAbiertaParaVender = hayCajaAbiertaParaVender;
