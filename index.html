@@ -10,11 +10,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<meta name="theme-color" content="#0f1117">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Guaripola">
-<link rel="apple-touch-icon" href="./icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script id="bg-safehtml-global-fix">
 // ── Función única global de escape HTML ──
@@ -56,14 +51,14 @@ window.safeHtml = escapeHtml;
   async function usuarioAdminActual(){
     try{
       const saved=lsGet('bg_usuario_actual');
-      if(!saved) return true;
+      if(!saved) return isAdminLocalCached();
       const obj=JSON.parse(saved);
-      if(!obj?.id) return true;
+      if(!obj?.id) return isAdminLocalCached();
       const {data,error}=await sb.from('bodega_usuarios').select('id,nombre,rol').eq('id',obj.id).maybeSingle();
-      if(error || !data) return true;
+      if(error || !data) return isAdminLocalCached(); // offline → cache local, no asumir admin
       lsSet('bg_usuario_full',JSON.stringify(data));
       return data.rol==='admin';
-    }catch(e){return true;}
+    }catch(e){ return isAdminLocalCached(); }
   }
   window.bgUsuarioEsAdmin = usuarioAdminActual;
 
@@ -677,7 +672,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   display: block;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -711,7 +706,7 @@ body {
 #main {
   padding-top: 28px;
   width: 100%;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2133,14 +2128,7 @@ async function renderDashboard(){
       }
       requestAnimationFrame(step);
     }
-    // Identificar las stat cards por su contenido actual
-    document.querySelectorAll('.stat-card .value').forEach(el => {
-      const raw = el.textContent.replace(/\./g,'').replace(',','.');
-      const num = parseFloat(raw.replace(/[^0-9.]/g,''));
-      const isGs = el.textContent.includes('Gs');
-      if(!isNaN(num) && num > 0) animateCounter(el, isGs ? tH||tM||tC : bc, isGs);
-    });
-    // Animación más precisa por selector
+    // Animación precisa por selector (valor correcto por card)
     const cards = [
       {sel: '.stat-card--green .value', val: tH, isGs: true},
       {sel: '.stat-card:nth-child(2) .value', val: totalGanancia, isGs: true},
@@ -12772,38 +12760,18 @@ window.diagnosticarStockCompras = async function(){
   function int(v){ return parseInt(v)||0; }
 
   async function buscarDetallesCompra(compraId){
-    var intentos = [
-      {tabla:'bodega_compras_detalle', campo:'compra_id'},
-      {tabla:'bodega_compra_detalle', campo:'compra_id'},
-      {tabla:'bodega_compras_items', campo:'compra_id'},
-      {tabla:'bodega_compra_items', campo:'compra_id'},
-      {tabla:'compras_detalle', campo:'compra_id'},
-      {tabla:'compra_detalle', campo:'compra_id'},
-      {tabla:'bodega_compras_detalle', campo:'id_compra'},
-      {tabla:'bodega_compra_detalle', campo:'id_compra'}
-    ];
-
-    var errores = [];
-
-    for(var i=0;i<intentos.length;i++){
-      var it=intentos[i];
-      try{
-        var q = await sb.from(it.tabla).select('*').eq(it.campo, compraId);
-        if(q.error){
-          errores.push(it.tabla+'.'+it.campo+': '+q.error.message);
-          continue;
-        }
-        if(q.data && q.data.length){
-          console.log('Detalle de compra encontrado en', it.tabla, it.campo, q.data);
-          return {data:q.data, tabla:it.tabla, campo:it.campo};
-        }
-      }catch(e){
-        errores.push(it.tabla+'.'+it.campo+': '+(e.message||e));
+    // Tabla confirmada: bodega_compras_detalle, campo: compra_id
+    try{
+      var q = await sb.from('bodega_compras_detalle').select('*').eq('compra_id', compraId);
+      if(q.error){
+        console.error('Error cargando detalle compra:', q.error);
+        return {data:[], tabla:'bodega_compras_detalle', campo:'compra_id', errores:[q.error.message]};
       }
+      return {data:q.data||[], tabla:'bodega_compras_detalle', campo:'compra_id'};
+    }catch(e){
+      console.error('Error buscarDetallesCompra:', e);
+      return {data:[], tabla:null, campo:null, errores:[e.message||e]};
     }
-
-    console.warn('No se encontraron detalles de compra. Intentos:', errores);
-    return {data:[], tabla:null, campo:null, errores:errores};
   }
 
   async function cargarProductos(detalles){
@@ -12947,8 +12915,28 @@ window.diagnosticarStockCompras = async function(){
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('[SW] Registrado:', reg.scope))
+      .then(reg => {
+        console.log('[SW] Registrado:', reg.scope);
+        // Registrar background sync cuando vuelve la red
+        window.addEventListener('online', function(){
+          if(reg.sync){
+            reg.sync.register('bg-sync-queue').catch(e => {
+              // Fallback: flush manual si Background Sync no está soportado
+              navigator.serviceWorker.controller?.postMessage({type:'FLUSH_QUEUE'});
+            });
+          } else {
+            navigator.serviceWorker.controller?.postMessage({type:'FLUSH_QUEUE'});
+          }
+        });
+      })
       .catch(err => console.warn('[SW] Error al registrar:', err));
+
+    // Escuchar sync completo del SW
+    navigator.serviceWorker.addEventListener('message', function(event){
+      if(event.data?.type === 'SYNC_COMPLETE'){
+        if(typeof toast === 'function') toast('✅ Datos sincronizados con el servidor');
+      }
+    });
   });
 }
 </script>
