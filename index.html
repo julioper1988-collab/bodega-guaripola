@@ -2961,6 +2961,7 @@ async function finalizarVenta(){
     return;
   }
   toast(`✓ Cobrado: ${fmtGs(totalFinal)}`);
+  try{ localStorage.removeItem('bg_draft_venta'); localStorage.removeItem('bg_last_page'); }catch(e){}
   _dashCache=null;
   await loadCaches(true);
   cart=[];
@@ -5864,7 +5865,7 @@ initMobileShell();
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
   }
-  window.logoutUsuarioSistema=function(){lsRemove('bg_usuario_actual');usuarioActual=null;closeModal();cargarUsuariosInicial();};
+  window.logoutUsuarioSistema=function(){lsRemove('bg_usuario_actual');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
   async function renderUsuarios(){
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
@@ -12101,21 +12102,12 @@ window.diagnosticarStockCompras = async function(){
   function lsGet(k){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){return null;} }
   function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 
-  // cart y compraItems son variables de scope cerrado — acceder via eval seguro
+  // cart y compraItems: leer variables reales del scope global
   function getCart(){
-    // Leer desde localStorage que bgSyncCart() mantiene actualizado
-    try{
-      var d = localStorage.getItem('bg_draft_venta');
-      if(d){ var p=JSON.parse(d); return (p&&p.cart&&p.cart.length)?p.cart:[]; }
-    }catch(e){}
-    return [];
+    try{ return (typeof cart !== 'undefined' && Array.isArray(cart)) ? cart : []; }catch(e){ return []; }
   }
   function getCompraItems(){
-    try{
-      var d = localStorage.getItem('bg_draft_compra');
-      if(d){ var p=JSON.parse(d); return (p&&p.compraItems&&p.compraItems.length)?p.compraItems:[]; }
-    }catch(e){}
-    return [];
+    try{ return (typeof compraItems !== 'undefined' && Array.isArray(compraItems)) ? compraItems : []; }catch(e){ return []; }
   }
 
   function guardarVenta(){
@@ -12243,8 +12235,11 @@ window.diagnosticarStockCompras = async function(){
   }, true);
 
   // Banners de recuperación al cargar
+  var MAX_DRAFT_AGE_MS = 8 * 60 * 60 * 1000; // 8 horas
   function mostrarBanners(){
     var dv=lsGet(DV), dc=lsGet(DC);
+    if(dv && dv.ts && (Date.now()-dv.ts) > MAX_DRAFT_AGE_MS){ lsDel(DV); dv=null; }
+    if(dc && dc.ts && (Date.now()-dc.ts) > MAX_DRAFT_AGE_MS){ lsDel(DC); dc=null; }
     if(dv && dv.cart && dv.cart.length){
       var mins=Math.round((Date.now()-dv.ts)/60000);
       var el=document.createElement('div');
@@ -12956,6 +12951,44 @@ if('serviceWorker' in navigator){
     });
   });
 }
+</script>
+
+<script id="bg-pwa-install-prompt">
+(function(){
+  if(window.__bgPwaInstall) return;
+  window.__bgPwaInstall = true;
+  var deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+    mostrarBotonInstalar();
+  });
+  window.addEventListener('appinstalled', function(){
+    deferredPrompt = null;
+    ocultarBotonInstalar();
+    if(typeof toast === 'function') toast('✅ App instalada correctamente');
+  });
+  function mostrarBotonInstalar(){
+    if(document.getElementById('bg-install-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'bg-install-btn';
+    btn.textContent = '📲 Instalar app';
+    btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    btn.onclick = function(){
+      if(!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(r){
+        if(r.outcome === 'accepted') ocultarBotonInstalar();
+        deferredPrompt = null;
+      });
+    };
+    document.body.appendChild(btn);
+  }
+  function ocultarBotonInstalar(){
+    var b = document.getElementById('bg-install-btn');
+    if(b) b.remove();
+  }
+})();
 </script>
 </body>
 </html>
