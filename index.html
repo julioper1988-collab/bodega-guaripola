@@ -6470,11 +6470,17 @@ initMobileShell();
     const ids=ventasCliente.map(v=>v.id);
     let detalles=[];
     if(ids.length){
-      const detRes=await sb.from('bodega_ventas_detalle')
-        .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)')
-        .in('venta_id',ids).limit(15000);
-      if(detRes.error) throw detRes.error;
-      detalles=(detRes.data||[]).filter(d=>repMatch(repProductName(d), productoQ));
+      const BATCH=100;
+      const allDet=[];
+      for(let i=0;i<ids.length;i+=BATCH){
+        const chunk=ids.slice(i,i+BATCH);
+        const detRes=await sb.from('bodega_ventas_detalle')
+          .select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)')
+          .in('venta_id',chunk).limit(5000);
+        if(detRes.error) throw detRes.error;
+        allDet.push(...(detRes.data||[]));
+      }
+      detalles=allDet.filter(d=>repMatch(repProductName(d), productoQ));
     }
     const ventaConProducto=new Set(detalles.map(d=>d.venta_id));
     const ventasFiltradas=productoQ ? ventasCliente.filter(v=>ventaConProducto.has(v.id)) : ventasCliente;
