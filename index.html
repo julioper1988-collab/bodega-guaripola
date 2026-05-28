@@ -7,6 +7,7 @@
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0f1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -1961,10 +1962,14 @@ async function renderDashboard(){
   const ventaIds=(ventasCaja||[]).map(v=>v.id);
   let detallesCaja=[];
   if(ventaIds.length){
-    const {data:det}=await sb.from('bodega_ventas_detalle')
-      .select('producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,stock,precio_costo)')
-      .in('venta_id',ventaIds);
-    detallesCaja=det||[];
+    const _B2=100,_ad2=[];
+    for(let _i=0;_i<ventaIds.length;_i+=_B2){
+      const {data:_d}=await sb.from('bodega_ventas_detalle')
+        .select('producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,stock,precio_costo)')
+        .in('venta_id',ventaIds.slice(_i,_i+_B2));
+      _ad2.push(...(_d||[]));
+    }
+    detallesCaja=_ad2;
   }
   // Agrupar por producto
   const porProd={};
@@ -3262,7 +3267,7 @@ async function deleteProv(id,nombre){
 // ─── AJUSTE DE STOCK ──────────────────────────────────────────
 let ajAcResults=[];
 async function renderAjustes(){
-  const {data}=await sb.from('bodega_ajustes_stock').select('*,bodega_productos(nombre)').order('created_at',{ascending:false}).limit(80);
+  const {data}=await sb.from('bodega_ajustes_stock').select('*,bodega_productos(nombre)').order('created_at',{ascending:false}).limit(300);
   gs('content').innerHTML=`
   <div style="margin-bottom:14px">
     <button class="btn btn-primary" onclick="openAjusteModal()">+ Nuevo ajuste</button>
@@ -3640,7 +3645,7 @@ async function editarVenta(id){
 
 // Historial compras con Ver / Editar / Borrar.
 renderHistorialCompras = async function(){
-  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(500);
   gs('content').innerHTML=`<div class="card">
     <div class="card-header"><h3>Historial de compras</h3></div>
     <table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Factura</th><th>Estado</th><th>Total</th><th>Acciones</th></tr></thead><tbody>
@@ -3980,7 +3985,7 @@ async function imprimirOrdenCompra(id){
 }
 
 renderHistorialCompras = async function(){
-  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(100);
+  const {data}=await sb.from('bodega_compras').select('*,bodega_proveedores(nombre)').order('created_at',{ascending:false}).limit(500);
   // Deduplicar por id para evitar duplicados visuales
   const seenIds = new Set();
   const rows = (data||[]).filter(c => {
@@ -5517,7 +5522,7 @@ initMobileShell();
     try{
       // Si hay hora definida, filtrar por created_at (timestamp exacto)
       // Si no hay hora, filtrar por fecha (campo de texto)
-      let ventasQ=sb.from('bodega_ventas').select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at').order('fecha',{ascending:false}).limit(2000);
+      let ventasQ=sb.from('bodega_ventas').select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at').order('fecha',{ascending:false}).limit(5000);
       if(tieneHora){
         // Convertir a UTC para comparar con created_at (PY = UTC-3)
         const desdeTsUTC=new Date(desdeTs+'-03:00').toISOString();
@@ -5536,9 +5541,14 @@ initMobileShell();
       const ventaIds=ventas.map(v=>v.id);
       let detalles=[];
       if(ventaIds.length){
-        const detRes=await sb.from('bodega_ventas_detalle').select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)').in('venta_id',ventaIds).limit(5000);
-        if(detRes.error){ console.warn('Reporte detalle:',detRes.error); }
-        detalles=(detRes.data||[]).filter(d=>!fProducto || rptNorm(rptProductName(d)).includes(fProducto));
+        const _BATCH=100,_allDet=[];
+        for(let _i=0;_i<ventaIds.length;_i+=_BATCH){
+          const _chunk=ventaIds.slice(_i,_i+_BATCH);
+          const _dr=await sb.from('bodega_ventas_detalle').select('venta_id,producto_id,cantidad,precio_unitario,subtotal,bodega_productos(nombre,precio_costo)').in('venta_id',_chunk).limit(5000);
+          if(_dr.error){ console.warn('Reporte detalle:',_dr.error); break; }
+          _allDet.push(...(_dr.data||[]));
+        }
+        detalles=_allDet.filter(d=>!fProducto || rptNorm(rptProductName(d)).includes(fProducto));
       }
       const ventasConDetalle=new Set(detalles.map(d=>d.venta_id));
       const ventasFiltradas=fProducto ? ventas.filter(v=>ventasConDetalle.has(v.id)) : ventas;
@@ -6454,7 +6464,7 @@ initMobileShell();
     const tieneHora=!!(hDesde||hHasta);
     let ventasQ=sb.from('bodega_ventas')
       .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
-      .order('created_at',{ascending:false}).limit(5000);
+      .order('created_at',{ascending:false}).limit(10000);
     if(tieneHora){
       // Filtrar por created_at con timestamp exacto (PY = UTC-3)
       const desdeTsUTC=new Date(`${desde}T${hDesde||'00:00'}:00-03:00`).toISOString();
