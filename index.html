@@ -3589,6 +3589,8 @@ renderHistorialVentas = async function(page){
         <td style="font-size:12px">${v.metodo_pago==='fiado'?'Fiado':(v.metodo_pago||'-')}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="bgReimprimirTicket('${v.id}')">Ticket</button>
+          <button class="btn btn-secondary btn-sm" onclick="bgEnviarTicketWhatsApp('${v.id}')">WhatsApp</button>
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
         </td>
@@ -7269,6 +7271,8 @@ initMobileShell();
         </td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
+          <button class="btn btn-primary btn-sm" onclick="bgReimprimirTicket('${v.id}')">🧾 Ticket</button>
+          <button class="btn btn-secondary btn-sm" onclick="bgEnviarTicketWhatsApp('${v.id}')">WhatsApp</button>
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
         </td>
@@ -8870,6 +8874,45 @@ async function revertirStockCompraReal(compraId, detalles){
     }
     if(bajos.length) toast('⚠️ Stock bajo: '+bajos.join(', '),'err');
 
+    const __ticketVentaData = {
+      id: ventaId,
+      numero_venta: numVenta,
+      fecha: fechaHoyPY(),
+      created_at: new Date().toISOString(),
+      tipo: ventaTipo,
+      cliente_nombre: cli.nombre || null,
+      total: Math.round(total),
+      descuento: Math.round(desc),
+      total_final: Math.round(totalFinal),
+      metodo_pago: selectedPay,
+      monto_efectivo: selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:((selectedPay==='efectivo'||selectedPay==='parcial')?importe:0),
+      monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
+      monto_qr: selectedPay==='mixto'?parseFloat(gs('v-qr')?.value)||0:(selectedPay==='qr'?totalFinal:0),
+      monto_debito: selectedPay==='mixto'?parseFloat(gs('v-debito')?.value)||0:(selectedPay==='debito'?totalFinal:0),
+      monto_credito: selectedPay==='mixto'?parseFloat(gs('v-credito-mix')?.value)||0:(selectedPay==='credito'?totalFinal:0),
+      monto_otro: selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0),
+      cajero: (function(){
+        try{
+          const raw = localStorage.getItem('bg_usuario_actual') || localStorage.getItem('bg_usuario_full');
+          const u = raw ? JSON.parse(raw) : null;
+          return u?.nombre || u?.email || null;
+        }catch(e){ return null; }
+      })(),
+      items: cart.map(function(c){
+        const uds = Number(c.uds)||1;
+        const cantidad = Number(c.cantidad)||0;
+        const subtotal = Math.round(Number(c.subtotalCalculado ?? ((Number(c.precio)||0)*cantidad)));
+        return {
+          nombre: c.nombre || c.producto_nombre || 'Producto',
+          cantidad: cantidad,
+          uds: uds,
+          cantidad_mostrada: uds>1 ? (cantidad+' pack x'+uds) : String(cantidad),
+          precio_unitario: cantidad>0 ? Math.round(subtotal/cantidad) : Math.round(Number(c.precio)||0),
+          subtotal: subtotal
+        };
+      })
+    };
+
     cart=[];
     // Siguiente número de comprobante = numero_venta + 1 (secuencial real)
     if(numVenta) ventaNum = numVenta + 1;
@@ -8878,6 +8921,9 @@ async function revertirStockCompraReal(compraId, detalles){
     if(numVenta){
       const span = document.getElementById('v-num-comp');
       if(span) span.textContent = '#' + (numVenta + 1);
+    }
+    if(typeof window.bgTicketPostVenta === 'function'){
+      setTimeout(function(){ window.bgTicketPostVenta(__ticketVentaData); }, 120);
     }
   };
 
@@ -12967,6 +13013,269 @@ if('serviceWorker' in navigator){
     });
   });
 }
+</script>
+
+
+
+<script id="bg-ticket-interno-y-factura-compra">
+(function(){
+  if(window.__bgTicketInternoGuaripola) return;
+  window.__bgTicketInternoGuaripola = true;
+
+  function esc(v){
+    if(typeof escapeHtml === 'function') return escapeHtml(v == null ? '' : v);
+    return String(v == null ? '' : v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});
+  }
+  function money(n){ return (typeof fmtGs === 'function') ? fmtGs(Number(n)||0) : 'Gs. '+(Number(n)||0).toLocaleString('es-PY'); }
+  function dateFmt(v){
+    try{
+      if(!v) return '-';
+      if(typeof fmtDate === 'function' && /^\d{4}-\d{2}-\d{2}$/.test(String(v))) return fmtDate(v);
+      return new Date(v).toLocaleString('es-PY');
+    }catch(e){ return v || '-'; }
+  }
+  function horaFmt(v){
+    try{ return v ? new Date(v).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : '-'; }
+    catch(e){ return '-'; }
+  }
+  function currentUserName(){
+    try{
+      var raw = localStorage.getItem('bg_usuario_actual') || localStorage.getItem('bg_usuario_full');
+      var u = raw ? JSON.parse(raw) : null;
+      return u?.nombre || u?.email || '-';
+    }catch(e){ return '-'; }
+  }
+  function normalizeTicketVenta(v){
+    v = v || {};
+    var items = Array.isArray(v.items) ? v.items : [];
+    return {
+      id: v.id || v.venta_id || null,
+      numero_venta: v.numero_venta || null,
+      fecha: v.created_at || v.fecha || null,
+      fecha_simple: v.fecha || null,
+      cajero: v.cajero || v.usuario_nombre || currentUserName(),
+      cliente_nombre: v.cliente_nombre || null,
+      total: Number(v.total)||0,
+      descuento: Number(v.descuento)||0,
+      total_final: Number(v.total_final)||0,
+      metodo_pago: v.metodo_pago || '-',
+      monto_efectivo: Number(v.monto_efectivo)||0,
+      monto_transferencia: Number(v.monto_transferencia)||0,
+      monto_qr: Number(v.monto_qr)||0,
+      monto_debito: Number(v.monto_debito)||0,
+      monto_credito: Number(v.monto_credito)||0,
+      monto_otro: Number(v.monto_otro)||0,
+      items: items.map(function(it){
+        var cantidad = it.cantidad_mostrada || it.cantidad || '-';
+        var subtotal = Number(it.subtotal)||0;
+        var precio = Number(it.precio_unitario)||0;
+        return {
+          nombre: it.nombre || it.producto_nombre || it.bodega_productos?.nombre || 'Producto',
+          cantidad: cantidad,
+          precio_unitario: precio,
+          subtotal: subtotal
+        };
+      })
+    };
+  }
+  function paymentRows(t){
+    var mp = String(t.metodo_pago||'').toLowerCase();
+    var rows = [];
+    function add(label,val){ if(Number(val)>0) rows.push({label:label,value:Number(val)}); }
+    if(mp==='mixto'){
+      add('Efectivo',t.monto_efectivo);
+      add('Transferencia',t.monto_transferencia);
+      add('QR',t.monto_qr);
+      add('Débito',t.monto_debito);
+      add('Crédito',t.monto_credito);
+      var usado = rows.reduce(function(s,r){return s+r.value;},0);
+      if(t.monto_otro>0 && usado < t.total_final) add('Otro', t.total_final-usado);
+      if(!rows.length) rows.push({label:'Mixto',value:t.total_final});
+    }else if(mp==='parcial'){
+      add('Efectivo',t.monto_efectivo);
+      rows.push({label:'Fiado',value:Math.max(0,t.total_final-(Number(t.monto_efectivo)||0))});
+    }else if(mp==='fiado'){
+      rows.push({label:'Fiado',value:t.total_final});
+    }else if(mp==='transferencia'){
+      rows.push({label:'Transferencia',value:t.monto_transferencia||t.total_final});
+    }else if(mp==='qr'){
+      rows.push({label:'QR',value:t.monto_qr||t.monto_otro||t.total_final});
+    }else if(mp==='debito'){
+      rows.push({label:'Débito',value:t.monto_debito||t.monto_otro||t.total_final});
+    }else if(mp==='credito'){
+      rows.push({label:'Crédito',value:t.monto_credito||t.monto_otro||t.total_final});
+    }else{
+      rows.push({label:mp?mp.charAt(0).toUpperCase()+mp.slice(1):'Pago',value:t.total_final});
+    }
+    return rows;
+  }
+  function ticketHtml(ticket, opts){
+    var t = normalizeTicketVenta(ticket);
+    var width = (opts && opts.width) || '80mm';
+    var rows = t.items.map(function(it){
+      return '<tr><td class="prod">'+esc(it.nombre)+'<br><span>'+esc(it.cantidad)+' x '+money(it.precio_unitario)+'</span></td><td class="num">'+money(it.subtotal)+'</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="muted">Sin detalle de productos</td></tr>';
+    var pagos = paymentRows(t).map(function(p){return '<div class="line"><span>'+esc(p.label)+'</span><b>'+money(p.value)+'</b></div>';}).join('');
+    var cliente = t.cliente_nombre ? '<div class="line"><span>Cliente</span><b>'+esc(t.cliente_nombre)+'</b></div>' : '';
+    return '<!doctype html><html><head><meta charset="utf-8"><title>Ticket '+esc(t.numero_venta||'')+'</title>'+
+      '<style>@page{size:'+width+' auto;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,monospace;font-size:12px}.ticket{width:'+width+';max-width:100%;padding:8px 9px}.center{text-align:center}.biz{font-weight:800;font-size:16px;letter-spacing:.3px}.muted{color:#555}.sep{border-top:1px dashed #111;margin:7px 0}.line{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.line b{text-align:right}table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:3px 0}.prod{width:70%}.prod span{font-size:11px;color:#555}.num{text-align:right;font-weight:700;white-space:nowrap}.total{font-size:16px;font-weight:900}.foot{font-size:11px;line-height:1.35}@media print{body{width:'+width+'}.no-print{display:none!important}}</style>'+
+      '</head><body><div class="ticket">'+
+      '<div class="center"><div class="biz">BODEGA GUARIPOLA</div><div>Ticket interno</div><div class="muted">No válido como factura legal</div></div><div class="sep"></div>'+
+      '<div class="line"><span>N°</span><b>'+(t.numero_venta ? '#'+esc(t.numero_venta) : '-')+'</b></div>'+
+      '<div class="line"><span>Fecha</span><b>'+esc(dateFmt(t.fecha || t.fecha_simple))+'</b></div>'+
+      '<div class="line"><span>Hora</span><b>'+esc(horaFmt(t.fecha))+'</b></div>'+
+      '<div class="line"><span>Cajero</span><b>'+esc(t.cajero||'-')+'</b></div>'+cliente+
+      '<div class="sep"></div><table>'+rows+'</table><div class="sep"></div>'+
+      '<div class="line"><span>Subtotal</span><b>'+money(t.total)+'</b></div>'+
+      (t.descuento>0?'<div class="line"><span>Descuento</span><b>-'+money(t.descuento)+'</b></div>':'')+
+      '<div class="line total"><span>TOTAL</span><b>'+money(t.total_final)+'</b></div><div class="sep"></div>'+pagos+
+      (String(t.metodo_pago).toLowerCase()==='fiado'?'<div class="line"><span>Saldo pendiente</span><b>'+money(t.total_final)+'</b></div>':'')+
+      '<div class="sep"></div><div class="center foot">Gracias por su compra<br>Ticket interno de control.<br>No válido como factura legal.</div></div></body></html>';
+  }
+  function ticketText(ticket){
+    var t = normalizeTicketVenta(ticket);
+    var lines = [];
+    lines.push('BODEGA GUARIPOLA');
+    lines.push('Ticket interno N° '+(t.numero_venta ? '#'+t.numero_venta : '-'));
+    lines.push('Fecha: '+dateFmt(t.fecha || t.fecha_simple));
+    lines.push('Cajero: '+(t.cajero||'-'));
+    if(t.cliente_nombre) lines.push('Cliente: '+t.cliente_nombre);
+    lines.push('------------------------------');
+    t.items.forEach(function(it){ lines.push((it.nombre||'Producto')+' | '+it.cantidad+' x '+money(it.precio_unitario)+' = '+money(it.subtotal)); });
+    lines.push('------------------------------');
+    lines.push('Subtotal: '+money(t.total));
+    if(t.descuento>0) lines.push('Descuento: -'+money(t.descuento));
+    lines.push('TOTAL: '+money(t.total_final));
+    lines.push('Pago:');
+    paymentRows(t).forEach(function(p){ lines.push(' - '+p.label+': '+money(p.value)); });
+    lines.push('------------------------------');
+    lines.push('Gracias por su compra');
+    lines.push('Ticket interno de control. No válido como factura legal.');
+    return lines.join('\n');
+  }
+  function printTicket(ticket){
+    var w = window.open('','_blank','width=420,height=700');
+    if(!w){ if(typeof toast==='function') toast('Permití ventanas emergentes para imprimir','err'); return; }
+    w.document.open(); w.document.write(ticketHtml(ticket)); w.document.close();
+    setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },350);
+  }
+  window.bgImprimirTicketInterno = printTicket;
+
+  var modalTicketActual = null;
+  var modalKeyHandler = null;
+  function closeTicketModal(){
+    if(modalKeyHandler){ document.removeEventListener('keydown', modalKeyHandler, true); modalKeyHandler=null; }
+    modalTicketActual=null;
+    try{ if(typeof closeModal==='function') closeModal(); }catch(e){}
+  }
+  window.bgCerrarTicketModal = closeTicketModal;
+  window.bgTicketModalPrint = function(){
+    if(modalTicketActual) printTicket(modalTicketActual);
+    closeTicketModal();
+  };
+  window.bgTicketPostVenta = function(ticket){
+    modalTicketActual = normalizeTicketVenta(ticket);
+    var body = '<div style="text-align:center;padding:4px 0 12px">'+
+      '<div style="font-size:42px;line-height:1;margin-bottom:8px">✅</div>'+ 
+      '<div style="font-size:18px;font-weight:900;margin-bottom:4px">Venta registrada correctamente</div>'+ 
+      '<div style="color:var(--text2);font-size:13px">Ticket '+(modalTicketActual.numero_venta?'#'+esc(modalTicketActual.numero_venta):'-')+'</div></div>'+ 
+      '<div class="card" style="box-shadow:none;margin-bottom:12px"><div style="padding:12px 14px">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span>Total</span><b style="font-size:18px;color:var(--green)">'+money(modalTicketActual.total_final)+'</b></div>'+ 
+      '<div style="display:flex;justify-content:space-between"><span>Método</span><b>'+esc(modalTicketActual.metodo_pago||'-')+'</b></div>'+ 
+      '</div></div>'+ 
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
+      '<button class="btn btn-primary" onclick="bgTicketModalPrint()">🧾 Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
+      '<button class="btn btn-secondary" onclick="bgCerrarTicketModal()">Cerrar sin imprimir <span style="opacity:.8">Esc</span></button>'+ 
+      '</div>';
+    if(typeof openModal === 'function') openModal('Ticket interno', body, null, '');
+    modalKeyHandler = function(e){
+      if(!modalTicketActual) return;
+      var tag=(e.target&&e.target.tagName||'').toLowerCase();
+      if(tag==='input'||tag==='textarea'||tag==='select') return;
+      if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); window.bgTicketModalPrint(); }
+      if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeTicketModal(); }
+    };
+    document.addEventListener('keydown', modalKeyHandler, true);
+  };
+
+  async function cargarTicketVenta(id){
+    var vRes = await sb.from('bodega_ventas').select('*').eq('id',id).single();
+    if(vRes.error || !vRes.data) throw new Error(vRes.error?.message || 'No se encontró la venta');
+    var venta = vRes.data;
+    var dRes = await sb.from('bodega_ventas_detalle').select('*,bodega_productos(nombre)').eq('venta_id',id).order('created_at',{ascending:true});
+    var items = (dRes.data||[]).map(function(d){
+      return {
+        nombre: d.bodega_productos?.nombre || d.producto_nombre || 'Producto',
+        cantidad: Number(d.cantidad)||0,
+        precio_unitario: Number(d.precio_unitario)||0,
+        subtotal: Number(d.subtotal)||((Number(d.precio_unitario)||0)*(Number(d.cantidad)||0))
+      };
+    });
+    venta.items = items;
+    return normalizeTicketVenta(venta);
+  }
+  window.bgReimprimirTicket = async function(id){
+    try{ var t = await cargarTicketVenta(id); printTicket(t); }
+    catch(e){ console.error(e); if(typeof toast==='function') toast('No se pudo imprimir ticket: '+(e.message||e),'err'); }
+  };
+  window.bgEnviarTicketWhatsApp = async function(id){
+    try{
+      var t = await cargarTicketVenta(id);
+      var url = 'https://wa.me/?text=' + encodeURIComponent(ticketText(t));
+      window.open(url,'_blank');
+    }catch(e){ console.error(e); if(typeof toast==='function') toast('No se pudo generar WhatsApp: '+(e.message||e),'err'); }
+  };
+
+  // Formato automático xxx-xxx-xxxxxxx para N° factura de compras.
+  window.bgFormatFacturaCompra = function(value){
+    var d = String(value || '').replace(/\D/g,'').slice(0,13);
+    var a = d.slice(0,3), b = d.slice(3,6), c = d.slice(6,13);
+    return [a,b,c].filter(Boolean).join('-');
+  };
+  function aplicarFormatoFacturaInput(el){
+    if(!el) return;
+    var old = el.value || '';
+    var formatted = window.bgFormatFacturaCompra(old);
+    if(old !== formatted) el.value = formatted;
+  }
+  window.bgInitFacturaCompraInput = function(){
+    var el = document.getElementById('comp-factura');
+    if(!el || el.__bgFacturaFmt) return;
+    el.__bgFacturaFmt = true;
+    el.setAttribute('inputmode','numeric');
+    el.setAttribute('maxlength','15');
+    el.setAttribute('placeholder','001-001-0000001');
+    ['input','change','blur'].forEach(function(ev){ el.addEventListener(ev,function(){ aplicarFormatoFacturaInput(el); }); });
+    el.addEventListener('paste',function(){ setTimeout(function(){ aplicarFormatoFacturaInput(el); },0); });
+    aplicarFormatoFacturaInput(el);
+  };
+  document.addEventListener('input', function(e){ if(e.target && e.target.id==='comp-factura') aplicarFormatoFacturaInput(e.target); }, true);
+  document.addEventListener('change', function(e){ if(e.target && e.target.id==='comp-factura') aplicarFormatoFacturaInput(e.target); }, true);
+
+  function patchRenderCompras(){
+    if(typeof window.renderCompras === 'function' && !window.renderCompras.__bgFacturaFmt){
+      var original = window.renderCompras;
+      window.renderCompras = renderCompras = function(){
+        var r = original.apply(this, arguments);
+        setTimeout(window.bgInitFacturaCompraInput, 60);
+        return r;
+      };
+      window.renderCompras.__bgFacturaFmt = true;
+    }
+  }
+  function patchFinalizarCompra(){
+    if(typeof window.finalizarCompra === 'function' && !window.finalizarCompra.__bgFacturaFmt){
+      var original = window.finalizarCompra;
+      window.finalizarCompra = finalizarCompra = async function(){
+        aplicarFormatoFacturaInput(document.getElementById('comp-factura'));
+        return await original.apply(this, arguments);
+      };
+      window.finalizarCompra.__bgFacturaFmt = true;
+    }
+  }
+  setTimeout(function(){ patchRenderCompras(); patchFinalizarCompra(); window.bgInitFacturaCompraInput(); }, 200);
+  setTimeout(function(){ patchRenderCompras(); patchFinalizarCompra(); window.bgInitFacturaCompraInput(); }, 1500);
+})();
 </script>
 
 <script id="bg-pwa-install-prompt">
