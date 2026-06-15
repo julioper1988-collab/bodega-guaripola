@@ -13315,5 +13315,177 @@ if('serviceWorker' in navigator){
   }
 })();
 </script>
+
+
+<script id="bg-fix-compras-total-redondeado-y-ajustes-filtros-v7">
+(function(){
+  if(window.__bgComprasAjustesFixV7) return;
+  window.__bgComprasAjustesFixV7 = true;
+
+  function n(v){ var x=parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(x)?x:0; }
+  function i(v){ var x=parseInt(v,10); return isFinite(x)?x:0; }
+  function round500(v){ return Math.round(n(v)/500)*500; }
+  window.redondearGs500 = round500;
+  function money(v){ return (typeof fmtGs==='function') ? fmtGs(v) : ('Gs. '+Math.round(n(v)).toLocaleString('es-PY')); }
+  function esc(s){
+    if(typeof window.safeHtml==='function') return window.safeHtml(s);
+    if(typeof window.escapeHtml==='function') return window.escapeHtml(s);
+    return String(s == null ? '' : s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});
+  }
+  function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/,/g,'.').replace(/[^a-z0-9.]+/g,' ').trim(); }
+  function codeNorm(c){ return String(c||'').trim().replace(/^0+/,'') || '0'; }
+  function codeMatch(codigo,q){ if(!codigo||!q)return false; var c=String(codigo).trim(); q=String(q).trim(); return c===q || codeNorm(c)===codeNorm(q) || c.endsWith(q); }
+  function productMatches(p,q){ q=norm(q); if(!q)return true; var tokens=q.split(/\s+/).filter(Boolean); var base=norm([p.nombre,p.codigo_barra,(typeof getCatName==='function'?getCatName(p.categoria_id):'')].join(' ')); return tokens.every(function(t){return base.indexOf(t)>-1 || base.replace(/\s+/g,'').indexOf(t.replace(/\s+/g,''))>-1;}); }
+  function currentQty(){ var q=gs('cp-qty'); return Math.max(1,i(q && q.value)||1); }
+  function focusCantidad(index){ setTimeout(function(){ var inputs=document.querySelectorAll('#ccomp-items .compra-input-cant'); var input=inputs && inputs[index]; if(input){input.focus();input.select();} },90); }
+  function clearCompraSearch(index){ var s=gs('cp-search'), q=gs('cp-qty'), ac=gs('cp-ac-list'); if(s)s.value=''; if(q)q.value='1'; if(ac)ac.style.display='none'; if(typeof renderCPList==='function') renderCPList(''); focusCantidad(index); }
+  function totalLinea(c){ return round500((n(c && c.costo)) * Math.max(1,n(c && c.cantidad)||1)); }
+  function totalCompra(){ return (window.compraItems || compraItems || []).reduce(function(s,c){ return s + totalLinea(c); },0); }
+  window.bgCompraTotalRedondeado = totalCompra;
+
+  function patchCompras(){
+    if(typeof window.addToCompra==='function' && !window.addToCompra.__bgRound500V7){
+      window.addToCompra = addToCompra = function(prodId,embId,qty){
+        qty=Math.max(1,i(qty)||1);
+        var prod=(prodCache||[]).find(function(p){return String(p.id)===String(prodId);}); if(!prod)return;
+        var costo,nombre,uds;
+        if(embId){
+          var emb=((embCache&&embCache[prodId])||[]).find(function(e){return String(e.id)===String(embId);}); if(!emb)return;
+          costo=n(emb.precio_costo); nombre=prod.nombre+' x'+emb.cantidad; uds=Math.max(1,n(emb.cantidad)||1);
+        }else{ costo=n(prod.precio_costo); nombre=prod.nombre; uds=1; }
+        var key=String(prodId)+'_'+String(embId||'unit');
+        var ex=compraItems.find(function(c){return c.key===key;});
+        var idx;
+        if(ex){ ex.cantidad=(n(ex.cantidad)||1)+qty; idx=compraItems.indexOf(ex); }
+        else { compraItems.push({key:key,producto_id:prodId,embalaje_id:embId||null,nombre:nombre,costo:costo,cantidad:qty,uds:uds,precio_venta:n(prod.precio_venta||prod.precio||0)}); idx=compraItems.length-1; }
+        renderCompraItems(); clearCompraSearch(idx);
+      };
+      window.addToCompra.__bgRound500V7 = true;
+    }
+
+    window.calcularTotalCompraActual = calcularTotalCompraActual = totalCompra;
+
+    window.actualizarTotalesCompraFinal = actualizarTotalesCompraFinal = function(){
+      var total=totalCompra();
+      ['comp-total','comp-total-top','comp-total-floating','comp-total-foot','ccomp-total','total-factura','compra-total','compra-total-factura'].forEach(function(id){ var el=gs(id); if(el)el.textContent=money(total); });
+      document.querySelectorAll('[data-compra-total="1"], .compra-total-sync').forEach(function(el){el.textContent=money(total);});
+    };
+
+    window.renderCompraItems = renderCompraItems = function(){
+      var el=gs('ccomp-items'); if(!el)return;
+      if(!compraItems.length){
+        el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;font-weight:800">Todavía no agregaste productos.<br><b style="color:var(--text)">Buscá arriba y tocá el producto.</b></div>';
+      }else{
+        el.innerHTML=compraItems.map(function(item,idx){
+          var uds=Math.max(1,n(item.uds)||1), packs=Math.max(1,n(item.cantidad)||1), totalUds=packs*uds, costo=n(item.costo), bruto=costo*packs, redondeado=round500(bruto);
+          var costoUnit=uds>1 ? (costo/uds) : costo;
+          var precioVenta=n(item.precio_venta||0);
+          var margen=costoUnit>0 ? ((precioVenta-costoUnit)/costoUnit)*100 : 0; margen=isFinite(margen)?Math.round(margen*10)/10:0;
+          var notaRed=(redondeado!==Math.round(bruto)) ? ' · Redondeado: <b>'+money(redondeado)+'</b>' : '';
+          return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
+            '<div style="min-width:0"><div class="compra-item-name">'+esc(item.nombre)+'</div>'+ 
+            '<div class="compra-item-sub detalle-legible">Cantidad: <b>'+packs+'</b> · +<b>'+totalUds+'</b> uds al stock · Costo ref.: <b>'+money(costoUnit)+'</b> · Precio venta: <b>'+money(precioVenta)+'</b> · Margen: <b>'+margen+'%</b> · Total exacto: <b>'+money(bruto)+'</b>'+notaRed+'</div></div>'+ 
+            '<div class="compra-qty-box"><button class="compra-qty-btn" onclick="cQty('+idx+',-1)">−</button><input type="number" value="'+packs+'" min="1" onchange="cQtySet('+idx+',this.value)" class="compra-input-cant"><button class="compra-qty-btn" onclick="cQty('+idx+',1)">+</button></div>'+ 
+            '<div class="compra-cost-wrap"><div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div><input type="number" value="'+costo+'" step="0.01" onchange="cCosto('+idx+',this.value)" class="compra-input-costo"></div>'+ 
+            '<div class="compra-cost-wrap compra-venta-wrap"><div class="compra-cost-label">Precio venta</div><input type="number" value="'+precioVenta+'" step="1" onchange="cPrecioVenta('+idx+',this.value)" class="compra-input-venta"></div>'+ 
+            '<div class="compra-cost-wrap compra-margen-wrap"><div class="compra-cost-label">% Margen</div><input type="number" value="'+margen+'" step="0.1" onchange="cMargenVenta('+idx+',this.value)" class="compra-input-margen"></div>'+ 
+            '<div class="compra-cost-wrap compra-total-wrap"><div class="compra-cost-label">Total redondeado</div><input type="number" value="'+redondeado+'" step="500" onchange="cTotal('+idx+',this.value)" class="compra-input-total"></div>'+ 
+            '<button onclick="cRemove('+idx+')" class="compra-remove-btn">✕</button></div>';
+        }).join('');
+      }
+      actualizarTotalesCompraFinal();
+      try{ if(typeof bgSyncCompra==='function') bgSyncCompra(); }catch(e){}
+    };
+
+    window.cQty = cQty = function(idx,d){ if(!compraItems[idx])return; compraItems[idx].cantidad=Math.max(1,(i(compraItems[idx].cantidad)||1)+d); renderCompraItems(); focusCantidad(idx); };
+    window.cQtySet = cQtySet = function(idx,v){ if(!compraItems[idx])return; compraItems[idx].cantidad=Math.max(1,i(v)||1); renderCompraItems(); focusCantidad(idx); };
+    window.cCosto = cCosto = function(idx,v){ if(!compraItems[idx])return; compraItems[idx].costo=n(v); renderCompraItems(); };
+    window.cTotal = cTotal = function(idx,v){ if(!compraItems[idx])return; var cant=Math.max(1,n(compraItems[idx].cantidad)||1); compraItems[idx].costo=round500(v)/cant; renderCompraItems(); };
+
+    if(typeof window.finalizarCompra==='function' && !window.finalizarCompra.__bgRound500V7){
+      window.finalizarCompra = finalizarCompra = async function(){
+        if(!compraItems.length){toast('No hay productos','err');return;}
+        var total=totalCompra();
+        var estado=gs('comp-estado').value;
+        var edit=window.__compraEditando;
+        if(edit && edit.id){
+          var idCompra=edit.id;
+          var compraUpd={fecha:gs('comp-fecha').value,proveedor_id:gs('comp-prov').value||null,numero_factura:gs('comp-factura').value||null,total:total,metodo_pago:gs('comp-metpago').value,estado:estado,notas:gs('comp-notas').value||null};
+          if(edit.compra && edit.compra.estado==='finalizado' && typeof revertirStockCompraReal==='function') await revertirStockCompraReal(idCompra, edit.detalles||[]);
+          var uErr=(await sb.from('bodega_compras').update(compraUpd).eq('id',idCompra)).error; if(uErr){toast('Error actualizando compra: '+uErr.message,'err');return;}
+          await sb.from('bodega_compras_detalle').delete().eq('compra_id',idCompra);
+          var nuevos=compraItems.map(function(c){ var uds=Math.max(1,n(c.uds)||1); return {compra_id:idCompra,producto_id:c.producto_id,cantidad:(n(c.cantidad)||0)*uds,costo_unitario:n(c.costo)/uds,embalaje_id:c.embalaje_id||null,uds_por_embalaje:uds,cantidad_embalajes:uds>1?i(c.cantidad)||null:null}; });
+          var insErr=(await sb.from('bodega_compras_detalle').insert(nuevos)).error; if(insErr){toast('Error guardando detalle: '+insErr.message,'err');return;}
+          if(typeof actualizarPreciosVentaCompra==='function') await actualizarPreciosVentaCompra();
+          if(estado==='finalizado' && typeof impactarStock==='function') await impactarStock(idCompra, compraItems);
+          window.__compraEditando=null; compraItems=[]; toast('✓ Compra editada correctamente: '+money(total)); await loadCaches(true); if(typeof renderHistorialCompras==='function')renderHistorialCompras(); else renderCompras(); return;
+        }
+        var compra={fecha:gs('comp-fecha').value,proveedor_id:gs('comp-prov').value||null,numero_factura:gs('comp-factura').value||null,total:total,metodo_pago:gs('comp-metpago').value,estado:estado,notas:gs('comp-notas').value||null};
+        var res=await sb.from('bodega_compras').insert(compra).select().single(); if(res.error){toast('Error: '+res.error.message,'err');return;}
+        var cD=res.data;
+        var detalles=compraItems.map(function(c){ var uds=Math.max(1,n(c.uds)||1); return {compra_id:cD.id,producto_id:c.producto_id,cantidad:(n(c.cantidad)||0)*uds,costo_unitario:n(c.costo)/uds,embalaje_id:c.embalaje_id||null,uds_por_embalaje:uds,cantidad_embalajes:uds>1?i(c.cantidad)||null:null}; });
+        var detRes=await sb.from('bodega_compras_detalle').insert(detalles); if(detRes.error){toast('Error detalle: '+detRes.error.message,'err');return;}
+        if(typeof actualizarPreciosVentaCompra==='function') await actualizarPreciosVentaCompra();
+        if(estado==='finalizado' && typeof impactarStock==='function') await impactarStock(cD.id,compraItems);
+        toast('✓ Compra registrada ('+estado+'): '+money(total)); await loadCaches(true); compraItems=[]; renderCompras();
+      };
+      window.finalizarCompra.__bgRound500V7 = true;
+    }
+  }
+
+  function tipoColor(t){ var pos=(t==='entrada'||t==='ajuste_positivo'); var inv=(t==='inventario'); if(inv)return 'background:rgba(59,130,246,.15);color:#60a5fa'; return pos?'background:rgba(34,197,94,.15);color:var(--green)':'background:rgba(239,68,68,.15);color:var(--red)'; }
+  function tipoSigno(t){ return (t==='entrada'||t==='ajuste_positivo')?'+':(t==='inventario'?'=':'-'); }
+  function fechaOK(created, desde, hasta){
+    var d=String(created||'').slice(0,10);
+    if(desde && d<desde)return false;
+    if(hasta && d>hasta)return false;
+    return true;
+  }
+
+  window.renderAjustes = renderAjustes = async function(){
+    var res=await sb.from('bodega_ajustes_stock').select('*,bodega_productos(nombre,codigo_barra)').order('created_at',{ascending:false}).limit(700);
+    var data=res.data||[];
+    var q=window.__ajFiltroQ||'', tipo=window.__ajFiltroTipo||'', origen=window.__ajFiltroOrigen||'', desde=window.__ajFiltroDesde||'', hasta=window.__ajFiltroHasta||'';
+    var rows=data.filter(function(a){
+      var p=a.bodega_productos||{};
+      var texto=norm([p.nombre,p.codigo_barra,a.motivo,a.tipo,a.referencia_tipo].join(' '));
+      var okQ=!q || norm(q).split(/\s+/).filter(Boolean).every(function(tok){return texto.indexOf(tok)>-1;});
+      return okQ && (!tipo || a.tipo===tipo) && (!origen || String(a.referencia_tipo||'')===origen) && fechaOK(a.created_at,desde,hasta);
+    });
+    var entradas=rows.reduce(function(s,a){ return s+((a.tipo==='entrada'||a.tipo==='ajuste_positivo')?n(a.cantidad):0); },0);
+    var salidas=rows.reduce(function(s,a){ return s+((a.tipo==='salida'||a.tipo==='ajuste_negativo')?n(a.cantidad):0); },0);
+    var tipos={}; data.forEach(function(a){ if(a.tipo)tipos[a.tipo]=true; });
+    var origenes={}; data.forEach(function(a){ if(a.referencia_tipo)origenes[a.referencia_tipo]=true; });
+    var tipoOpts='<option value="">Todos los movimientos</option>'+Object.keys(tipos).sort().map(function(t){return '<option value="'+esc(t)+'" '+(tipo===t?'selected':'')+'>'+esc(t)+'</option>';}).join('');
+    var origenOpts='<option value="">Todos los orígenes</option>'+Object.keys(origenes).sort().map(function(o){return '<option value="'+esc(o)+'" '+(origen===o?'selected':'')+'>'+esc(o)+'</option>';}).join('');
+    gs('content').innerHTML=
+      '<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><button class="btn btn-primary" onclick="openAjusteModal()">+ Nuevo ajuste</button><div style="font-size:12px;color:var(--text2)">Mostrando <b>'+rows.length+'</b> de '+data.length+' movimientos</div></div>'+ 
+      '<div class="card" style="margin-bottom:12px"><div class="card-header"><h3>Filtros de ajustes</h3><button class="btn btn-secondary btn-sm" onclick="limpiarFiltrosAjustes()">Limpiar filtros</button></div>'+ 
+      '<div style="padding:12px;display:grid;grid-template-columns:1.4fr .9fr .9fr .7fr .7fr;gap:10px" class="ajustes-filter-grid">'+
+      '<div class="form-group"><label>Producto, código o motivo</label><input id="aj-f-q" value="'+esc(q)+'" placeholder="Ej: Coca, 779..., merma" oninput="setFiltroAjustes(\'q\',this.value)"></div>'+ 
+      '<div class="form-group"><label>Tipo de movimiento</label><select id="aj-f-tipo" onchange="setFiltroAjustes(\'tipo\',this.value)">'+tipoOpts+'</select></div>'+ 
+      '<div class="form-group"><label>Origen</label><select id="aj-f-origen" onchange="setFiltroAjustes(\'origen\',this.value)">'+origenOpts+'</select></div>'+ 
+      '<div class="form-group"><label>Desde</label><input id="aj-f-desde" type="date" value="'+esc(desde)+'" onchange="setFiltroAjustes(\'desde\',this.value)"></div>'+ 
+      '<div class="form-group"><label>Hasta</label><input id="aj-f-hasta" type="date" value="'+esc(hasta)+'" onchange="setFiltroAjustes(\'hasta\',this.value)"></div>'+ 
+      '</div><div style="padding:0 12px 12px;display:flex;gap:8px;flex-wrap:wrap"><span class="badge">Movimientos: '+rows.length+'</span><span class="badge" style="background:rgba(34,197,94,.15);color:var(--green)">Entradas: +'+entradas+'</span><span class="badge" style="background:rgba(239,68,68,.15);color:var(--red)">Salidas: -'+salidas+'</span></div></div>'+ 
+      '<div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Origen</th><th>Cantidad</th><th>Stock ant.</th><th>Stock nuevo</th><th>Motivo</th></tr></thead><tbody>'+ 
+      (rows.length?rows.map(function(a){ var p=a.bodega_productos||{}; return '<tr><td style="font-size:11px">'+esc(typeof fmtDate==='function'?fmtDate(fechaLocalParaguay(new Date(a.created_at))):String(a.created_at||'').slice(0,10))+'</td><td><div style="font-weight:700">'+esc(p.nombre||'-')+'</div><div style="font-size:11px;color:var(--text2)">'+esc(p.codigo_barra||'-')+'</div></td><td><span class="badge-cat" style="'+tipoColor(a.tipo)+'">'+esc(a.tipo||'-')+'</span></td><td style="font-size:12px;color:var(--text2)">'+esc(a.referencia_tipo||'-')+'</td><td style="font-weight:800">'+tipoSigno(a.tipo)+esc(a.cantidad)+'</td><td style="color:var(--text2)">'+esc(a.stock_anterior == null ? '-' : a.stock_anterior)+'</td><td style="font-weight:700">'+esc(a.stock_nuevo == null ? '-' : a.stock_nuevo)+'</td><td style="font-size:12px;color:var(--text2)">'+esc(a.motivo||'-')+'</td></tr>'; }).join(''):'<tr><td colspan="8" style="text-align:center;padding:22px;color:var(--text2)">Sin movimientos con esos filtros.</td></tr>')+
+      '</tbody></table></div></div>';
+  };
+
+  window.setFiltroAjustes=function(k,v){
+    if(k==='q')window.__ajFiltroQ=v;
+    if(k==='tipo')window.__ajFiltroTipo=v;
+    if(k==='origen')window.__ajFiltroOrigen=v;
+    if(k==='desde')window.__ajFiltroDesde=v;
+    if(k==='hasta')window.__ajFiltroHasta=v;
+    clearTimeout(window.__ajFiltroTimer); window.__ajFiltroTimer=setTimeout(function(){renderAjustes();}, k==='q'?250:20);
+  };
+  window.limpiarFiltrosAjustes=function(){ window.__ajFiltroQ=''; window.__ajFiltroTipo=''; window.__ajFiltroOrigen=''; window.__ajFiltroDesde=''; window.__ajFiltroHasta=''; renderAjustes(); };
+
+  setTimeout(patchCompras, 300);
+  setTimeout(patchCompras, 1600);
+})();
+</script>
 </body>
 </html>
