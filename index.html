@@ -5831,15 +5831,19 @@ initMobileShell();
   }
   async function cargarUsuariosInicial(){
     try{
-      const {data,error}=await sb.from('bodega_usuarios').select('*').eq('activo',true).order('created_at');
+      const {data,error}=await sb.from('bodega_usuarios_login').select('*').order('nombre');
       if(error){usuariosDisponibles=false;return;}
       usuariosDisponibles=true;
       const usuarios=data||[];
       initUsuariosNav(); initUserBadge();
+      // ¿hay sesión Supabase Auth activa? → cargar perfil real y entrar
+      const {data:sess}=await sb.auth.getSession();
+      if(sess?.session?.user){
+        const {data:perfil}=await sb.from('bodega_usuarios').select('*').eq('auth_id',sess.session.user.id).maybeSingle();
+        if(perfil){usuarioActual=perfil;applyUsuarioPermisos();return;}
+      }
       if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();return;}
-      const saved=lsGet('bg_usuario_actual');
-      if(saved){try{const obj=JSON.parse(saved); const ok=usuarios.find(u=>u.id===obj.id); if(ok) usuarioActual=ok;}catch(e){} }
-      if(!usuarioActual) mostrarLoginUsuarios(usuarios); else applyUsuarioPermisos();
+      mostrarLoginUsuarios(usuarios);
     }catch(e){usuariosDisponibles=false;}
   }
   const oldInitSB = window.initSB;
@@ -5861,23 +5865,26 @@ initMobileShell();
     nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
   }
   function mostrarLoginUsuarios(usuarios){
-    const opts=usuarios.map(u=>`<option value="${u.id}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
+    const opts=usuarios.map(u=>`<option value="${escapeHtml(u.auth_email)}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
     openModal('Ingresar al sistema',`<div class="form-grid">
       <div class="form-group" style="grid-column:1/-1"><label>Usuario</label><select id="login-user">${opts}</select></div>
       <div class="form-group" style="grid-column:1/-1"><label>PIN</label><input id="login-pin" type="password" inputmode="numeric" placeholder="PIN del usuario" onkeydown="if(event.key==='Enter')loginUsuarioSistema()"></div>
-      <div class="alert alert-warning" style="grid-column:1/-1">Control interno por usuario. Para seguridad fuerte habría que usar Supabase Auth y RLS por usuario.</div>
+      <div class="alert alert-warning" style="grid-column:1/-1">Acceso con Supabase Auth. Ingresá tu PIN.</div>
     </div>`,()=>loginUsuarioSistema(),'Entrar');
   }
   window.loginUsuarioSistema = async function(){
-    const id=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
-    const {data,error}=await sb.from('bodega_usuarios').select('*').eq('id',id).eq('pin',pin).eq('activo',true).maybeSingle();
-    if(error||!data){toast('Usuario o PIN incorrecto','err');return;}
+    const email=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
+    const {error:aerr}=await sb.auth.signInWithPassword({email,password:'gpola_'+pin});
+    if(aerr){toast('Usuario o PIN incorrecto','err');return;}
+    const {data:{user}}=await sb.auth.getUser();
+    const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
+    if(error||!data){toast('No se pudo cargar el perfil','err');return;}
     usuarioActual=data; lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); goTo('dashboard');
   };
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
   }
-  window.logoutUsuarioSistema=function(){lsRemove('bg_usuario_actual');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){}usuarioActual=null;closeModal();cargarUsuariosInicial();};
+  window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){}lsRemove('bg_usuario_actual');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
   async function renderUsuarios(){
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
