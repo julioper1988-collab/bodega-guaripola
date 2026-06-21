@@ -5887,9 +5887,38 @@ initMobileShell();
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
     const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')">🗑</button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
-    gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>🛟 Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   window.renderUsuarios = renderUsuarios;
+
+  window.bgDescargarRespaldo = async function(btn){
+    const tablas = ["arqueos","bodega_ajustes_stock","bodega_caja","bodega_caja_gastos","bodega_categorias","bodega_clientes","bodega_compras","bodega_compras_detalle","bodega_embalajes","bodega_fiados","bodega_historial_precios","bodega_inventario_detalle","bodega_inventarios","bodega_pagos_fiado","bodega_productos","bodega_proveedores","bodega_rucs_cache","bodega_usuarios","bodega_ventas","bodega_ventas_detalle","cierres_diarios","detalle_billetes","finanzas_categorias","finanzas_cuentas","finanzas_deudas","finanzas_movimientos","finanzas_saldos_iniciales","gastos","productos","ventas"];
+    if(btn){ btn.disabled=true; btn.textContent='Generando...'; }
+    const backup={ meta:{ app:'bodega-guaripola', fecha:new Date().toISOString(), generado_por:(usuarioActual&&usuarioActual.nombre)||null }, omitidas:[], datos:{} };
+    try{
+      for(const t of tablas){
+        let all=[], from=0; const size=1000;
+        try{
+          while(true){
+            const {data,error}=await sb.from(t).select('*').range(from, from+size-1);
+            if(error){ backup.omitidas.push(t); break; }
+            all=all.concat(data||[]);
+            if(!data || data.length<size) break;
+            from+=size;
+          }
+          backup.datos[t]=all;
+        }catch(e){ backup.omitidas.push(t); }
+      }
+      const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='respaldo-guaripola-'+(typeof fechaHoyPY==='function'?fechaHoyPY():new Date().toISOString().slice(0,10))+'.json';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      const totalReg=Object.values(backup.datos).reduce(function(s,a){return s+a.length;},0);
+      toast('✓ Respaldo descargado ('+totalReg+' registros'+(backup.omitidas.length?', '+backup.omitidas.length+' tablas omitidas':'')+')');
+    }catch(e){ toast('Error generando respaldo: '+(e.message||e),'err'); }
+    finally{ if(btn){ btn.disabled=false; btn.textContent='⬇️ Descargar respaldo'; } }
+  };
   function modsToText(u){ if(u.rol==='admin') return 'Todos'; const m=u.modulos||{}; return MODS.filter(([k])=>m[k]).map(x=>x[1]).join(', ')||'-'; }
   window.openUsuarioModal=async function(id=null){
     let u=null; if(id){const {data}=await sb.from('bodega_usuarios').select('*').eq('id',id).single();u=data;}
