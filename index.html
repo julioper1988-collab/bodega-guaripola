@@ -5876,7 +5876,7 @@ initMobileShell();
     const {data:{user}}=await sb.auth.getUser();
     const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
     if(error||!data){toast('No se pudo cargar el perfil','err');return;}
-    usuarioActual=data; lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('dashboard');
+    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('dashboard');
   };
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
@@ -5887,8 +5887,39 @@ initMobileShell();
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
     const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')">🗑</button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
-    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>🛟 Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>🛟 Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>📋 Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
+  window.bgVerAuditoria = function(){
+    if(typeof openModal!=='function') return;
+    openModal('📋 Auditoría', '<div style="min-width:300px">'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
+        '<select id="aud-accion" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda acción</option><option value="INSERT">Creó</option><option value="UPDATE">Editó</option><option value="DELETE">Borró</option><option value="LOGIN">Login</option></select>'+
+        '<select id="aud-tabla" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda tabla</option><option value="bodega_ventas">Ventas</option><option value="bodega_compras">Compras</option><option value="bodega_productos">Productos</option><option value="bodega_caja">Caja</option><option value="bodega_caja_gastos">Gastos caja</option><option value="bodega_fiados">Fiados</option><option value="bodega_pagos_fiado">Pagos fiado</option><option value="bodega_clientes">Clientes</option><option value="bodega_proveedores">Proveedores</option><option value="auth">Logins</option></select>'+
+        '<input id="aud-user" placeholder="Usuario" onkeydown="if(event.key===\'Enter\')bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px;width:110px">'+
+      '</div><div id="aud-list"><div class="bg-chart-empty">Cargando...</div></div></div>');
+    bgAudCargar();
+  };
+  window.bgAudCargar = async function(){
+    var box=document.getElementById('aud-list'); if(box) box.innerHTML='<div class="bg-chart-empty">Cargando...</div>';
+    var gv=function(id){var e=document.getElementById(id);return e?(e.value||'').trim():'';};
+    var accion=gv('aud-accion'), tabla=gv('aud-tabla'), user=gv('aud-user');
+    var q=sb.from('bodega_auditoria').select('fecha,usuario,accion,tabla,registro_id,dispositivo').order('fecha',{ascending:false}).limit(200);
+    if(accion) q=q.eq('accion',accion);
+    if(tabla) q=q.eq('tabla',tabla);
+    if(user) q=q.ilike('usuario','%'+user+'%');
+    var r=await q;
+    if(r.error){ if(box) box.innerHTML='<div class="bg-chart-empty">Error: '+escapeHtml(r.error.message)+'</div>'; return; }
+    var accTxt={INSERT:'➕ creó',UPDATE:'✏️ editó',DELETE:'🗑️ borró',LOGIN:'🔑 entró'};
+    var tbTxt={bodega_ventas:'venta',bodega_compras:'compra',bodega_productos:'producto',bodega_caja:'caja',bodega_caja_gastos:'gasto caja',bodega_fiados:'fiado',bodega_pagos_fiado:'pago fiado',bodega_clientes:'cliente',bodega_proveedores:'proveedor',bodega_categorias:'categoría',bodega_embalajes:'embalaje',auth:'sesión'};
+    var rows=(r.data||[]).map(function(a){
+      var f=new Date(a.fecha).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+      var q2=(accTxt[a.accion]||a.accion)+' '+(tbTxt[a.tabla]||a.tabla||'');
+      var dev=a.dispositivo==='Móvil'?'📱 Móvil':(a.dispositivo==='Web'?'💻 Web':'—');
+      return '<tr><td style="font-size:12px;white-space:nowrap">'+f+'</td><td style="font-weight:600">'+escapeHtml(a.usuario||'-')+'</td><td>'+escapeHtml(q2)+'</td><td style="font-size:12px;white-space:nowrap">'+dev+'</td></tr>';
+    }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin registros</td></tr>';
+    if(box) box.innerHTML='<div style="overflow:auto;max-height:420px"><table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Dónde</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  };
+
   window.renderUsuarios = renderUsuarios;
 
   window.bgDescargarRespaldo = async function(btn){
