@@ -13719,42 +13719,74 @@ if('serviceWorker' in navigator){
 })();
 </script>
 <script>
-/* Página de Inicio: menú liviano para elegir a dónde ir (carga instantánea) */
+/* Página de Inicio — opción 2: panel ejecutivo compacto SIN estado rápido */
 window.renderInicio = function(){
   var cont=document.getElementById('content'); if(!cont) return;
+  cont.className='';
   var nombre=(window.usuarioActual&&usuarioActual.nombre)?usuarioActual.nombre:'';
-  var navEl=document.querySelector('nav');
-  var cards='';
-  if(navEl){
-    navEl.querySelectorAll('a[id^="nav-"]').forEach(function(a){
-      var page=a.id.replace('nav-','');
-      if(page==='inicio') return;
-      if(a.style.display==='none') return; // oculto por permisos
-      var sp=a.querySelector('span');
-      var label=(sp?sp.textContent:a.textContent||'').trim()||page;
-      var icon=a.querySelector('svg')?a.querySelector('svg').outerHTML:'';
-      cards+='<button class="bg-inicio-card" onclick="goTo(\''+page+'\')"><span class="bg-inicio-ico">'+icon+'</span><span class="bg-inicio-lbl">'+label+'</span></button>';
-    });
+  var hoy=new Date();
+  var fecha=hoy.toLocaleDateString('es-PY',{weekday:'long',day:'2-digit',month:'long'});
+  var proveedores=(window.provCache||[]);
+  var categorias=(window.catCache||[]);
+  var clientes=(window.clienteCache||window.clientesCache||[]);
+  function acceso(page,ico,titulo,sub,clase){
+    return '<button class="ini2-action '+(clase||'')+'" onclick="goTo(\''+page+'\')">'+
+      '<span class="ini2-action-ico">'+ico+'</span><span><b>'+titulo+'</b><small>'+sub+'</small></span></button>';
   }
-  cont.innerHTML=
+  cont.innerHTML=''+
     '<style>'+
-    '.bg-inicio-wrap{max-width:900px;margin:0 auto;padding:8px 4px}'+
-    '.bg-inicio-hi{font-size:22px;font-weight:800;margin:6px 0 2px}'+
-    '.bg-inicio-sub{color:var(--text2);font-size:14px;margin:0 0 18px}'+
-    '.bg-inicio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}'+
-    '.bg-inicio-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px 12px;border:1px solid var(--border);border-radius:16px;background:var(--card,transparent);color:var(--text);cursor:pointer;font-weight:700;font-size:14px;text-align:center;transition:transform .08s,border-color .12s}'+
-    '.bg-inicio-card:active{transform:scale(.97)}'+
-    '.bg-inicio-card:hover{border-color:var(--green)}'+
-    '.bg-inicio-ico svg{width:30px;height:30px;color:var(--green)}'+
+      '.ini2{max-width:1120px;margin:0 auto;padding:4px 2px 18px}'+
+      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(79,126,248,.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
+      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(79,126,248,.13);border:1px solid rgba(255,255,255,.08)}'+
+      '.ini2-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#9db5ff;font-weight:800;margin-bottom:6px}'+
+      '.ini2-title{font-size:28px;font-weight:950;letter-spacing:-.8px;line-height:1.05;color:var(--text);position:relative;z-index:1}'+
+      '.ini2-sub{font-size:13px;color:var(--text3);margin-top:8px;position:relative;z-index:1;max-width:650px}'+
+      '.ini2-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px;position:relative;z-index:1}'+
+      '.ini2-action{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:var(--text);border-radius:15px;padding:14px 12px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s,background .12s}'+
+      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(79,126,248,.14)}'+
+      '.ini2-action:active{transform:scale(.99)}'+
+      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(79,126,248,.18);font-size:18px;flex:0 0 auto}'+
+      '.ini2-action b{display:block;font-size:13px;font-weight:900;color:var(--text)}'+
+      '.ini2-action small{display:block;font-size:11px;color:var(--text2);margin-top:2px;line-height:1.2}'+
+      '.ini2-green .ini2-action-ico{background:rgba(34,197,94,.16)}.ini2-amber .ini2-action-ico{background:rgba(245,158,11,.16)}'+
+      '.ini2-panel{background:var(--bg2);border:1px solid var(--border);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}'+
+      '.ini2-panel-h{padding:15px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}'+
+      '.ini2-panel-h h3{font-size:14px;margin:0;font-weight:900;color:var(--text)}'+
+      '.ini2-panel-h span{font-size:11px;color:var(--text2);font-weight:700}'+
+      '.ini2-list{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}'+
+      '.ini2-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;text-decoration:none;color:var(--text);cursor:pointer;min-height:72px}'+
+      '.ini2-row:hover{border-color:var(--accent);background:rgba(79,126,248,.08)}'+
+      '.ini2-row b{font-size:13px}.ini2-row small{display:block;color:var(--text2);font-size:11px;margin-top:2px}.ini2-arrow{color:var(--text2);font-weight:900;font-size:18px}'+
+      '@media(max-width:900px){.ini2{padding:0}.ini2-hero{border-radius:0 0 22px 22px;margin:-20px -20px 16px;padding:22px 20px}.ini2-title{font-size:24px}.ini2-actions{grid-template-columns:1fr 1fr}.ini2-list{grid-template-columns:1fr}.ini2-action{padding:13px 10px}.ini2-action small{display:none}}'+
+      '@media(max-width:430px){.ini2-actions{grid-template-columns:1fr 1fr}.ini2-title{font-size:22px}}'+
     '</style>'+
-    '<div class="bg-inicio-wrap">'+
-      '<div class="bg-inicio-hi">Hola'+(nombre?', '+nombre:'')+' 👋</div>'+
-      '<p class="bg-inicio-sub">¿A dónde querés ir?</p>'+
-      '<div class="bg-inicio-grid">'+(cards||'<div style="color:var(--text2)">Sin accesos disponibles</div>')+'</div>'+
+    '<div class="ini2">'+
+      '<section class="ini2-hero">'+
+        '<div class="ini2-kicker">Bodega Guaripola · '+fecha+'</div>'+
+        '<div class="ini2-title">Hola'+(nombre?', '+nombre:'')+' 👋<br>Panel de trabajo</div>'+
+        '<div class="ini2-sub">Entrá rápido a vender, comprar, revisar caja o controlar stock. Esta pantalla está pensada para abrir el sistema y trabajar sin perder tiempo.</div>'+
+        '<div class="ini2-actions">'+
+          acceso('ventas','🛒','Nueva venta','Mostrador / fiado','')+
+          acceso('compras','📦','Cargar compra','Mercadería y proveedores','ini2-green')+
+          acceso('caja','💰','Caja / arqueo','Abrir, cerrar y revisar','ini2-amber')+
+          acceso('dashboard','📊','Dashboard','Números del negocio','')+
+        '</div>'+
+      '</section>'+
+      '<section class="ini2-panel">'+
+        '<div class="ini2-panel-h"><h3>Accesos de gestión</h3><span>'+proveedores.length+' prov. · '+categorias.length+' cat. · '+clientes.length+' clientes</span></div>'+
+        '<div class="ini2-list">'+
+          '<div class="ini2-row" onclick="goTo(\'productos\')"><span><b>📦 Productos y stock</b><small>Precios, códigos, mínimos y ajustes</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'historial-ventas\')"><span><b>📋 Historial de ventas</b><small>Buscar ventas, editar o imprimir</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'clientes\')"><span><b>👥 Clientes y fiados</b><small>Deudas, pagos y seguimiento</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'reportes\')"><span><b>📈 Reportes</b><small>Estadísticas y análisis</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'ajustes\')"><span><b>⚙️ Ajustes</b><small>Usuarios, seguridad y configuración</small></span><span class="ini2-arrow">›</span></div>'+
+        '</div>'+
+      '</section>'+
     '</div>';
 };
-try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; } }catch(e){}
-try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; } }catch(e){}
+try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; pages.dashboard=window.renderInicio; } }catch(e){}
+try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Inicio'; } }catch(e){}
 </script>
+
 </body>
 </html>
