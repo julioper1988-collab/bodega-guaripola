@@ -12714,8 +12714,8 @@ window.diagnosticarStockCompras = async function(){
     }
     var q = await sb.from('bodega_ventas')
       .select('fecha,total_final')
-      .gte('fecha', desde)
-      .order('fecha',{ascending:true});
+      .order('fecha',{ascending:true})
+      .limit(100000);
     if(q.error) return [];
     var g={};
     (q.data||[]).forEach(function(v){
@@ -12728,6 +12728,61 @@ window.diagnosticarStockCompras = async function(){
     });
     return Object.values(g).sort(function(a,b){ return a.ym.localeCompare(b.ym); }).slice(-12);
   }
+
+  async function cargarComprasPorMes(){
+    var desde;
+    try{ var d=new Date(); d.setMonth(d.getMonth()-11); desde=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
+    catch(e){ desde='2026-01-01'; }
+    var q=await sb.from('bodega_compras').select('fecha,total,estado').limit(100000);
+    var g={};
+    if(!q.error){ (q.data||[]).forEach(function(c){ if(c.estado!=='finalizado') return; var ym=String(c.fecha||'').slice(0,7); if(!/^\d{4}-\d{2}$/.test(ym)) return; g[ym]=(g[ym]||0)+n(c.total); }); }
+    return g;
+  }
+  function barsMes(rows, comprasMap){
+    if(!rows.length) return '<div class="bg-chart-empty">Sin datos para este filtro.</div>';
+    var max=Math.max.apply(null, rows.map(function(r){return Math.max(1,n(r.total));}));
+    return '<div class="bg-chart-bars">'+rows.map(function(r){
+      var pct=Math.max(4, Math.round((n(r.total)/max)*100));
+      var comp=n((comprasMap||{})[r.ym]);
+      return '<div class="bg-chart-row" style="cursor:pointer" onclick="bgDashMesDetalle(\''+r.ym+'\')" title="Ver compras y productos vendidos del mes">'+
+        '<div class="bg-chart-label"><b>'+esc(mesTxt(r.ym))+'</b><span>'+r.cant+' ventas · compras '+money(comp)+'</span></div>'+
+        '<div class="bg-chart-track"><div class="bg-chart-fill" style="width:'+pct+'%"></div></div>'+
+        '<div class="bg-chart-value">'+money(r.total)+'</div>'+
+      '</div>';
+    }).join('')+'</div>';
+  }
+  window.bgDashMesDetalle = async function(ym){
+    var r=mesRango(ym);
+    if(typeof openModal==='function') openModal('📅 Mes: '+mesTxt(ym),'<div id="bg-mes-det" style="min-width:280px"><div class="bg-chart-empty">Cargando...</div></div>');
+    try{
+      var compq=await sb.from('bodega_compras').select('fecha,total,estado,bodega_proveedores(nombre)').gte('fecha',r.start).lte('fecha',r.end).order('fecha',{ascending:false});
+      var compras=compq.data||[];
+      var totalComp=compras.filter(function(c){return c.estado==='finalizado';}).reduce(function(s,c){return s+n(c.total);},0);
+      var vq=await sb.from('bodega_ventas').select('id').gte('fecha',r.start).lte('fecha',r.end).limit(10000);
+      var vids=(vq.data||[]).map(function(v){return v.id;});
+      var byProd={}, totalUds=0;
+      for(var i=0;i<vids.length;i+=100){
+        var dq=await sb.from('bodega_ventas_detalle').select('producto_id,cantidad,bodega_productos(nombre)').in('venta_id',vids.slice(i,i+100));
+        (dq.data||[]).forEach(function(d){ var c2=n(d.cantidad); totalUds+=c2; var nm=(d.bodega_productos&&d.bodega_productos.nombre)||'-'; byProd[nm]=(byProd[nm]||0)+c2; });
+      }
+      var topProd=Object.keys(byProd).map(function(k){return {nombre:k,cant:byProd[k]};}).sort(function(a,b){return b.cant-a.cant;});
+      var compRows=compras.map(function(c){
+        var est=c.estado==='finalizado'?'<span style="color:var(--green);font-weight:600">finalizado</span>':'<span style="color:var(--amber);font-weight:600">'+esc(c.estado||'-')+'</span>';
+        return '<tr><td style="font-size:13px">'+fechaPy(c.fecha)+'</td><td>'+esc((c.bodega_proveedores&&c.bodega_proveedores.nombre)||'-')+'</td><td>'+est+'</td><td style="font-weight:600;color:var(--amber)">'+money(c.total)+'</td></tr>';
+      }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:12px">Sin compras este mes</td></tr>';
+      var prodRows=topProd.map(function(p){return '<tr><td>'+esc(p.nombre)+'</td><td style="font-weight:700;text-align:right">'+p.cant.toLocaleString('es-PY')+'</td></tr>';}).join('')||'<tr><td colspan="2" style="text-align:center;color:var(--text2);padding:12px">Sin ventas este mes</td></tr>';
+      var html=''+
+        '<div class="bg-dash-mini-summary" style="margin-bottom:12px">'+
+          '<div><span>Compras del mes</span><b>'+money(totalComp)+'</b></div>'+
+          '<div><span>Productos vendidos</span><b>'+totalUds.toLocaleString('es-PY')+'</b></div>'+
+        '</div>'+
+        '<h3 style="font-size:14px;margin:10px 0 6px">🛒 Compras ('+compras.length+')</h3>'+
+        '<div style="overflow:auto;max-height:240px"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Estado</th><th>Total</th></tr></thead><tbody>'+compRows+'</tbody></table></div>'+
+        '<h3 style="font-size:14px;margin:14px 0 6px">📦 Productos vendidos (cantidades)</h3>'+
+        '<div style="overflow:auto;max-height:300px"><table><thead><tr><th>Producto</th><th style="text-align:right">Cant.</th></tr></thead><tbody>'+prodRows+'</tbody></table></div>';
+      var box=document.getElementById('bg-mes-det'); if(box) box.innerHTML=html;
+    }catch(e){ var b=document.getElementById('bg-mes-det'); if(b) b.innerHTML='<div class="bg-chart-empty">Error: '+esc(e.message||String(e))+'</div>'; }
+  };
 
   window.bgRenderDashboardArqueoCharts = async function(ym){
     var host=document.getElementById('bg-dash-chart-content');
@@ -12743,9 +12798,10 @@ window.diagnosticarStockCompras = async function(){
       var res=await Promise.all([
         cargarVentasMes(rango),
         cargarCajasMes(rango),
-        cargarVentasPorMes()
+        cargarVentasPorMes(),
+        cargarComprasPorMes()
       ]);
-      var ventas=res[0], cajas=res[1], meses=res[2];
+      var ventas=res[0], cajas=res[1], meses=res[2], comprasMap=res[3];
       var arqueos=agruparVentasPorCajas(ventas,cajas,rango).slice(-18);
 
       var total=arqueos.reduce(function(s,x){return s+x.total;},0);
@@ -12760,7 +12816,7 @@ window.diagnosticarStockCompras = async function(){
         '</div>'+
         '<div class="bg-dash-graph-grid">'+
           '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por arqueo / jornada</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+bars(arqueos,false)+'</div>'+
-          '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por mes</b><span>Últimos 12 meses</span></div>'+bars(meses,true)+'</div>'+
+          '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por mes</b><span>Últimos 12 meses · tocá un mes</span></div>'+barsMes(meses,comprasMap)+'</div>'+
         '</div>';
     }catch(e){
       console.error('Error cargando gráficos dashboard', e);
