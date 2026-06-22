@@ -6493,24 +6493,26 @@ initMobileShell();
     return `<span style="color:${gan>=0?'var(--green)':'var(--red)'};font-weight:700">${pct.toFixed(1)}%</span><br><span class="rep-mini">${repMoney(gan)}</span>`;
   }
   async function repFetchVentas(desde,hasta,clienteQ,productoQ){
-    // Leer horas si están definidas
-    const hDesde=document.getElementById('rep-hora-desde')?.value||'';
-    const hHasta=document.getElementById('rep-hora-hasta')?.value||'';
-    const tieneHora=!!(hDesde||hHasta);
     let ventasQ=sb.from('bodega_ventas')
-      .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at')
+      .select('id,fecha,tipo,cliente_nombre,total,descuento,total_final,metodo_pago,monto_efectivo,monto_transferencia,monto_otro,created_at,caja_id')
       .order('created_at',{ascending:false}).limit(10000);
-    if(tieneHora){
-      // Filtrar por created_at con timestamp exacto (PY = UTC-3)
-      const desdeTsUTC=new Date(`${desde}T${hDesde||'00:00'}:00-03:00`).toISOString();
-      const hastaTsUTC=new Date(`${hasta}T${hHasta||'23:59'}:59-03:00`).toISOString();
-      ventasQ=ventasQ.gte('created_at',desdeTsUTC).lte('created_at',hastaTsUTC);
+    if(window.__repCajaId){
+      ventasQ=ventasQ.eq('caja_id', window.__repCajaId);   // turno exacto
     } else {
       ventasQ=ventasQ.gte('fecha',desde).lte('fecha',hasta);
     }
     const ventasRes=await ventasQ;
     if(ventasRes.error) throw ventasRes.error;
-    const ventasTodas=ventasRes.data||[];
+    let ventasTodas=ventasRes.data||[];
+    // Franja horaria: aplica "esa franja en CADA día" (hora local Paraguay, 24h)
+    if(window.__repFranja){
+      const m1=window.__repFranja.m1, m2=window.__repFranja.m2;
+      ventasTodas=ventasTodas.filter(function(v){
+        const hm=new Date(v.created_at).toLocaleString('en-GB',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
+        const pp=hm.split(':'); const mins=(parseInt(pp[0],10)||0)*60+(parseInt(pp[1],10)||0);
+        return mins>=m1 && mins<m2;
+      });
+    }
     const ventasCliente=ventasTodas.filter(v=>repMatch(v.cliente_nombre || 'Ocasional', clienteQ));
     const ids=ventasCliente.map(v=>v.id);
     let detalles=[];
@@ -6534,24 +6536,24 @@ initMobileShell();
     return {ventasTodas,ventasCliente,ventasFiltradas,ventasMap,detalles};
   }
   window.repSetTab=repSetTab;
-  window.repCargarTurno=function(val){
-    if(!val) return;
-    const [openedAt,closedAt]=val.split('||');
-    const apertura=new Date(openedAt);
-    const cierre=closedAt?new Date(closedAt):new Date();
-    const toFecha=d=>d.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});
-    const toHora=d=>d.toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit',hour12:false});
-    const dDesde=document.getElementById('rep-desde');
-    const dHasta=document.getElementById('rep-hasta');
-    const hDesde=document.getElementById('rep-hora-desde');
-    const hHasta=document.getElementById('rep-hora-hasta');
-    if(dDesde) dDesde.value=toFecha(apertura);
-    if(dHasta) dHasta.value=toFecha(cierre);
-    if(hDesde) hDesde.value=toHora(apertura);
-    if(hHasta) hHasta.value=toHora(cierre);
+  window.repCargarTurno=function(elOrVal){
+    var el=(elOrVal && elOrVal.tagName)?elOrVal:null;
+    var val=el?el.value:elOrVal;
+    if(!val){ window.__repCajaId=null; generarReportes(); return; }
+    window.__repCajaId=val; // id de caja → filtro EXACTO por turno (no depende de cerrar caja)
+    var opt=el?el.options[el.selectedIndex]:null;
+    var openedAt=opt?opt.getAttribute('data-open'):null;
+    var closedAt=opt?opt.getAttribute('data-close'):null;
+    var toFecha=function(d){return new Date(d).toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});};
+    var dDesde=document.getElementById('rep-desde'), dHasta=document.getElementById('rep-hasta');
+    var hDesde=document.getElementById('rep-hora-desde'), hHasta=document.getElementById('rep-hora-hasta');
+    if(openedAt && dDesde) dDesde.value=toFecha(openedAt);
+    if(dHasta) dHasta.value=toFecha(closedAt||new Date());
+    if(hDesde) hDesde.value=''; if(hHasta) hHasta.value='';
     generarReportes();
   };
   window.repSetFechas=function(tipo){
+    window.__repCajaId=null; var ts=document.getElementById('rep-turno-sel'); if(ts) ts.value='';
     const hoy=new Date();
     const iso=d=>fechaLocalParaguay(d);
     let desde=iso(hoy), hasta=iso(hoy);
@@ -6563,11 +6565,53 @@ initMobileShell();
     if(hEl) hEl.value=hasta;
     if(typeof generarReportes==='function') generarReportes();
   };
+  function repChipOn(group, btn){
+    if(!btn) return;
+    document.querySelectorAll('.rep-chip[data-'+group+']').forEach(function(b){ b.classList.remove('on'); });
+    btn.classList.add('on');
+  }
+  window.repPeriodo=function(tipo,btn){
+    window.__repCajaId=null; var ts=document.getElementById('rep-turno-sel'); if(ts) ts.value='';
+    repChipOn('per',btn);
+    var hoy=new Date(); var iso=function(d){return fechaLocalParaguay(d);};
+    var desde=iso(hoy), hasta=iso(hoy);
+    if(tipo==='ayer'){ var a=new Date(hoy); a.setDate(a.getDate()-1); desde=hasta=iso(a); }
+    else if(tipo==='7d'){ var d=new Date(hoy); d.setDate(d.getDate()-6); desde=iso(d); }
+    else if(tipo==='mes'){ desde=iso(hoy).slice(0,7)+'-01'; }
+    else if(tipo==='mespasado'){ var p=new Date(hoy.getFullYear(),hoy.getMonth()-1,1); var fin=new Date(hoy.getFullYear(),hoy.getMonth(),0); desde=iso(p); hasta=iso(fin); }
+    var dE=document.getElementById('rep-desde'), hE=document.getElementById('rep-hasta');
+    if(dE) dE.value=desde; if(hE) hE.value=hasta;
+    generarReportes();
+  };
+  window.repSetFranja=function(tipo,btn){
+    var custom=document.getElementById('rep-franja-custom');
+    if(btn) repChipOn('fr',btn);
+    if(tipo==='manana'){ window.__repFranja={m1:360,m2:720}; if(custom) custom.hidden=true; }
+    else if(tipo==='tarde'){ window.__repFranja={m1:720,m2:1080}; if(custom) custom.hidden=true; }
+    else if(tipo==='noche'){ window.__repFranja={m1:1080,m2:1440}; if(custom) custom.hidden=true; }
+    else if(tipo==='custom'){
+      if(custom) custom.hidden=false;
+      var toMin=function(s){ var pp=(s||'').split(':'); return (parseInt(pp[0],10)||0)*60+(parseInt(pp[1],10)||0); };
+      var h1=document.getElementById('rep-hora-desde').value||'00:00';
+      var h2=document.getElementById('rep-hora-hasta').value||'23:59';
+      window.__repFranja={m1:toMin(h1),m2:toMin(h2)+1};
+    } else { window.__repFranja=null; if(custom) custom.hidden=true; }
+    generarReportes();
+  };
+  window.repToggleAdv=function(){ var a=document.getElementById('rep-adv'); if(a) a.hidden=!a.hidden; };
+  window.repFechaManual=function(){
+    window.__repCajaId=null; var ts=document.getElementById('rep-turno-sel'); if(ts) ts.value='';
+    var ch=document.querySelector('.rep-chip[data-per].on'); if(ch) ch.classList.remove('on');
+    generarReportes();
+  };
   window.repLimpiar=function(){
-    const c=document.getElementById('rep-cliente'), p=document.getElementById('rep-producto');
-    if(c) c.value='';
-    if(p) p.value='';
-    repSetFechas('mes');
+    var c=document.getElementById('rep-cliente'), p=document.getElementById('rep-producto');
+    if(c) c.value=''; if(p) p.value='';
+    window.__repFranja=null; window.__repCajaId=null;
+    var ts=document.getElementById('rep-turno-sel'); if(ts) ts.value='';
+    document.querySelectorAll('.rep-chip[data-fr]').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-fr')==='todo'); });
+    var cc=document.getElementById('rep-franja-custom'); if(cc) cc.hidden=true;
+    repPeriodo('mes', document.querySelector('.rep-chip[data-per="mes"]'));
   };
   window.renderReportes=async function renderReportes(){
     repAddStyles();
@@ -6582,34 +6626,52 @@ initMobileShell();
           <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir / PDF</button>
         </div>
         <div style="padding:14px 16px">
-          <div class="rep-filters">
-            <div class="form-group"><label>Desde</label>
-              <div style="display:flex;gap:6px">
-                <input id="rep-desde" type="date" value="${first}" style="flex:1">
-                <input id="rep-hora-desde" type="time" value="" title="Hora desde" style="width:90px">
-              </div>
-            </div>
-            <div class="form-group"><label>Hasta</label>
-              <div style="display:flex;gap:6px">
-                <input id="rep-hasta" type="date" value="${today}" style="flex:1">
-                <input id="rep-hora-hasta" type="time" value="" title="Hora hasta" style="width:90px">
-              </div>
-            </div>
-            <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
-            <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
+          <style>
+            .rep-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+            .rep-row>.rep-lbl{font-size:12px;font-weight:700;color:var(--text2);min-width:78px}
+            .rep-chip{font-size:13px;padding:7px 12px;border-radius:var(--radius);border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-weight:600}
+            .rep-chip.on{background:var(--green);border-color:var(--green);color:#fff}
+            .rep-adv[hidden]{display:none}
+          </style>
+          <div class="rep-row">
+            <span class="rep-lbl">Período</span>
+            <button class="rep-chip" data-per="hoy" onclick="repPeriodo('hoy',this)">Hoy</button>
+            <button class="rep-chip" data-per="ayer" onclick="repPeriodo('ayer',this)">Ayer</button>
+            <button class="rep-chip" data-per="7d" onclick="repPeriodo('7d',this)">7 días</button>
+            <button class="rep-chip on" data-per="mes" onclick="repPeriodo('mes',this)">Este mes</button>
+            <button class="rep-chip" data-per="mespasado" onclick="repPeriodo('mespasado',this)">Mes pasado</button>
           </div>
-          <div class="rep-actions" style="margin-top:12px">
-            <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar reporte</button>
-            <select id="rep-turno-sel" onchange="repCargarTurno(this.value)" style="font-size:13px;min-height:36px;border-color:var(--green);color:var(--green);font-weight:700;max-width:220px;border-radius:var(--radius);padding:0 8px">
-              <option value="">📋 Seleccionar turno...</option>
+          <div class="rep-row">
+            <span class="rep-lbl">Turno</span>
+            <select id="rep-turno-sel" onchange="repCargarTurno(this)" style="font-size:13px;min-height:36px;border:1px solid var(--green);color:var(--green);font-weight:700;max-width:280px;border-radius:var(--radius);padding:0 8px">
+              <option value="">📋 Todos / elegir turno...</option>
             </select>
-            <button class="btn btn-secondary" onclick="repSetFechas('hoy')">Hoy</button>
-            <button class="btn btn-secondary" onclick="repSetFechas('7d')">7 días</button>
-            <button class="btn btn-secondary" onclick="repSetFechas('mes')">Mes</button>
-            <button class="btn btn-secondary" onclick="repLimpiar()">Limpiar</button>
           </div>
-          <div class="rep-muted" style="margin-top:10px">
-            Ejemplo útil: poné cliente <b>Juan</b> y producto <b>coca 1,5</b>. El reporte te muestra cantidad total comprada, total pagado, fiado y margen estimado dentro de la fecha elegida.
+          <div class="rep-row">
+            <span class="rep-lbl">⏰ Horario</span>
+            <button class="rep-chip on" data-fr="todo" onclick="repSetFranja('todo',this)">Todo el día</button>
+            <button class="rep-chip" data-fr="manana" onclick="repSetFranja('manana',this)">Mañana 6–12</button>
+            <button class="rep-chip" data-fr="tarde" onclick="repSetFranja('tarde',this)">Tarde 12–18</button>
+            <button class="rep-chip" data-fr="noche" onclick="repSetFranja('noche',this)">Noche 18–24</button>
+            <button class="rep-chip" data-fr="custom" onclick="repSetFranja('custom',this)">Personalizada</button>
+            <span id="rep-franja-custom" hidden style="display:flex;gap:6px;align-items:center">
+              <input id="rep-hora-desde" type="time" value="" onchange="repSetFranja('custom')" style="width:104px">
+              <span style="color:var(--text2)">a</span>
+              <input id="rep-hora-hasta" type="time" value="" onchange="repSetFranja('custom')" style="width:104px">
+            </span>
+          </div>
+          <div class="rep-row">
+            <button class="btn btn-secondary btn-sm" onclick="repToggleAdv()">⚙️ Más filtros (fechas exactas · cliente · producto)</button>
+            <button class="btn btn-secondary btn-sm" onclick="repLimpiar()">Limpiar</button>
+          </div>
+          <div id="rep-adv" class="rep-adv" hidden style="border-top:1px solid var(--border);padding-top:10px">
+            <div class="rep-filters">
+              <div class="form-group"><label>Desde</label><input id="rep-desde" type="date" value="${first}" onchange="repFechaManual()"></div>
+              <div class="form-group"><label>Hasta</label><input id="rep-hasta" type="date" value="${today}" onchange="repFechaManual()"></div>
+              <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
+              <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="generarReportes()">🔎 Aplicar filtros</button>
           </div>
         </div>
       </div>
@@ -6644,7 +6706,7 @@ initMobileShell();
         cajas.map(c=>{
           const estado=c.estado==='abierta'?'🟢':'🔴';
           const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
-          return `<option value="${c.opened_at}||${c.closed_at||''}">${estado} ${fmtTs(c.opened_at)}${c.closed_at?' → '+fmtTs(c.closed_at):''}${nombre}</option>`;
+          return `<option value="${c.id}" data-open="${c.opened_at}" data-close="${c.closed_at||''}">${estado} ${fmtTs(c.opened_at)}${c.closed_at?' → '+fmtTs(c.closed_at):''}${nombre}</option>`;
         }).join('');
     })();
   };
