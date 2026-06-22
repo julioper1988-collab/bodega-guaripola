@@ -5896,11 +5896,28 @@ initMobileShell();
       '</div><div id="aud-list"><div class="bg-chart-empty">Cargando...</div></div></div>');
     bgAudCargar();
   };
+  function bgAudFmtDetalle(accion, datos){
+    if(!datos) return '<span style="color:var(--text2)">Sin detalle guardado</span>';
+    var campos={nombre:'Nombre',precio_venta:'Precio venta',precio_costo:'Precio costo',stock:'Stock',total:'Total',total_final:'Total final',descuento:'Descuento',metodo_pago:'Método pago',cliente_nombre:'Cliente',estado:'Estado',activo:'Activo',monto:'Monto',monto_pagado:'Pagado',saldo:'Saldo',saldo_pendiente:'Saldo',notas:'Notas',fecha:'Fecha',codigo_barra:'Código',numero_venta:'N° venta',responsable:'Responsable',telefono:'Teléfono',ruc:'RUC'};
+    var skip={id:1,created_at:1,updated_at:1,caja_id:1,auth_id:1,user_id:1};
+    var lbl=function(k){return campos[k]||k;};
+    var val=function(k,v){ if(v===null||v===undefined||v==='') return '—'; if(typeof fmtGs==='function' && /precio|total|monto|saldo|descuento/.test(k) && !isNaN(v)) return fmtGs(v); return escapeHtml(String(v)); };
+    var old=datos.old||{}, neu=datos['new']||{};
+    if(accion==='UPDATE'){
+      var changed=[];
+      Object.keys(neu).forEach(function(k){ if(skip[k]) return; if(JSON.stringify(old[k])!==JSON.stringify(neu[k])) changed.push('<div style="margin:3px 0"><b>'+escapeHtml(lbl(k))+':</b> <span style="color:var(--red)">'+val(k,old[k])+'</span> → <span style="color:var(--green)">'+val(k,neu[k])+'</span></div>'); });
+      return changed.length?changed.join(''):'<span style="color:var(--text2)">Sin cambios visibles</span>';
+    }
+    var obj=(accion==='DELETE')?old:neu, parts=[];
+    ['nombre','cliente_nombre','total_final','total','monto','estado','precio_venta','precio_costo','stock','codigo_barra','numero_venta','fecha','responsable','telefono','notas'].forEach(function(k){ if(obj[k]!==undefined && obj[k]!==null && obj[k]!=='') parts.push('<div style="margin:3px 0"><b>'+escapeHtml(lbl(k))+':</b> '+val(k,obj[k])+'</div>'); });
+    return parts.length?parts.join(''):'<span style="color:var(--text2)">Sin datos</span>';
+  }
+  window.bgAudToggle=function(btn){ var det=btn.closest('tr').nextElementSibling; if(det && det.className==='aud-det'){ det.style.display=(det.style.display==='none')?'':'none'; } };
   window.bgAudCargar = async function(){
     var box=document.getElementById('aud-list'); if(box) box.innerHTML='<div class="bg-chart-empty">Cargando...</div>';
     var gv=function(id){var e=document.getElementById(id);return e?(e.value||'').trim():'';};
     var accion=gv('aud-accion'), tabla=gv('aud-tabla'), user=gv('aud-user');
-    var q=sb.from('bodega_auditoria').select('fecha,usuario,accion,tabla,registro_id,dispositivo').order('fecha',{ascending:false}).limit(200);
+    var q=sb.from('bodega_auditoria').select('fecha,usuario,accion,tabla,registro_id,dispositivo,datos').order('fecha',{ascending:false}).limit(200);
     if(accion) q=q.eq('accion',accion);
     if(tabla) q=q.eq('tabla',tabla);
     if(user) q=q.ilike('usuario','%'+user+'%');
@@ -5912,9 +5929,11 @@ initMobileShell();
       var f=new Date(a.fecha).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       var q2=(accTxt[a.accion]||a.accion)+' '+(tbTxt[a.tabla]||a.tabla||'');
       var dev=a.dispositivo==='Móvil'?'📱 Móvil':(a.dispositivo==='Web'?'💻 Web':'—');
-      return '<tr><td style="font-size:12px;white-space:nowrap">'+f+'</td><td style="font-weight:600">'+escapeHtml(a.usuario||'-')+'</td><td>'+escapeHtml(q2)+'</td><td style="font-size:12px;white-space:nowrap">'+dev+'</td></tr>';
-    }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin registros</td></tr>';
-    if(box) box.innerHTML='<div style="overflow:auto;max-height:420px"><table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Dónde</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      var verBtn=(a.accion==='LOGIN')?'':'<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px" onclick="bgAudToggle(this)">🔍 ver</button>';
+      var det=(a.accion==='LOGIN')?'':'<tr class="aud-det" style="display:none"><td colspan="5" style="background:rgba(0,0,0,.04);font-size:13px;padding:10px 14px">'+bgAudFmtDetalle(a.accion, a.datos)+'</td></tr>';
+      return '<tr><td style="font-size:12px;white-space:nowrap">'+f+'</td><td style="font-weight:600">'+escapeHtml(a.usuario||'-')+'</td><td>'+escapeHtml(q2)+'</td><td style="font-size:12px;white-space:nowrap">'+dev+'</td><td>'+verBtn+'</td></tr>'+det;
+    }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:14px">Sin registros</td></tr>';
+    if(box) box.innerHTML='<div style="overflow:auto;max-height:420px"><table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Dónde</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   };
 
   window.renderUsuarios = renderUsuarios;
