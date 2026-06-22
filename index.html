@@ -1607,6 +1607,10 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
     <div class="logo-text"><h1>Bodega Guaripola</h1><p>Sistema de gestión</p></div>
   </div>
   <nav>
+    <a onclick="goTo('inicio')" id="nav-inicio">
+      <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l7-6 7 6"/><path d="M5 8v9h10V8"/></svg>
+      <span>Inicio</span>
+    </a>
     <a onclick="goTo('dashboard')" id="nav-dashboard">
       <svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
       <span>Dashboard</span>
@@ -5811,7 +5815,7 @@ initMobileShell();
   const oldGoTo = window.goTo;
   window.goTo = async function(page){
     // usuarios siempre accesible (solo admins lo ven en el menú)
-    if(page !== 'usuarios' && !usuarioPuede(page)){ toast('Este usuario no tiene acceso a este módulo','err'); return; }
+    if(page !== 'usuarios' && page !== 'inicio' && !usuarioPuede(page)){ toast('Este usuario no tiene acceso a este módulo','err'); return; }
     return oldGoTo(page);
   };
   function usuarioPuede(page){
@@ -5834,9 +5838,9 @@ initMobileShell();
       const {data:sess}=await sb.auth.getSession();
       if(sess?.session?.user){
         const {data:perfil}=await sb.from('bodega_usuarios').select('*').eq('auth_id',sess.session.user.id).maybeSingle();
-        if(perfil){usuarioActual=perfil;applyUsuarioPermisos();await loadCaches(true);goTo('dashboard');return;}
+        if(perfil){usuarioActual=perfil;applyUsuarioPermisos();await loadCaches(true);goTo('inicio');return;}
       }
-      if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();await loadCaches(true);goTo('dashboard');return;}
+      if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();await loadCaches(true);goTo('inicio');return;}
       mostrarLoginUsuarios(usuarios);
     }catch(e){usuariosDisponibles=false;}
   }
@@ -5873,7 +5877,7 @@ initMobileShell();
     const {data:{user}}=await sb.auth.getUser();
     const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
     if(error||!data){toast('No se pudo cargar el perfil','err');return;}
-    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('dashboard');
+    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
   };
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
@@ -13713,6 +13717,44 @@ if('serviceWorker' in navigator){
     console.log('[PERF] cronómetro activo');
   }, 2500);
 })();
+</script>
+<script>
+/* Página de Inicio: menú liviano para elegir a dónde ir (carga instantánea) */
+window.renderInicio = function(){
+  var cont=document.getElementById('content'); if(!cont) return;
+  var nombre=(window.usuarioActual&&usuarioActual.nombre)?usuarioActual.nombre:'';
+  var navEl=document.querySelector('nav');
+  var cards='';
+  if(navEl){
+    navEl.querySelectorAll('a[id^="nav-"]').forEach(function(a){
+      var page=a.id.replace('nav-','');
+      if(page==='inicio') return;
+      if(a.style.display==='none') return; // oculto por permisos
+      var sp=a.querySelector('span');
+      var label=(sp?sp.textContent:a.textContent||'').trim()||page;
+      var icon=a.querySelector('svg')?a.querySelector('svg').outerHTML:'';
+      cards+='<button class="bg-inicio-card" onclick="goTo(\''+page+'\')"><span class="bg-inicio-ico">'+icon+'</span><span class="bg-inicio-lbl">'+label+'</span></button>';
+    });
+  }
+  cont.innerHTML=
+    '<style>'+
+    '.bg-inicio-wrap{max-width:900px;margin:0 auto;padding:8px 4px}'+
+    '.bg-inicio-hi{font-size:22px;font-weight:800;margin:6px 0 2px}'+
+    '.bg-inicio-sub{color:var(--text2);font-size:14px;margin:0 0 18px}'+
+    '.bg-inicio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}'+
+    '.bg-inicio-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px 12px;border:1px solid var(--border);border-radius:16px;background:var(--card,transparent);color:var(--text);cursor:pointer;font-weight:700;font-size:14px;text-align:center;transition:transform .08s,border-color .12s}'+
+    '.bg-inicio-card:active{transform:scale(.97)}'+
+    '.bg-inicio-card:hover{border-color:var(--green)}'+
+    '.bg-inicio-ico svg{width:30px;height:30px;color:var(--green)}'+
+    '</style>'+
+    '<div class="bg-inicio-wrap">'+
+      '<div class="bg-inicio-hi">Hola'+(nombre?', '+nombre:'')+' 👋</div>'+
+      '<p class="bg-inicio-sub">¿A dónde querés ir?</p>'+
+      '<div class="bg-inicio-grid">'+(cards||'<div style="color:var(--text2)">Sin accesos disponibles</div>')+'</div>'+
+    '</div>';
+};
+try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; } }catch(e){}
+try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; } }catch(e){}
 </script>
 </body>
 </html>
