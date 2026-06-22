@@ -452,17 +452,14 @@ window.safeHtml = escapeHtml;
     const {error:e2}=await sb.from('bodega_inventario_detalle').insert(detalles);
     if(e2){toast('Error detalle: '+e2.message,'err');return;}
     if(estado==='finalizado'){
-      for(const it of invItems){
-        const ns=invTotalContado(it), old=Number(it.stock_sistema)||0, dif=ns-old;
-        if(dif===0) continue;
-        await sb.from('bodega_productos').update({stock:ns}).eq('id',it.producto_id);
-        await sb.from('bodega_ajustes_stock').insert({producto_id:it.producto_id,
-          tipo:dif>0?'ajuste_positivo':'ajuste_negativo',cantidad:Math.abs(dif),
-          motivo:'Inventario físico'+(responsable?' — '+responsable:'')+' ('+fmtDate(fecha)+')',stock_anterior:old,stock_nuevo:ns,
-          referencia_id:inv.id,referencia_tipo:'inventario'});
-      }
+      const items=invItems.map(function(it){ var ns=invTotalContado(it), old=Number(it.stock_sistema)||0; return {producto_id:it.producto_id, ns:ns, old:old}; });
+      const motivo='Inventario físico'+(responsable?' — '+responsable:'')+' ('+fmtDate(fecha)+')';
+      const {error:e3}=await sb.rpc('aplicar_inventario',{p_inventario_id:inv.id,p_items:items,p_motivo:motivo});
+      if(e3){ toast('Error aplicando stock: '+e3.message,'err'); }
+      // reflejar en cache local sin más red
+      invItems.forEach(function(it){ var p=prodCache.find(function(x){return x.id===it.producto_id;}); if(p) p.stock=invTotalContado(it); });
     }
-    toast('Inventario guardado'); await loadCaches(true); invItems=[]; renderInventario();
+    toast('Inventario guardado'); loadCaches(true); invItems=[]; renderInventario();
   };
 
   window.renderHistorialInventarios = async function(){
