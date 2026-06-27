@@ -3009,6 +3009,21 @@ async function verVenta(id){
 
 // ─── COMPRAS ──────────────────────────────────────────────────
 let compraAcResults=[];
+let ventaStatsMap={};
+let ventaStatsLoaded=false;
+async function loadVentaStats(){
+  try{
+    const {data,error}=await sb.rpc('ventas_resumen_compra',{p_dias:7});
+    if(error){toast('RPC ventas: '+error.message,'err');return;}
+    const m={};(data||[]).forEach(r=>m[r.producto_id]={ayer:r.vendido_ayer||0,prom:Number(r.prom_dia)||0});
+    ventaStatsMap=m;ventaStatsLoaded=true;
+    if(gs('compra-prod-list'))renderCPList(gs('cp-search')?.value||'');
+  }catch(e){_swallow(e);}
+}
+function ventaStatsBadge(prodId){
+  const st=ventaStatsMap[prodId]||{ayer:0,prom:0};
+  return `<div style="font-size:11px;color:var(--text2)">Ayer: <b style="color:#fbbf24">${st.ayer}</b> · Prom: <b style="color:#34d399">${st.prom}</b>/d</div>`;
+}
 function renderCompras(){
   compraItems=[];
   gs('content').innerHTML=`
@@ -3051,6 +3066,7 @@ function renderCompras(){
     </div>
   </div>`;
   renderCPList('');
+  loadVentaStats();
 }
 
 function renderCPList(q){
@@ -3060,7 +3076,7 @@ function renderCPList(q){
     const embs=embCache[p.id]||[];
     return `<div>
       <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;gap:8px;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" onclick="addToCompra('${p.id}',null,parseInt(gs('cp-qty').value)||1)">
-        <div style="flex:1"><div style="font-size:13px;font-weight:500">${escapeHtml(p.nombre)}</div><div style="font-size:11px;color:var(--text2)">Stock: ${p.stock} · Costo: ${fmtGs(p.precio_costo)}</div></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:500">${escapeHtml(p.nombre)}</div><div style="font-size:11px;color:var(--text2)">Stock: ${p.stock} · Costo: ${fmtGs(p.precio_costo)}</div>${ventaStatsBadge(p.id)}</div>
         <div style="font-size:13px;color:var(--accent2);font-weight:600">${fmtGs(p.precio_costo)}</div>
       </div>
       ${embs.map(e=>`<div style="display:flex;align-items:center;padding:8px 14px 8px 28px;border-bottom:1px solid var(--border);cursor:pointer;background:rgba(20,184,166,.05);transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='rgba(20,184,166,.03)'" onclick="addToCompra('${p.id}','${e.id}',parseInt(gs('cp-qty').value)||1)">
@@ -11921,11 +11937,12 @@ small,
       list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
       return;
     }
+    if(!ventaStatsLoaded){ventaStatsLoaded=true;loadVentaStats();}
     list.innerHTML=results.map(function(p){
       var embs=(embCache&&embCache[p.id])||[];
       return '<div>'+
         '<div class="compra-result-row" onclick="addToCompra(\''+p.id+'\',null,currentCompraQtyPublic())">'+
-          '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+window.safeHtml(p.nombre)+'</div><div style="font-size:11px;color:var(--text2)">'+window.safeHtml(p.codigo_barra||'-')+' · Stock: '+(p.stock||0)+' · Costo unit.: '+fmtGs(p.precio_costo||0)+'</div></div>'+
+          '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+window.safeHtml(p.nombre)+'</div><div style="font-size:11px;color:var(--text2)">'+window.safeHtml(p.codigo_barra||'-')+' · Stock: '+(p.stock||0)+' · Costo unit.: '+fmtGs(p.precio_costo||0)+'</div>'+ventaStatsBadge(p.id)+'</div>'+
           '<div style="font-size:13px;color:var(--accent2);font-weight:800;white-space:nowrap">'+fmtGs(p.precio_costo||0)+'</div>'+
         '</div>'+
         embs.map(function(e){return '<div class="compra-result-row compra-pack-row" onclick="addToCompra(\''+p.id+'\',\''+e.id+'\',currentCompraQtyPublic())">'+
