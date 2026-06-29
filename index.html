@@ -6834,7 +6834,7 @@ initMobileShell();
         const cliente=(v.cliente_nombre||'Ocasional').trim() || 'Ocasional';
         const prod=repProductName(d);
         const qty=Number(d.cantidad)||0, total=repLineTotal(d), cst=qty*repProductCost(d);
-        if(!byProd[prod]) byProd[prod]={producto:prod,cantidad:0,total:0,costo:0,ventas:new Set(),clientes:new Set()};
+        if(!byProd[prod]) byProd[prod]={producto:prod,pid:d.producto_id,cantidad:0,total:0,costo:0,ventas:new Set(),clientes:new Set()};
         byProd[prod].cantidad+=qty; byProd[prod].total+=total; byProd[prod].costo+=cst; byProd[prod].ventas.add(d.venta_id); byProd[prod].clientes.add(cliente);
         if(!byCli[cliente]) byCli[cliente]={cliente,cantidad:0,total:0,costo:0,ventas:new Set(),fiado:0};
         byCli[cliente].cantidad+=qty; byCli[cliente].total+=total; byCli[cliente].costo+=cst; byCli[cliente].ventas.add(d.venta_id);
@@ -6853,11 +6853,11 @@ initMobileShell();
         return `<tr><td style="color:var(--accent);font-weight:700;white-space:nowrap">${hora}</td><td>${repDate(v.fecha)}</td><td>${repEsc(v.cliente_nombre||'Ocasional')}</td><td>${repEsc(repProductName(d))}</td><td>${repNum(d.cantidad)}</td><td>${repMoney(d.precio_unitario)}</td><td>${repMoney(total)}</td><td>${repEsc(v.metodo_pago||'-')}</td><td>${repMarginHTML(total,cst)}</td></tr>`;
       }).join('');
       const cpRows=Object.values(byCP).sort((a,b)=>a.cliente.localeCompare(b.cliente)||b.cantidad-a.cantidad).map(x=>`<tr><td style="font-weight:600">${repEsc(x.cliente)}</td><td>${repEsc(x.producto)}</td><td class="rep-kpi">${repNum(x.cantidad)}</td><td>${repMoney(x.total)}</td><td>${repMoney(x.fiado)}</td><td>${repMarginHTML(x.total,x.costo)}</td><td>${x.ventas.size}</td><td>${repDate(x.primera)} → ${repDate(x.ultima)}</td></tr>`).join('');
-      const prodRows=Object.values(byProd).sort((a,b)=>b.cantidad-a.cantidad).map(p=>`<tr><td style="font-weight:600">${repEsc(p.producto)}</td><td class="rep-kpi">${repNum(p.cantidad)}</td><td>${repMoney(p.total)}</td><td>${repMoney(p.costo)}</td><td>${repMarginHTML(p.total,p.costo)}</td><td>${p.ventas.size}</td><td>${p.clientes.size}</td></tr>`).join('');
+      const prodRows=Object.values(byProd).sort((a,b)=>b.cantidad-a.cantidad).map(p=>{const _pr=(prodCache||[]).find(x=>x.id===p.pid)||(prodCache||[]).find(x=>(x.nombre||'').toLowerCase()===(p.producto||'').toLowerCase());const _st=_pr?Number(_pr.stock)||0:null;const _stTd=_st===null?'<td class="rep-mini">-</td>':`<td class="rep-kpi" style="color:${_st<=0?'var(--red)':'var(--teal)'}">${repNum(_st)}</td>`;return `<tr><td style="font-weight:600">${repEsc(p.producto)}</td><td class="rep-kpi">${repNum(p.cantidad)}</td>${_stTd}<td>${repMoney(p.total)}</td><td>${repMoney(p.costo)}</td><td>${repMarginHTML(p.total,p.costo)}</td><td>${p.ventas.size}</td><td>${p.clientes.size}</td></tr>`;}).join('');
       const cliRows=Object.values(byCli).sort((a,b)=>b.total-a.total).map(c=>`<tr><td style="font-weight:600">${repEsc(c.cliente)}</td><td>${c.ventas.size}</td><td class="rep-kpi">${repNum(c.cantidad)}</td><td>${repMoney(c.total)}</td><td>${repMoney(c.fiado)}</td><td>${repMarginHTML(c.total,c.costo)}</td></tr>`).join('');
       document.getElementById('rep-panel-detalle').innerHTML=repCard('Detalle de ventas filtradas','<tr><th>Hora</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>P. unit.</th><th>Total</th><th>Pago</th><th>Margen</th></tr>',detailRows,'Sin ventas con esos filtros.');
       document.getElementById('rep-panel-cliente-producto').innerHTML=repCard('Cantidad total por cliente y producto','<tr><th>Cliente</th><th>Producto</th><th>Cantidad total</th><th>Total comprado</th><th>Fiado</th><th>Margen</th><th>Ventas</th><th>Periodo</th></tr>',cpRows,'Sin resultados para cliente/producto.');
-      document.getElementById('rep-panel-productos').innerHTML=repCard('Productos vendidos','<tr><th>Producto</th><th>Cantidad total</th><th>Total vendido</th><th>Costo estimado</th><th>Margen</th><th>Ventas</th><th>Clientes</th></tr>',prodRows,'Sin productos vendidos.');
+      document.getElementById('rep-panel-productos').innerHTML=repCard('Productos vendidos','<tr><th>Producto</th><th>Cantidad total</th><th>Stock actual</th><th>Total vendido</th><th>Costo estimado</th><th>Margen</th><th>Ventas</th><th>Clientes</th></tr>',prodRows,'Sin productos vendidos.');
       document.getElementById('rep-panel-clientes').innerHTML=repCard('Clientes','<tr><th>Cliente</th><th>Ventas</th><th>Cant. productos</th><th>Total comprado</th><th>Fiado</th><th>Margen</th></tr>',cliRows,'Sin clientes.');
       const gastosPorCaja={};
       gastos.forEach(g=>{ if(g.caja_id) gastosPorCaja[g.caja_id]=(gastosPorCaja[g.caja_id]||0)+(Number(g.monto)||0); });
@@ -7262,7 +7262,14 @@ initMobileShell();
     const busqueda = (window.__hvProducto||'').trim();
     const badge = document.getElementById('hv-count');
     if(badge && busqueda){
-      badge.textContent = ventas.length + ' ventas (filtrado por producto)';
+      const q=busqueda.toLowerCase();
+      const matches=(prodCache||[]).filter(p=>(p.nombre||'').toLowerCase().includes(q));
+      const stockTot=matches.reduce((a,p)=>a+(Number(p.stock)||0),0);
+      const stockTxt = matches.length===0 ? '' :
+        (matches.length===1
+          ? ' · Stock actual: '+stockTot
+          : ' · Stock actual ('+matches.length+' prod.): '+stockTot);
+      badge.textContent = ventas.length + ' ventas (filtrado por producto)' + stockTxt;
     }
   };
 
