@@ -13383,6 +13383,35 @@ if('serviceWorker' in navigator){
     lines.push('Ticket interno de control. No válido como factura legal.');
     return lines.join('\n');
   }
+  var _bgSerialPort = null;
+  async function bgVincularCajon(){
+    if(!('serial' in navigator)){ if(typeof toast==='function') toast('Este navegador no soporta Web Serial (usá Chrome/Edge en PC)','err'); return; }
+    try{
+      _bgSerialPort = await navigator.serial.requestPort();
+      await _bgSerialPort.open({baudRate:9600});
+      lsSet('bg_cajon_vinculado','1');
+      if(typeof toast==='function') toast('Impresora/cajón vinculado ✅');
+    }catch(e){ console.error(e); if(typeof toast==='function') toast('No se vinculó: '+(e.message||e),'err'); }
+  }
+  window.bgVincularCajon = bgVincularCajon;
+  function bgCajonAutoEnabled(){ return lsGet('bg_cajon_auto')==='1'; }
+  window.bgToggleCajonAuto = function(v){ lsSet('bg_cajon_auto', v?'1':'0'); };
+  async function bgAbrirCajon(){
+    if(!bgCajonAutoEnabled()) return;
+    if(!('serial' in navigator)) return;
+    try{
+      if(!_bgSerialPort){
+        var ports = await navigator.serial.getPorts();
+        _bgSerialPort = ports[0] || null;
+      }
+      if(!_bgSerialPort) return;
+      if(!_bgSerialPort.writable){ await _bgSerialPort.open({baudRate:9600}); }
+      var writer = _bgSerialPort.writable.getWriter();
+      await writer.write(new Uint8Array([0x1B,0x70,0x00,0x19,0xFA]));
+      writer.releaseLock();
+    }catch(e){ console.error('Cajón:',e); }
+  }
+  window.bgAbrirCajon = bgAbrirCajon;
   function printTicket(ticket){
     var w = window.open('','_blank','width=420,height=700');
     if(!w){ if(typeof toast==='function') toast('Permití ventanas emergentes para imprimir','err'); return; }
@@ -13405,6 +13434,7 @@ if('serviceWorker' in navigator){
   };
   window.bgTicketPostVenta = function(ticket){
     modalTicketActual = normalizeTicketVenta(ticket);
+    bgAbrirCajon();
     var body = '<div style="text-align:center;padding:4px 0 12px">'+
       '<div style="font-size:42px;line-height:1;margin-bottom:8px">✅</div>'+ 
       '<div style="font-size:18px;font-weight:900;margin-bottom:4px">Venta registrada correctamente</div>'+ 
@@ -13416,6 +13446,10 @@ if('serviceWorker' in navigator){
       '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
       '<button class="btn btn-primary" onclick="bgTicketModalPrint()">🧾 Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
       '<button class="btn btn-secondary" onclick="bgCerrarTicketModal()">Cerrar sin imprimir <span style="opacity:.8">Esc</span></button>'+ 
+      '</div>'+
+      '<div style="margin-top:10px;text-align:center;font-size:12px;color:var(--text2)">'+
+      '<label style="cursor:pointer"><input type="checkbox" onchange="bgToggleCajonAuto(this.checked)" '+(bgCajonAutoEnabled()?'checked':'')+'> Abrir cajón automático</label>'+
+      ' · <a href="#" onclick="bgVincularCajon();return false" style="color:var(--accent)">Vincular impresora/cajón</a>'+
       '</div>';
     if(typeof openModal === 'function') openModal('Ticket interno', body, null, '');
     modalKeyHandler = function(e){
