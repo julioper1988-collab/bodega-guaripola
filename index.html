@@ -2956,12 +2956,13 @@ async function finalizarVenta(){
   const importe=parseFloat(gs('v-importe').value)||0;
 
   const productos=cart.map(c=>{
-    const cantUds = (Number(c.cantidad)||0) * (Number(c.uds)||1);
+    const uds = Number(c.uds)||1;
+    const cantUds = (Number(c.cantidad)||0) * uds;
     const sub = Number(c.subtotalCalculado ?? ((Number(c.precio)||0) * (Number(c.cantidad)||0)));
     return {
       producto_id:     c.producto_id,
       cantidad:        cantUds,
-      precio_unitario: cantUds>0 ? sub/cantUds : 0,
+      precio_unitario: uds>1 ? (Number(c.cantidad)>0 ? sub/Number(c.cantidad) : 0) : (cantUds>0 ? sub/cantUds : 0),
       subtotal:        Math.round(sub),
       es_embalaje:     (Number(c.uds)||1)>1,
       uds_por_embalaje:Number(c.uds)||1,
@@ -8940,7 +8941,7 @@ async function revertirStockCompraReal(compraId, detalles){
       return {
         producto_id:        c.producto_id,
         cantidad:           cantUds,
-        precio_unitario:    cantUds>0 ? sub/cantUds : 0,
+        precio_unitario:    uds>1 ? (cantPacksOUnidades>0 ? sub/cantPacksOUnidades : 0) : (cantUds>0 ? sub/cantUds : 0),
         subtotal:           Math.round(sub),
         es_embalaje:        uds > 1,
         uds_por_embalaje:   uds,
