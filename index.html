@@ -3184,7 +3184,7 @@ async function impactarStock(compraId,items){
     const p=prodCache.find(x=>x.id===c.producto_id); if(!p) continue;
     const uds=Math.max(1,parseInt(c.uds)||1);
     const totalUds=(parseInt(c.cantidad)||0)*uds;
-    p.stock=(p.stock||0)+totalUds; p.precio_costo=Math.round((parseFloat(c.costo)||0)/uds);
+    p.stock=(p.stock||0)+totalUds; p.precio_costo=(parseFloat(c.costo)||0)/uds;
   }
 }
 
@@ -3227,7 +3227,7 @@ async function confirmarFinalizar(compraId){
     const ns=sa+d.cantidad; // d.cantidad ya está en unidades
     // Costo unitario: si uds_por_embalaje > 1, dividir entre las unidades del pack
     const uds=Math.max(1,parseInt(d.uds_por_embalaje)||1);
-    const costoUnitario=Math.round((parseFloat(d.costo_unitario)||0)/uds);
+    const costoUnitario=(parseFloat(d.costo_unitario)||0)/uds;
     await sb.from('bodega_productos').update({stock:ns,precio_costo:costoUnitario}).eq('id',d.producto_id);
     await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'entrada',cantidad:d.cantidad,motivo:'Compra finalizada',stock_anterior:sa,stock_nuevo:ns,referencia_id:compraId,referencia_tipo:'compra'});
   }
@@ -12014,7 +12014,7 @@ small,
         var totalUds=packs*uds;
         var costo=Number(item.costo)||0;
         var totalLinea=costo*packs;
-        var costoUnit=uds>1 ? Math.round(costo/uds) : costo;
+        var costoUnit=uds>1 ? costo/uds : costo;
         var precioVenta=Number(item.precio_venta||0)||0;
         var margen = costoUnit>0 ? ((precioVenta - costoUnit) / costoUnit) * 100 : 0;
         margen = isFinite(margen) ? Math.round(margen*10)/10 : 0;
@@ -13589,7 +13589,7 @@ if('serviceWorker' in navigator){
 
   function n(v){ var x=parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(x)?x:0; }
   function i(v){ var x=parseInt(v,10); return isFinite(x)?x:0; }
-  function round500(v){ return Math.round(n(v)/500)*500; }
+  function round500(v){ return n(v); } /* costo exacto: sin redondeo a 500 */
   window.redondearGs500 = round500;
   function money(v){ return (typeof fmtGs==='function') ? fmtGs(v) : ('Gs. '+Math.round(n(v)).toLocaleString('es-PY')); }
   function esc(s){
@@ -13646,7 +13646,7 @@ if('serviceWorker' in navigator){
           var costoUnit=uds>1 ? (costo/uds) : costo;
           var precioVenta=n(item.precio_venta||0);
           var margen=costoUnit>0 ? ((precioVenta-costoUnit)/costoUnit)*100 : 0; margen=isFinite(margen)?Math.round(margen*10)/10:0;
-          var notaRed=(redondeado!==Math.round(bruto)) ? ' · Redondeado: <b>'+money(redondeado)+'</b>' : '';
+          var notaRed='';
           return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
             '<div style="min-width:0"><div class="compra-item-name">'+esc(item.nombre)+'</div>'+ 
             '<div class="compra-item-sub detalle-legible">Cantidad: <b>'+packs+'</b> · +<b>'+totalUds+'</b> uds al stock · Costo ref.: <b>'+money(costoUnit)+'</b> · Precio venta: <b>'+money(precioVenta)+'</b> · Margen: <b>'+margen+'%</b> · Total exacto: <b>'+money(bruto)+'</b>'+notaRed+'</div></div>'+ 
@@ -13654,7 +13654,7 @@ if('serviceWorker' in navigator){
             '<div class="compra-cost-wrap"><div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div><input type="number" value="'+costo+'" step="0.01" onchange="cCosto('+idx+',this.value)" class="compra-input-costo"></div>'+ 
             '<div class="compra-cost-wrap compra-venta-wrap"><div class="compra-cost-label">Precio venta</div><input type="number" value="'+precioVenta+'" step="1" onchange="cPrecioVenta('+idx+',this.value)" class="compra-input-venta"></div>'+ 
             '<div class="compra-cost-wrap compra-margen-wrap"><div class="compra-cost-label">% Margen</div><input type="number" value="'+margen+'" step="0.1" onchange="cMargenVenta('+idx+',this.value)" class="compra-input-margen"></div>'+ 
-            '<div class="compra-cost-wrap compra-total-wrap"><div class="compra-cost-label">Total redondeado</div><input type="number" value="'+redondeado+'" step="500" onchange="cTotal('+idx+',this.value)" class="compra-input-total"></div>'+ 
+            '<div class="compra-cost-wrap compra-total-wrap"><div class="compra-cost-label">Total</div><input type="number" value="'+redondeado+'" step="0.01" onchange="cTotal('+idx+',this.value)" class="compra-input-total"></div>'+ 
             '<button onclick="cRemove('+idx+')" class="compra-remove-btn">✕</button></div>';
         }).join('');
       }
