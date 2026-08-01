@@ -13847,5 +13847,149 @@ try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; pages
 try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Inicio'; } }catch(e){}
 </script>
 
+
+<!-- ══ PARCHE: TEMA CLARO/OSCURO + TOTAL VENTA MINORISTA EN COMPRAS ══ -->
+<style id="bg-theme-light-css">
+body.theme-light{
+  --bg:#f4f6fa; --bg2:#ffffff; --bg3:#eef1f7; --bg4:#e3e7f0;
+  --border:#d7dce8; --border2:#c2c9da;
+  --text:#161a24; --text2:#6b7280; --text3:#374151;
+  --accent:#3a63d4; --accent2:#2b4bb0;
+  --accent-bg:rgba(58,99,212,.10); --accent-glow:0 0 20px rgba(58,99,212,.18);
+  --green:#16a34a; --green-bg:rgba(22,163,74,.10);
+  --red:#dc2626;   --red-bg:rgba(220,38,38,.10);
+  --amber:#d97706; --amber-bg:rgba(217,119,6,.10);
+  --teal:#0d9488;  --teal-bg:rgba(13,148,136,.10);
+  --purple:#7c3aed;
+  --shadow:0 2px 8px rgba(16,24,40,.08);
+  --shadow-md:0 4px 20px rgba(16,24,40,.10);
+  --shadow-lg:0 8px 40px rgba(16,24,40,.14);
+  color-scheme:light;
+}
+body.theme-light .logo-icon{color:#fff}
+#bg-theme-btn{
+  display:flex;align-items:center;gap:10px;width:calc(100% - 16px);margin:6px 8px;
+  padding:9px 10px;background:var(--bg3);border:1px solid var(--border);
+  color:var(--text2);border-radius:var(--radius);cursor:pointer;font-size:13px;
+  font-weight:600;font-family:inherit;text-align:left;
+}
+#bg-theme-btn:hover{color:var(--text);border-color:var(--border2)}
+body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
+#comp-total-venta-row{
+  display:flex;justify-content:space-between;font-size:13px;font-weight:700;
+  color:var(--green);margin-top:-4px;margin-bottom:10px;
+}
+</style>
+<script>
+/* ── 1) TEMA CLARO / OSCURO ───────────────────────────────── */
+(function(){
+  var KEY='bg_theme';
+  function get(){ try{ return localStorage.getItem(KEY)||'dark'; }catch(e){ return 'dark'; } }
+  function apply(t){
+    document.body.classList.toggle('theme-light', t==='light');
+    var m=document.querySelector('meta[name="theme-color"]');
+    if(m) m.setAttribute('content', t==='light'?'#f4f6fa':'#0f1117');
+    var b=document.getElementById('bg-theme-btn');
+    if(b) b.innerHTML=(t==='light'?'🌙':'☀️')+'<span class="lbl">'+(t==='light'?'Tema oscuro':'Tema claro')+'</span>';
+  }
+  window.toggleTema=function(){
+    var t=get()==='light'?'dark':'light';
+    try{ localStorage.setItem(KEY,t); }catch(e){}
+    apply(t);
+  };
+  function initTema(){
+    var sb=document.getElementById('sidebar');
+    if(sb && !document.getElementById('bg-theme-btn')){
+      var b=document.createElement('button');
+      b.id='bg-theme-btn'; b.type='button'; b.onclick=window.toggleTema;
+      var nav=sb.querySelector('nav');
+      if(nav) nav.appendChild(b); else sb.appendChild(b);
+    }
+    apply(get());
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initTema);
+  else initTema();
+  setTimeout(initTema,300);
+})();
+
+/* ── 2) TOTAL DE VENTA (MINORISTA) EN COMPRAS ─────────────── */
+(function(){
+  function n(v){ var x=parseFloat(String(v==null?'':v).replace(',','.')); return isFinite(x)?x:0; }
+
+  function precioVentaItem(c){
+    if(c && c.precio_venta != null && n(c.precio_venta) > 0) return n(c.precio_venta);
+    try{
+      var p=(typeof prodCache!=='undefined'?prodCache:[]).find(function(x){return String(x.id)===String(c.producto_id);});
+      return n(p && p.precio_venta);
+    }catch(e){ return 0; }
+  }
+  function ventaTotal(){
+    try{
+      return (compraItems||[]).reduce(function(s,c){
+        var uds=(Math.max(1,parseInt(c.uds)||1))*(Math.max(1,parseInt(c.cantidad)||1));
+        return s+precioVentaItem(c)*uds;
+      },0);
+    }catch(e){ return 0; }
+  }
+  function costoTotal(){
+    try{
+      if(typeof window.bgCompraTotalRedondeado==='function') return window.bgCompraTotalRedondeado();
+      return (compraItems||[]).reduce(function(s,c){
+        return s+(typeof compraLineSubtotal==='function'?compraLineSubtotal(c):n(c.costo)*Math.max(1,parseInt(c.cantidad)||1));
+      },0);
+    }catch(e){ return 0; }
+  }
+  function fm(x){ return (typeof fmtGs==='function')?fmtGs(x):('Gs. '+Math.round(x||0).toLocaleString('es-PY')); }
+
+  function pintar(){
+    if(!document.getElementById('ccomp-items')) return;
+    var total=ventaTotal(), costo=costoTotal(), gan=total-costo;
+    var pct=costo>0?((gan/costo)*100).toFixed(1)+'%':'—';
+
+    var ct=document.getElementById('comp-total');
+    if(ct){
+      var row=document.getElementById('comp-total-venta-row');
+      if(!row || !row.isConnected){
+        row=document.createElement('div');
+        row.id='comp-total-venta-row';
+        ct.parentElement.insertAdjacentElement('afterend',row);
+      }
+      row.innerHTML='<span>VENTA MINORISTA</span><span>'+fm(total)+'</span>';
+    }
+
+    var top=document.getElementById('comp-total-top');
+    if(top){
+      var box=document.getElementById('comp-venta-top');
+      if(!box || !box.isConnected){
+        box=document.createElement('div');
+        box.id='comp-venta-top';
+        box.style.cssText='text-align:right;white-space:nowrap;margin-left:18px';
+        top.parentElement.appendChild(box);
+      }
+      box.innerHTML='<div style="font-size:12px;color:var(--text2);font-weight:800;text-transform:uppercase;letter-spacing:.5px">Venta minorista</div>'+
+        '<div style="font-size:24px;font-weight:950;color:var(--accent)">'+fm(total)+'</div>'+
+        '<div style="font-size:11px;color:var(--text2);margin-top:2px">Ganancia '+fm(gan)+' · '+pct+'</div>';
+    }
+  }
+  window.pintarVentaCompra=pintar;
+
+  /* Repintado independiente de overrides: observa el DOM + eventos de input */
+  var t=null;
+  function pedir(){ if(t) return; t=setTimeout(function(){ t=null; try{ pintar(); }catch(e){} },60); }
+
+  document.addEventListener('input',  pedir, true);
+  document.addEventListener('change', pedir, true);
+  document.addEventListener('click',  pedir, true);
+
+  function arrancar(){
+    try{ new MutationObserver(pedir).observe(document.body,{childList:true,subtree:true}); }catch(e){}
+    pedir();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',arrancar);
+  else arrancar();
+})();
+/* ══ FIN PARCHE ══ */
+</script>
+
 </body>
 </html>
