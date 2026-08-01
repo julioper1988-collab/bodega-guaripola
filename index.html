@@ -14436,5 +14436,33 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 </script>
 <!-- ══ FIN PARCHE 6 ══ -->
 
+
+<!-- ══ PARCHE 7: REVERSA DE STOCK ATÓMICA, EXACTA E IDEMPOTENTE ══ -->
+<script>
+(function(){
+  if(window.__bgReversaRPC) return;
+  window.__bgReversaRPC=true;
+
+  /* Sustituye la reversa hecha en el navegador (fila por fila, con piso en 0)
+     por una única llamada a la RPC revertir_stock_compra:
+       · corre en una transacción con candado por compra  -> imposible duplicar
+       · comprueba si ya se revirtió esa entrada           -> idempotente
+       · resta exacto, admite negativo                     -> no se traga stock previo */
+  window.revertirStockCompraReal = async function(compraId, detalles){
+    if(!compraId) return;
+    try{
+      var r = await sb.rpc('revertir_stock_compra', { p_compra_id: compraId });
+      if(r && r.error) throw r.error;
+    }catch(e){
+      if(typeof toast==='function') toast('Error revirtiendo stock: '+(e.message||e),'err');
+      throw e;
+    }
+    if(typeof loadCaches==='function') await loadCaches(true);
+  };
+  try{ revertirStockCompraReal = window.revertirStockCompraReal; }catch(e){}
+})();
+</script>
+<!-- ══ FIN PARCHE 7 ══ -->
+
 </body>
 </html>
