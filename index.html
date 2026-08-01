@@ -13991,5 +13991,265 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 /* ══ FIN PARCHE ══ */
 </script>
 
+
+<!-- ══ PARCHE 3: ORDEN POR STOCK EN BUSCADORES + LOCK ANTI DOBLE GUARDADO ══ -->
+<script>
+(function(){
+  var KEY_OCULTAR='bg_ventas_ocultar_sin_stock';
+  function ocultarSinStock(){ try{ return localStorage.getItem(KEY_OCULTAR)==='1'; }catch(e){ return false; } }
+  window.toggleOcultarSinStock=function(){
+    var v=ocultarSinStock()?'0':'1';
+    try{ localStorage.setItem(KEY_OCULTAR,v); }catch(e){}
+    if(typeof toast==='function') toast(v==='1'?'Ventas: ocultando productos sin stock':'Ventas: mostrando todos');
+    return v==='1';
+  };
+
+  function st(p){ var n=Number(p&&p.stock); return isFinite(n)?n:0; }
+  function rot(p){
+    try{
+      var s=(typeof ventaStatsMap!=='undefined'?ventaStatsMap:{})[p&&p.id];
+      return s?Number(s.prom)||0:0;
+    }catch(e){ return 0; }
+  }
+  function ordenar(arr){
+    return arr.slice().sort(function(a,b){
+      var sa=st(a), sb=st(b);
+      if((sa>0)!==(sb>0)) return sa>0?-1:1;      // con stock primero
+      var ra=rot(a), rb=rot(b);
+      if(rb!==ra) return rb-ra;                   // más rotación primero
+      if(sb!==sa) return sb-sa;                   // mayor stock como desempate
+      return String(a.nombre||'').localeCompare(String(b.nombre||''));
+    });
+  }
+  window.bgOrdenarProductos=ordenar;
+
+  /* ── VENTAS: bgFilterProductos ordenado sólo cuando lo llama onVSearch ── */
+  var flag=false;
+  if(typeof window.bgFilterProductos==='function' && !window.bgFilterProductos.__stockSort){
+    var origFilter=window.bgFilterProductos;
+    var wrapFilter=function(q,limit){
+      if(!flag) return origFilter.apply(this,arguments);
+      var lim=limit||60;
+      var r=origFilter.call(this,q,Math.max(lim,80));
+      if(!Array.isArray(r)) return r;
+      if(ocultarSinStock()) r=r.filter(function(p){return st(p)>0;});
+      return ordenar(r).slice(0,lim);
+    };
+    wrapFilter.__stockSort=true;
+    window.bgFilterProductos=bgFilterProductos=wrapFilter;
+  }
+
+  function hookVentas(){
+    if(typeof window.onVSearch!=='function' || window.onVSearch.__stockSort) return;
+    var orig=window.onVSearch;
+    var w=function(){ flag=true; try{ return orig.apply(this,arguments); } finally { flag=false; } };
+    w.__stockSort=true;
+    window.onVSearch=onVSearch=w;
+  }
+
+  /* ── COMPRAS: ordena prodCache sólo durante renderCPList y lo restaura ── */
+  function hookCompras(){
+    if(typeof window.renderCPList!=='function' || window.renderCPList.__stockSort) return;
+    var orig=window.renderCPList;
+    var w=function(q){
+      var snap=(typeof prodCache!=='undefined'&&Array.isArray(prodCache))?prodCache.slice():null;
+      if(snap){
+        var ord=ordenar(snap);
+        prodCache.length=0; Array.prototype.push.apply(prodCache,ord);
+      }
+      try{ return orig.call(this,q); }
+      finally{ if(snap){ prodCache.length=0; Array.prototype.push.apply(prodCache,snap); } }
+    };
+    w.__stockSort=true;
+    window.renderCPList=renderCPList=w;
+  }
+
+  /* ── LOCK: evita que finalizarCompra corra dos veces en paralelo ── */
+  var guardando=false;
+  function hookLock(){
+    if(typeof window.finalizarCompra!=='function' || window.finalizarCompra.__lock) return;
+    var orig=window.finalizarCompra;
+    var w=async function(){
+      if(guardando){ if(typeof toast==='function') toast('Guardando… esperá','err'); return; }
+      guardando=true;
+      var btn=document.querySelector('button[onclick="finalizarCompra()"]');
+      var txt=btn?btn.textContent:null;
+      if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='Guardando…'; }
+      try{ return await orig.apply(this,arguments); }
+      finally{
+        guardando=false;
+        if(btn){ btn.disabled=false; btn.style.opacity=''; if(txt!=null) btn.textContent=txt; }
+      }
+    };
+    w.__lock=true;
+    window.finalizarCompra=finalizarCompra=w;
+  }
+
+  function hookAll(){ hookVentas(); hookCompras(); hookLock(); }
+  hookAll();
+  [300,1000,2500,5000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('click',function(){ setTimeout(hookAll,0); },true);
+})();
+</script>
+<!-- ══ FIN PARCHE 3 ══ -->
+
+
+<!-- ══ PARCHE 4: ROTACIÓN, ALERTAS, TOP VENDIDOS, WATCHDOG DE INTEGRIDAD ══ -->
+<style id="bg-p4-css">
+#bg-top-vendidos{display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;margin-bottom:6px;-webkit-overflow-scrolling:touch}
+#bg-top-vendidos::-webkit-scrollbar{display:none}
+.bg-tv-chip{flex:0 0 auto;background:var(--bg3);border:1px solid var(--border);border-radius:999px;
+  padding:7px 12px;font-size:12px;font-weight:700;color:var(--text);cursor:pointer;white-space:nowrap;font-family:inherit}
+.bg-tv-chip:hover{border-color:var(--accent);color:var(--accent)}
+.bg-tv-chip small{color:var(--text2);font-weight:600;margin-left:5px}
+.bg-tv-title{font-size:11px;color:var(--text2);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-top:6px}
+</style>
+<script>
+(function(){
+  function n(v){ var x=parseFloat(String(v==null?'':v).replace(',','.')); return isFinite(x)?x:0; }
+  function gsx(id){ return document.getElementById(id); }
+
+  /* ── A) Cargar estadísticas de rotación también en VENTAS ───────── */
+  var statsPedidos=false;
+  function asegurarStats(){
+    if(statsPedidos) return;
+    if(typeof ventaStatsMap!=='undefined' && Object.keys(ventaStatsMap||{}).length) { statsPedidos=true; return; }
+    if(typeof loadVentaStats==='function'){ statsPedidos=true; try{ loadVentaStats(); }catch(e){} }
+  }
+
+  /* ── B) Aviso de stock insuficiente al agregar al carrito ───────── */
+  function hookAddToVenta(){
+    if(typeof window.addToVenta!=='function' || window.addToVenta.__p4) return;
+    var orig=window.addToVenta;
+    var w=function(prodId,embId,qty){
+      var r=orig.apply(this,arguments);
+      try{
+        var prod=(prodCache||[]).find(function(p){return String(p.id)===String(prodId);});
+        if(prod){
+          var key=String(prodId)+(embId||'');
+          var it=(cart||[]).find(function(c){return c.key===key;});
+          var pedidas=(cart||[]).filter(function(c){return String(c.producto_id)===String(prodId);})
+            .reduce(function(s,c){return s+(n(c.cantidad)*Math.max(1,n(c.uds)||1));},0);
+          var disp=n(prod.stock);
+          if(pedidas>disp && typeof toast==='function'){
+            toast('⚠ '+prod.nombre+': pedís '+pedidas+' y hay '+disp+' en stock','err');
+          }
+        }
+      }catch(e){}
+      return r;
+    };
+    w.__p4=true;
+    window.addToVenta=addToVenta=w;
+  }
+
+  /* ── C) Margen bajo marcado en el buscador de ventas ────────────── */
+  var MARGEN_MIN=15;
+  function hookMargen(){
+    if(typeof window.bgMarginText!=='function' || window.bgMarginText.__p4) return;
+    var orig=window.bgMarginText;
+    var w=function(costo,venta){
+      var t=orig.apply(this,arguments);
+      try{
+        var c=n(costo), v=n(venta);
+        if(c>0 && v>0){
+          var m=((v-c)/c)*100;
+          if(m<0) return '🔴 PIERDE — '+t;
+          if(m<MARGEN_MIN) return '⚠ '+t;
+        }
+      }catch(e){}
+      return t;
+    };
+    w.__p4=true;
+    window.bgMarginText=w;
+  }
+
+  /* ── D) Fila de accesos rápidos: más vendidos con stock ─────────── */
+  function topVendidos(limit){
+    var m=(typeof ventaStatsMap!=='undefined'?ventaStatsMap:{})||{};
+    return (prodCache||[])
+      .filter(function(p){ return n(p.stock)>0 && m[p.id] && n(m[p.id].prom)>0; })
+      .sort(function(a,b){ return n(m[b.id].prom)-n(m[a.id].prom); })
+      .slice(0,limit||10);
+  }
+  function pintarTopVendidos(){
+    var search=gsx('v-search');
+    if(!search) return;
+    var host=search.closest('.form-group') || search.parentElement;
+    if(!host) return;
+    var tops=topVendidos(10);
+    var cont=gsx('bg-top-vendidos');
+    if(!tops.length){ if(cont) cont.remove(); return; }
+    if(!cont || !cont.isConnected){
+      var wrap=document.createElement('div');
+      wrap.id='bg-top-vendidos';
+      host.insertAdjacentElement('afterend',wrap);
+      cont=wrap;
+    }
+    cont.innerHTML=tops.map(function(p){
+      return '<button type="button" class="bg-tv-chip" onclick="addToVenta(\''+p.id+'\',null,1)">'+
+        (window.safeHtml?window.safeHtml(p.nombre):p.nombre)+'<small>'+n(p.stock)+'</small></button>';
+    }).join('');
+  }
+
+  /* ── E) Watchdog: ninguna compra/venta puede quedar sin detalle ─── */
+  async function verificarIntegridad(){
+    if(typeof sb==='undefined' || !sb) return;
+    try{
+      var desde=new Date(Date.now()-1000*60*60*24*3).toISOString().slice(0,10);
+      var comp=await sb.from('bodega_compras').select('id,numero_factura,total,fecha').gte('fecha',desde);
+      var lista=(comp.data||[]).filter(function(c){return n(c.total)>0;});
+      for(var i=0;i<lista.length;i++){
+        var r=await sb.from('bodega_compras_detalle').select('id',{count:'exact',head:true}).eq('compra_id',lista[i].id);
+        if((r.count||0)===0 && typeof toast==='function'){
+          toast('⚠ Compra '+(lista[i].numero_factura||lista[i].fecha)+' quedó SIN PRODUCTOS. Revisala.','err');
+        }
+      }
+    }catch(e){}
+  }
+  window.verificarIntegridadCompras=verificarIntegridad;
+
+  function hookWatchdog(){
+    if(typeof window.finalizarCompra!=='function' || window.finalizarCompra.__p4) return;
+    var orig=window.finalizarCompra;
+    var w=async function(){
+      var snap=(typeof compraItems!=='undefined')?JSON.parse(JSON.stringify(compraItems||[])):[];
+      var r=await orig.apply(this,arguments);
+      try{
+        window.__ultimaCompraItems=snap;                 // respaldo en memoria
+        try{ localStorage.setItem('bg_ultima_compra_backup',JSON.stringify({ts:Date.now(),items:snap})); }catch(e){}
+        setTimeout(verificarIntegridad,1200);
+      }catch(e){}
+      return r;
+    };
+    w.__p4=true;
+    window.finalizarCompra=finalizarCompra=w;
+  }
+
+  /* ── F) Lock también en finalizarVenta ─────────────────────────── */
+  var vendiendo=false;
+  function hookLockVenta(){
+    if(typeof window.finalizarVenta!=='function' || window.finalizarVenta.__p4lock) return;
+    var orig=window.finalizarVenta;
+    var w=async function(){
+      if(vendiendo){ if(typeof toast==='function') toast('Procesando venta… esperá','err'); return; }
+      vendiendo=true;
+      try{ return await orig.apply(this,arguments); }
+      finally{ setTimeout(function(){ vendiendo=false; },400); }
+    };
+    w.__p4lock=true;
+    window.finalizarVenta=finalizarVenta=w;
+  }
+
+  function hookAll(){
+    hookAddToVenta(); hookMargen(); hookWatchdog(); hookLockVenta();
+    if(gsx('v-search')){ asegurarStats(); pintarTopVendidos(); }
+  }
+  hookAll();
+  [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('click',function(){ setTimeout(hookAll,120); },true);
+})();
+</script>
+<!-- ══ FIN PARCHE 4 ══ -->
+
 </body>
 </html>
