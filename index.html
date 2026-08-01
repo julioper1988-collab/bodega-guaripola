@@ -14065,19 +14065,22 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   }
 
   /* ── LOCK: evita que finalizarCompra corra dos veces en paralelo ── */
-  var guardando=false;
+  var guardandoTs=0;
   function hookLock(){
-    if(typeof window.finalizarCompra!=='function' || window.finalizarCompra.__lock) return;
+    if(window.__bgLockCompraInstalada) return;
+    if(typeof window.finalizarCompra!=='function') return;
+    window.__bgLockCompraInstalada=true;
     var orig=window.finalizarCompra;
     var w=async function(){
-      if(guardando){ if(typeof toast==='function') toast('Guardando… esperá','err'); return; }
-      guardando=true;
+      var ahora=Date.now();
+      if(guardandoTs && (ahora-guardandoTs)<15000){ if(typeof toast==='function') toast('Guardando… esperá','err'); return; }
+      guardandoTs=ahora;
       var btn=document.querySelector('button[onclick="finalizarCompra()"]');
       var txt=btn?btn.textContent:null;
       if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='Guardando…'; }
       try{ return await orig.apply(this,arguments); }
       finally{
-        guardando=false;
+        guardandoTs=0;
         if(btn){ btn.disabled=false; btn.style.opacity=''; if(txt!=null) btn.textContent=txt; }
       }
     };
@@ -14119,7 +14122,9 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 
   /* ── B) Aviso de stock insuficiente al agregar al carrito ───────── */
   function hookAddToVenta(){
+    if(window.__bgAvisoStockInstalado) return;
     if(typeof window.addToVenta!=='function' || window.addToVenta.__p4) return;
+    window.__bgAvisoStockInstalado=true;
     var orig=window.addToVenta;
     var w=function(prodId,embId,qty){
       var r=orig.apply(this,arguments);
@@ -14224,7 +14229,9 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   window.verificarIntegridadCompras=verificarIntegridad;
 
   function hookWatchdog(){
+    if(window.__bgWatchdogInstalado) return;
     if(typeof window.finalizarCompra!=='function' || window.finalizarCompra.__p4) return;
+    window.__bgWatchdogInstalado=true;
     var orig=window.finalizarCompra;
     var w=async function(){
       var snap=(typeof compraItems!=='undefined')?JSON.parse(JSON.stringify(compraItems||[])):[];
@@ -14241,15 +14248,21 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   }
 
   /* ── F) Lock también en finalizarVenta ─────────────────────────── */
-  var vendiendo=false;
+  var vendiendoTs=0;
   function hookLockVenta(){
-    if(typeof window.finalizarVenta!=='function' || window.finalizarVenta.__p4lock) return;
+    if(window.__bgLockVentaInstalada) return;                 // una sola capa, nunca anidar
+    if(typeof window.finalizarVenta!=='function') return;
+    window.__bgLockVentaInstalada=true;
     var orig=window.finalizarVenta;
     var w=async function(){
-      if(vendiendo){ if(typeof toast==='function') toast('Procesando venta… esperá','err'); return; }
-      vendiendo=true;
+      var ahora=Date.now();
+      if(vendiendoTs && (ahora-vendiendoTs)<15000){          // se libera solo a los 15s
+        if(typeof toast==='function') toast('Procesando venta… esperá','err');
+        return;
+      }
+      vendiendoTs=ahora;
       try{ return await orig.apply(this,arguments); }
-      finally{ setTimeout(function(){ vendiendo=false; },400); }
+      finally{ setTimeout(function(){ vendiendoTs=0; },300); }
     };
     w.__p4lock=true;
     window.finalizarVenta=finalizarVenta=w;
