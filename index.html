@@ -14096,7 +14096,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 
 <!-- ══ PARCHE 4: ROTACIÓN, ALERTAS, TOP VENDIDOS, WATCHDOG DE INTEGRIDAD ══ -->
 <style id="bg-p4-css">
-#bg-top-vendidos{display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;margin-bottom:6px;-webkit-overflow-scrolling:touch}
+#bg-top-vendidos{grid-column:1/-1;width:100%;max-width:100%;display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;margin-bottom:6px;-webkit-overflow-scrolling:touch}
 #bg-top-vendidos::-webkit-scrollbar{display:none}
 .bg-tv-chip{flex:0 0 auto;background:var(--bg3);border:1px solid var(--border);border-radius:999px;
   padding:7px 12px;font-size:12px;font-weight:700;color:var(--text);cursor:pointer;white-space:nowrap;font-family:inherit}
@@ -14171,18 +14171,33 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
       .sort(function(a,b){ return n(m[b.id].prom)-n(m[a.id].prom); })
       .slice(0,limit||10);
   }
+  function topVendidosActivo(){
+    try{ return localStorage.getItem('bg_top_vendidos_off')!=='1'; }catch(e){ return true; }
+  }
+  window.toggleTopVendidos=function(){
+    var off=topVendidosActivo()?'1':'0';
+    try{ localStorage.setItem('bg_top_vendidos_off',off); }catch(e){}
+    var c=gsx('bg-top-vendidos'); if(c) c.remove();
+    if(off==='0') pintarTopVendidos();
+    if(typeof toast==='function') toast(off==='1'?'Accesos rapidos ocultos':'Accesos rapidos activos');
+  };
   function pintarTopVendidos(){
+    var cont=gsx('bg-top-vendidos');
+    if(!topVendidosActivo()){ if(cont) cont.remove(); return; }
     var search=gsx('v-search');
     if(!search) return;
     var host=search.closest('.form-group') || search.parentElement;
     if(!host) return;
     var tops=topVendidos(10);
-    var cont=gsx('bg-top-vendidos');
     if(!tops.length){ if(cont) cont.remove(); return; }
     if(!cont || !cont.isConnected){
       var wrap=document.createElement('div');
       wrap.id='bg-top-vendidos';
-      host.insertAdjacentElement('afterend',wrap);
+      wrap.style.gridColumn='1 / -1';
+      wrap.style.width='100%';
+      wrap.innerHTML='';
+      var padre=host.parentElement||host;
+      padre.appendChild(wrap);
       cont=wrap;
     }
     cont.innerHTML=tops.map(function(p){
@@ -14359,6 +14374,54 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 })();
 </script>
 <!-- ══ FIN PARCHE 5 ══ -->
+
+
+<!-- ══ PARCHE 6: CERRAR LISTA DE AUTOCOMPLETADO AL CLICKEAR AFUERA ══ -->
+<script>
+(function(){
+  var LISTAS=[
+    {list:'v-ac-list',  input:'v-search'},
+    {list:'cp-ac-list', input:'cp-search'}
+  ];
+
+  function ocultar(id){
+    var el=document.getElementById(id);
+    if(el && el.style.display!=='none') el.style.display='none';
+  }
+
+  function fuera(ev){
+    var t=ev.target;
+    LISTAS.forEach(function(cfg){
+      var list=document.getElementById(cfg.list);
+      if(!list || list.style.display==='none') return;
+      if(list.contains(t)) return;                       // click dentro de la lista
+      var inp=document.getElementById(cfg.input);
+      if(inp && (t===inp || inp.contains(t))) return;    // click en el buscador
+      list.style.display='none';
+    });
+  }
+
+  document.addEventListener('mousedown', fuera);
+  document.addEventListener('touchstart', fuera, {passive:true});
+
+  document.addEventListener('keydown', function(ev){
+    if(ev.key!=='Escape') return;
+    LISTAS.forEach(function(cfg){ ocultar(cfg.list); });
+  });
+
+  // Al scrollear la pantalla también se cierra (evita que quede flotando)
+  window.addEventListener('scroll', function(){
+    LISTAS.forEach(function(cfg){
+      var list=document.getElementById(cfg.list);
+      if(!list || list.style.display==='none') return;
+      var inp=document.getElementById(cfg.input);
+      if(inp && document.activeElement===inp) return;
+      list.style.display='none';
+    });
+  }, true);
+})();
+</script>
+<!-- ══ FIN PARCHE 6 ══ -->
 
 </body>
 </html>
