@@ -1,5 +1,5 @@
-/* ── Service Worker — Bodega Guaripola v4 ── */
-const CACHE_NAME = 'guaripola-v4';
+/* ── Service Worker — Bodega Guaripola v2 ── */
+const CACHE_NAME = 'guaripola-v3';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
@@ -9,8 +9,7 @@ const PRECACHE = [
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png',
-  './precio-venta-compras-fix.js'
+  './icon-512.png'
 ];
 
 /* ── IndexedDB helpers ── */
@@ -56,25 +55,6 @@ function dbDelete(id){
   }));
 }
 
-/* Inyecta el hotfix en documentos HTML sin tener que alterar el index gigante. */
-async function injectCompraPrecioFix(response){
-  try{
-    if(!response || response.status !== 200) return response;
-    const type = response.headers.get('content-type') || '';
-    if(!type.includes('text/html')) return response;
-    let html = await response.text();
-    if(html.includes('precio-venta-compras-fix.js')) return new Response(html,{status:response.status,statusText:response.statusText,headers:response.headers});
-    const tag = '<script src="./precio-venta-compras-fix.js"></script>';
-    html = html.includes('</body>') ? html.replace('</body>', tag+'\n</body>') : html + tag;
-    const headers = new Headers(response.headers);
-    headers.delete('content-length');
-    return new Response(html,{status:response.status,statusText:response.statusText,headers});
-  }catch(e){
-    console.warn('[SW] No se pudo inyectar fix de precios:', e);
-    return response;
-  }
-}
-
 /* ── INSTALL ── */
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -85,7 +65,7 @@ self.addEventListener('install', event => {
         ))
       );
     }).then(() => {
-      console.log('[SW] v4 instalado');
+      console.log('[SW] v2 instalado');
       return self.skipWaiting();
     })
   );
@@ -97,7 +77,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => {
-      console.log('[SW] v4 activado');
+      console.log('[SW] v2 activado');
       return self.clients.claim();
     })
   );
@@ -113,6 +93,7 @@ self.addEventListener('fetch', event => {
      (method === 'POST' || method === 'PATCH' || method === 'DELETE')){
     event.respondWith(
       fetch(event.request.clone()).catch(async () => {
+        // Sin red: encolar la request
         try{
           const body = await event.request.clone().text();
           await dbAdd({
@@ -126,6 +107,7 @@ self.addEventListener('fetch', event => {
         }catch(e){
           console.error('[SW] Error encolando:', e);
         }
+        // Responder con 202 para que la app no rompa
         return new Response(JSON.stringify({offline:true, queued:true}), {
           status: 202,
           headers: {'Content-Type':'application/json'}
@@ -166,27 +148,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Navegaciones: usar caché/red y siempre inyectar el fix en el HTML servido.
-  if(event.request.mode === 'navigate' || event.request.destination === 'document'){
-    event.respondWith(
-      caches.match(event.request).then(async cached => {
-        const fetchPromise = fetch(event.request).then(response => {
-          if(response && response.status === 200 && response.type !== 'opaque'){
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => null);
-
-        const base = cached || await fetchPromise || await caches.match('./index.html');
-        if(!base) return new Response('Sin conexión', {status:503});
-        return injectCompraPrecioFix(base.clone());
-      })
-    );
-    return;
-  }
-
-  // Assets propios: cache-first + background update
+  // Assets propios (index.html, manifest, icons): cache-first + background update
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(response => {
@@ -197,7 +159,11 @@ self.addEventListener('fetch', event => {
         return response;
       }).catch(() => null);
 
-      return cached || fetchPromise.then(r => r || new Response('Sin conexión', {status:503}));
+      return cached || fetchPromise.then(r => r || (
+        event.request.destination === 'document'
+          ? caches.match('./index.html')
+          : new Response('Sin conexión', {status:503})
+      ));
     })
   );
 });
@@ -227,10 +193,11 @@ async function flushQueue(){
       }
     }catch(e){
       console.warn('[SW] Sync falló, se reintentará:', e.message);
-      break;
+      break; // Si falla uno, parar — la red puede no estar estable
     }
   }
 
+  // Notificar a los clientes que se sincronizó
   const clients = await self.clients.matchAll();
   clients.forEach(c => c.postMessage({type:'SYNC_COMPLETE'}));
 }
