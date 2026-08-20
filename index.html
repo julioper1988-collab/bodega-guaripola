@@ -1934,8 +1934,11 @@ async function renderDashboard(){
   if(cajasAbiertas&&cajasAbiertas[0]){
     cajaActiva=cajasAbiertas[0];
   } else {
-    const {data:cajasHoy}=await sb.from('bodega_caja').select('*').eq('fecha',today).order('opened_at',{ascending:false}).limit(1);
-    cajaActiva=cajasHoy&&cajasHoy[0]||null;
+    // FIX: buscar la ULTIMA caja por opened_at, sin filtrar por fecha calendario.
+    // Un turno puede cruzar la medianoche: sus ventas tienen fecha de hoy pero la caja
+    // es de ayer. Filtrar por fecha=hoy dejaba cajaActiva=null y mostraba "Sin caja".
+    const {data:ultimaCaja}=await sb.from('bodega_caja').select('*').order('opened_at',{ascending:false}).limit(1);
+    cajaActiva=ultimaCaja&&ultimaCaja[0]||null;
   }
   const cajaAbierta=cajaActiva&&cajaActiva.estado==='abierta';
   const horaApertura=cajaActiva?.opened_at ? new Date(cajaActiva.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}) : null;
@@ -2012,7 +2015,7 @@ async function renderDashboard(){
       <div>
         <div class="label">Ventas del turno</div>
         <div class="value" style="color:var(--green)">${fmtGs(tH)}</div>
-        <div class="sub">${cajaAbierta?`<span style="color:var(--green)">● Abierta</span> desde ${horaApertura||'--:--'}`:cajaActiva?`<span style="color:var(--red)">● Cerrada</span> · ${horaApertura||'--:--'}`:'Sin caja'} · ${ventasCaja.length} ventas</div>
+        <div class="sub">${cajaAbierta?`<span style="color:var(--green)">● Abierta</span> desde ${horaApertura||'--:--'}`:cajaActiva?`<span style="color:var(--amber)">● Cerrada</span> · turno ${fmtDate(cajaActiva.fecha)} ${horaApertura||''}`:'<span style="color:var(--red)">Sin caja</span>'} · ${ventasCaja.length} ventas</div>
       </div>
     </div>
     <div class="stat-card">
@@ -6247,6 +6250,77 @@ initMobileShell();
     </div></div>`;
   }
 
+  // ===== Ventas fuera de turno (sin caja o pegadas a una caja ya cerrada) =====
+  window.obtenerVentasFueraDeTurno = async function(caja){
+    try{
+      const desde=new Date(Date.now()-1000*60*60*72).toISOString();
+      const {data:vts,error}=await sb.from('bodega_ventas')
+        .select('id,numero_venta,fecha,created_at,cliente_nombre,total_final,metodo_pago,caja_id')
+        .gte('created_at',desde).order('created_at',{ascending:false}).limit(500);
+      if(error||!vts) return {items:[],total:0};
+      const ids=[...new Set(vts.map(v=>v.caja_id).filter(Boolean))];
+      let cajas={};
+      if(ids.length){
+        const {data:cs}=await sb.from('bodega_caja').select('id,closed_at,estado,nombre_turno,fecha').in('id',ids);
+        (cs||[]).forEach(c=>cajas[c.id]=c);
+      }
+      const ini=new Date(caja.opened_at).getTime();
+      const items=vts.filter(v=>{
+        const t=new Date(v.created_at).getTime();
+        if(t>=ini) return false;                          // ya entra al turno por hora
+        if(!v.caja_id) return true;                       // huérfana
+        const c=cajas[v.caja_id];
+        if(!c||!c.closed_at) return false;
+        return t > new Date(c.closed_at).getTime();       // quedó en el hueco, después del cierre anterior
+      });
+      return {items,total:items.reduce((a,v)=>a+(Number(v.total_final)||0),0)};
+    }catch(e){ return {items:[],total:0}; }
+  };
+
+  window.cajaVentasHuerfanasHTML = function(caja,h){
+    if(!h||!h.items.length) return '';
+    const rows=h.items.map(v=>`<tr>
+      <td><input type="checkbox" class="vh-chk" value="${v.id}" data-ts="${v.created_at}" checked></td>
+      <td>#${v.numero_venta||'-'}</td>
+      <td>${new Date(v.created_at).toLocaleString('es-PY')}</td>
+      <td>${v.cliente_nombre||'-'}</td>
+      <td>${v.metodo_pago||'-'}</td>
+      <td style="text-align:right;font-weight:700">${fmtGs(v.total_final)}</td>
+      <td>${v.caja_id?'<span style="color:var(--amber)">caja cerrada</span>':'<span style="color:var(--red)">sin caja</span>'}</td>
+    </tr>`).join('');
+    return `<div class="card" style="margin-bottom:16px;border:1px solid var(--amber)">
+      <div class="card-header"><h3>⚠️ Ventas fuera de turno</h3><span class="badge">${h.items.length} ventas · ${fmtGs(h.total)}</span></div>
+      <div style="padding:12px 16px 0;font-size:13px;color:var(--text2)">Se registraron antes de abrir este turno, con la caja anterior ya cerrada. Al agregarlas se mueve la <b>apertura del turno</b> hacia atrás — la hora real de cada venta no se toca.</div>
+      <div style="overflow-x:auto"><table><thead><tr>
+        <th><input type="checkbox" checked onclick="document.querySelectorAll('.vh-chk').forEach(c=>c.checked=this.checked)"></th>
+        <th>N°</th><th>Fecha/hora</th><th>Cliente</th><th>Pago</th><th style="text-align:right">Total</th><th>Origen</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="padding:12px 16px">
+        <button class="btn btn-primary" onclick="asignarVentasACaja('${caja.id}')">➕ Incluir en este turno</button>
+      </div>
+    </div>`;
+  };
+
+  window.asignarVentasACaja = async function(cajaId){
+    const chk=[...document.querySelectorAll('.vh-chk:checked')];
+    if(!chk.length){toast('No seleccionaste ninguna venta','err');return;}
+    const ids=chk.map(c=>c.value);
+    // hora más vieja de las seleccionadas
+    const minTs=Math.min(...chk.map(c=>new Date(c.dataset.ts).getTime()));
+    const nuevoOpen=new Date(minTs-1000).toISOString();
+    const {data:cj}=await sb.from('bodega_caja').select('opened_at').eq('id',cajaId).single();
+    const mueve=cj&&new Date(nuevoOpen)<new Date(cj.opened_at);
+    if(!(await bgConfirm(`¿Agregar <b>${ids.length}</b> venta(s) a esta caja?<br><span style="font-size:12px;color:var(--text2)">${mueve?'La apertura del turno se moverá a '+new Date(nuevoOpen).toLocaleString('es-PY')+'. ':''}No se modifica la hora de las ventas.</span>`,{title:'Incluir en este turno',confirmText:'Agregar',variant:'warning'}))) return;
+    const {error}=await sb.from('bodega_ventas').update({caja_id:cajaId}).in('id',ids);
+    if(error){toast('Error: '+error.message,'err');return;}
+    if(mueve){
+      const {error:e2}=await sb.from('bodega_caja').update({opened_at:nuevoOpen}).eq('id',cajaId);
+      if(e2){toast('Ventas reasignadas pero no se pudo mover la apertura: '+e2.message,'err');return;}
+    }
+    toast(`${ids.length} venta(s) incluidas en el turno`);
+    renderCaja();
+  };
+
   window.renderCaja = async function(){
     const hoy=fechaHoyPY();
     // Leer siempre desde window para que los onclick del HTML funcionen
@@ -6273,6 +6347,7 @@ initMobileShell();
     const cerrada=caja.estado==='cerrada' && !cajaEditId;
     const ventas=await resumenVentasCaja(caja);
     const gastos=await obtenerGastosCaja(caja.fecha,caja.id);
+    const huerfanas = caja.estado==='abierta' ? await obtenerVentasFueraDeTurno(caja) : {items:[],total:0};
     const apertura=Number(caja.apertura_efectivo)||0;
     const esperado=apertura+ventas.efectivo-gastos.total;
     // Total esperado = apertura + cobrado real (sin fiado) - gastos
@@ -6308,6 +6383,7 @@ initMobileShell();
           </tr>
         </tbody></table></div>
       </div>
+      ${cajaVentasHuerfanasHTML(caja,huerfanas)}
       ${cajaGastosTurnoHTML(caja,gastos)}
       ${cajaEditAperturaHTML(caja)}
       ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total)}`;
