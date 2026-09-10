@@ -3121,7 +3121,7 @@ function addToCompra(prodId,embId,qty=1){
   const key=prodId+(embId||'');
   const ex=compraItems.find(c=>c.key===key);
   if(ex)ex.cantidad+=qty;
-  else compraItems.push({key,producto_id:prodId,embalaje_id:embId||null,nombre,costo,cantidad:qty,uds});
+  else compraItems.push({key,producto_id:prodId,embalaje_id:embId||null,nombre,costo,cantidad:qty,uds,precio_venta:Number(prod.precio_venta||0)||0});
   renderCompraItems();
 }
 function bgSyncCompra(){
@@ -3151,7 +3151,8 @@ function renderCompraItems(){
       <input type="number" value="${item.cantidad}" min="1" onchange="cQtySet(${i},this.value)" style="width:40px;text-align:center;padding:3px">
       <button onclick="cQty(${i},1)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);width:22px;height:22px;border-radius:4px;cursor:pointer">+</button>
     </div>
-    <input type="number" value="${item.costo}" onchange="cCosto(${i},this.value)" style="width:80px;text-align:right;padding:4px">
+    <input type="number" value="${item.costo}" onchange="cCosto(${i},this.value)" title="Costo" style="width:80px;text-align:right;padding:4px">
+    <input type="number" value="${item.precio_venta||0}" onchange="cPrecioVenta(${i},this.value)" title="Precio de venta" style="width:80px;text-align:right;padding:4px">
     <button onclick="cRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button>
   </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Seleccioná productos</div>';
   const total=compraItems.reduce((s,c)=>s+c.costo*c.cantidad,0);
@@ -3161,6 +3162,7 @@ function renderCompraItems(){
 function cQty(i,d){compraItems[i].cantidad=Math.max(1,compraItems[i].cantidad+d);renderCompraItems();}
 function cQtySet(i,v){compraItems[i].cantidad=Math.max(1,parseInt(v)||1);renderCompraItems();}
 function cCosto(i,v){compraItems[i].costo=parseFloat(v)||0;renderCompraItems();}
+function cPrecioVenta(i,v){compraItems[i].precio_venta=parseFloat(v)||0;renderCompraItems();}
 function cRemove(i){compraItems.splice(i,1);renderCompraItems();}
 
 async function finalizarCompra(){
@@ -3178,7 +3180,7 @@ async function finalizarCompra(){
 async function impactarStock(compraId,items){
   // 1 sola llamada atómica al servidor (antes: 3 round-trips por producto)
   const payload=(items||[]).map(function(c){
-    return {producto_id:c.producto_id, cantidad:parseInt(c.cantidad)||0, uds:Math.max(1,parseInt(c.uds)||1), costo:parseFloat(c.costo)||0};
+    return {producto_id:c.producto_id, cantidad:parseInt(c.cantidad)||0, uds:Math.max(1,parseInt(c.uds)||1), costo:parseFloat(c.costo)||0, precio_venta:parseFloat(c.precio_venta)||0};
   });
   const {error}=await sb.rpc('impactar_stock_compra',{p_compra_id:compraId,p_items:payload});
   if(error){ console.warn('impactar_stock_compra error:',error.message); toast('Error impactando stock: '+error.message,'err'); return; }
