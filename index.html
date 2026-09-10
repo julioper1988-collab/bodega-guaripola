@@ -14540,5 +14540,172 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 </script>
 <!-- ══ FIN PARCHE 7 ══ -->
 
+
+<script id="bg-fix-compra-atomica-v1">
+/* ══ FIX DEFINITIVO COMPRAS: GUARDADO ATÓMICO + ANTIDUPLICADO ══ */
+(function(){
+  if(window.__bgCompraAtomicaV1) return;
+  window.__bgCompraAtomicaV1 = true;
+
+  var finalizarAnterior = window.finalizarCompra;
+  var guardandoCompra = false;
+
+  function numero(v){
+    var x = parseFloat(String(v == null ? '' : v).replace(',', '.'));
+    return isFinite(x) ? x : 0;
+  }
+  function entero(v){
+    var x = parseInt(v,10);
+    return isFinite(x) ? x : 0;
+  }
+  function dinero(v){
+    return typeof fmtGs==='function' ? fmtGs(v) : ('Gs. '+Math.round(numero(v)).toLocaleString('es-PY'));
+  }
+  function totalActual(items){
+    if(typeof window.bgCompraTotalRedondeado === 'function'){
+      try { return numero(window.bgCompraTotalRedondeado()); } catch(e){}
+    }
+    return (items||[]).reduce(function(s,c){
+      return s + numero(c && c.costo) * Math.max(1, numero(c && c.cantidad) || 1);
+    },0);
+  }
+  function setBotonGuardando(on){
+    var btn=document.querySelector('button[onclick="finalizarCompra()"]');
+    if(!btn) return;
+    if(on){
+      if(!btn.dataset.bgTextoOriginal) btn.dataset.bgTextoOriginal=btn.textContent||'✓ Registrar compra';
+      btn.disabled=true;
+      btn.style.opacity='.6';
+      btn.textContent='Guardando…';
+    }else{
+      btn.disabled=false;
+      btn.style.opacity='';
+      btn.textContent=btn.dataset.bgTextoOriginal||'✓ Registrar compra';
+    }
+  }
+  function limpiarBorradorCompra(){
+    try{ localStorage.removeItem('bg_draft_compra'); }catch(e){}
+  }
+  function sincronizarCamposCompra(items){
+    try{
+      var filas=document.querySelectorAll('#ccomp-items .compra-item-row');
+      (items||[]).forEach(function(c,idx){
+        var fila=filas[idx]; if(!fila) return;
+        var p=fila.querySelector('.compra-input-venta');
+        var co=fila.querySelector('.compra-input-costo');
+        var ca=fila.querySelector('.compra-input-cant');
+        if(p) c.precio_venta=Math.max(0,numero(p.value));
+        if(co) c.costo=Math.max(0,numero(co.value));
+        if(ca) c.cantidad=Math.max(1,entero(ca.value)||1);
+      });
+    }catch(e){ console.warn('No se pudieron sincronizar campos visibles de compra',e); }
+  }
+  async function actualizarPreciosVenta(items){
+    try{
+      var vistos={};
+      var cambios=(items||[]).filter(function(c){
+        return c && c.producto_id && numero(c.precio_venta)>0 && !vistos[c.producto_id] && (vistos[c.producto_id]=true);
+      }).map(function(c){ return {id:c.producto_id, precio_venta:numero(c.precio_venta)}; });
+      if(!cambios.length) return;
+      var r=await sb.rpc('actualizar_precios_venta',{p_items:cambios});
+      if(r && r.error) console.warn('actualizar_precios_venta:',r.error.message);
+      cambios.forEach(function(c){
+        var p=(prodCache||[]).find(function(x){ return String(x.id)===String(c.id); });
+        if(p) p.precio_venta=c.precio_venta;
+      });
+    }catch(e){ console.warn('No se pudieron actualizar precios de venta',e); }
+  }
+
+  window.finalizarCompra = finalizarCompra = async function(){
+    // Edición: conservar el flujo existente, que incluye reversa de stock.
+    if(window.__compraEditando && window.__compraEditando.id){
+      if(guardandoCompra){ if(typeof toast==='function') toast('Guardando… esperá','err'); return; }
+      guardandoCompra=true; setBotonGuardando(true);
+      try{
+        return await finalizarAnterior.apply(this,arguments);
+      }finally{
+        guardandoCompra=false; setBotonGuardando(false);
+      }
+    }
+
+    var items=(typeof compraItems!=='undefined' && Array.isArray(compraItems)) ? compraItems : [];
+    if(!items.length){ if(typeof toast==='function') toast('No hay productos','err'); return; }
+    sincronizarCamposCompra(items);
+    if(guardandoCompra){ if(typeof toast==='function') toast('La compra ya se está guardando…','err'); return; }
+
+    guardandoCompra=true;
+    setBotonGuardando(true);
+
+    try{
+      var facturaEl=document.getElementById('comp-factura');
+      var factura=facturaEl ? String(facturaEl.value||'').trim() : '';
+      var proveedor=(document.getElementById('comp-prov')||{}).value||null;
+      var fecha=(document.getElementById('comp-fecha')||{}).value || (typeof fechaHoyPY==='function'?fechaHoyPY():null);
+      var estado=(document.getElementById('comp-estado')||{}).value || 'en_proceso';
+      var metodo=(document.getElementById('comp-metpago')||{}).value || 'efectivo';
+      var notas=(document.getElementById('comp-notas')||{}).value || null;
+      var total=totalActual(items);
+
+      var payload=items.map(function(c){
+        return {
+          producto_id:c.producto_id,
+          cantidad:Math.max(1,entero(c.cantidad)||1),
+          uds:Math.max(1,entero(c.uds)||1),
+          costo:numero(c.costo),
+          precio_venta:Math.max(0,numero(c.precio_venta)),
+          embalaje_id:c.embalaje_id||null
+        };
+      });
+
+      var res=await sb.rpc('registrar_compra_atomica',{
+        p_fecha:fecha,
+        p_proveedor_id:proveedor,
+        p_numero_factura:factura||null,
+        p_total:total,
+        p_metodo_pago:metodo,
+        p_estado:estado,
+        p_notas:notas,
+        p_items:payload
+      });
+
+      if(res && res.error){
+        var msg=String(res.error.message||res.error.details||'Error desconocido');
+        if(msg.indexOf('DUPLICATE_FACTURA')>=0){
+          if(typeof toast==='function') toast('⚠️ Esa factura ya está registrada para este proveedor. No se duplicó la compra.','err');
+          return;
+        }
+        throw res.error;
+      }
+
+      // El precio de venta ya se guarda dentro de registrar_compra_atomica.
+      // Reflejarlo también en cache local sin una segunda escritura al servidor.
+      items.forEach(function(c){
+        var p=(prodCache||[]).find(function(x){return String(x.id)===String(c.producto_id);});
+        if(p && numero(c.precio_venta)>0) p.precio_venta=numero(c.precio_venta);
+      });
+      limpiarBorradorCompra();
+      compraItems=[];
+      window.__compraEditando=null;
+      if(typeof toast==='function') toast('✓ Compra guardada correctamente ('+estado+'): '+dinero(total));
+      if(typeof loadCaches==='function') await loadCaches(true);
+      if(typeof renderCompras==='function') renderCompras();
+    }catch(e){
+      var online = (typeof navigator==='undefined') ? true : navigator.onLine;
+      var msg=(e && e.message) ? e.message : String(e||'Error desconocido');
+      if(typeof toast==='function'){
+        if(!online) toast('Sin conexión. La compra NO se guardó; queda en pantalla para reintentar cuando vuelva Internet.','err');
+        else toast('Error al guardar compra: '+msg+'. La compra sigue en pantalla y no se perdió.','err');
+      }
+      console.warn('registrar_compra_atomica error:',e);
+    }finally{
+      guardandoCompra=false;
+      setBotonGuardando(false);
+    }
+  };
+
+  window.finalizarCompra.__bgCompraAtomicaV1=true;
+})();
+
+</script>
 </body>
 </html>
