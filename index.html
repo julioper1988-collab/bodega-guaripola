@@ -6108,7 +6108,18 @@ initMobileShell();
 
   window.obtenerGastosCaja = async function(fecha, cajaId){
     try{
-      let q=sb.from('bodega_caja_gastos').select('*').order('created_at',{ascending:false});
+      let q=sb.from('bodega_caja_gastos').select('*').eq('tipo','gasto_vario').order('created_at',{ascending:false});
+      if(cajaId) q=q.eq('caja_id',cajaId); else q=q.eq('fecha',fecha);
+      const {data,error}=await q;
+      if(error) return {items:[],total:0,error};
+      const items=data||[];
+      return {items,total:items.reduce((s,g)=>s+(Number(g.monto)||0),0),error:null};
+    }catch(e){return {items:[],total:0,error:e};}
+  };
+
+  window.obtenerIngresosCaja = async function(fecha, cajaId){
+    try{
+      let q=sb.from('bodega_caja_gastos').select('*').eq('tipo','ingreso_vario').order('created_at',{ascending:false});
       if(cajaId) q=q.eq('caja_id',cajaId); else q=q.eq('fecha',fecha);
       const {data,error}=await q;
       if(error) return {items:[],total:0,error};
@@ -6198,7 +6209,29 @@ initMobileShell();
     </div>`;
   }
 
-  function cajaCierreTurnoHTML(caja, ventas, esperado, gastosTotal){
+  function cajaIngresosTurnoHTML(caja, ingresos){
+    const cerrado=caja.estado==='cerrada';
+    const rows=(ingresos.items||[]).map(g=>`<tr>
+      <td>${escapeHtml(g.descripcion||'Ingreso')}</td>
+      <td style="font-weight:600;color:var(--green)">${fmtGs(g.monto)}</td>
+      <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
+      <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarIngresoCajaTurno('${g.id}')">🗑</button>`}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin ingresos varios cargados</td></tr>`;
+    return `<div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Ingresos varios del turno</h3><span class="badge">Total: ${fmtGs(ingresos.total||0)}</span></div>
+      <div style="padding:14px">
+        ${ingresos.error?`<div class="alert alert-error">No se pudo leer bodega_caja_gastos. Ejecutá el SQL de gastos.</div>`:''}
+        ${cerrado?`<div class="alert alert-warning">Caja cerrada: los ingresos quedan guardados en el historial.</div>`:`<div class="form-grid" style="align-items:end">
+          <div class="form-group" style="grid-column:span 2"><label>Descripción</label><input id="ci-ing-desc" placeholder="Ej: préstamo, devolución, aporte"></div>
+          <div class="form-group"><label>Monto</label><input id="ci-ing-monto" type="number" value="0"></div>
+          <button class="btn btn-primary" onclick="agregarIngresoCajaTurno('${caja.id}','${caja.fecha}')">+ Agregar ingreso</button>
+        </div>`}
+      </div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Descripción</th><th>Monto</th><th>Hora</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }
+
+  function cajaCierreTurnoHTML(caja, ventas, esperado, gastosTotal, ingresosTotal){
     const cerrado=caja.estado==='cerrada';
     const vals=cerrado?(caja.denominaciones_cierre||{}):{};
     const difGuardada=cerrado?Number(caja.diferencia||0):null;
@@ -6241,6 +6274,7 @@ initMobileShell();
           <input id="ci-credito" type="number" value="${caja.credito_contado||ventas.credito}" oninput="actualizarTotalConteo('ci')">
         </div>
         <div class="form-group"><label>Gastos varios</label><input type="number" value="${gastosTotal}" disabled></div>
+        <div class="form-group"><label>Ingresos varios</label><input type="number" value="${ingresosTotal||0}" disabled></div>
         <div class="form-group"><label>Usuario cierre</label><input id="ci-usuario" value="${escapeHtml(caja.usuario_cierre||'')}" placeholder="Ej: Julio, cajera"></div>
       </div>
       <div class="form-group" style="margin-top:12px"><label>Notas de cierre</label><textarea id="ci-notas" rows="2">${escapeHtml(caja.notas_cierre||'')}</textarea></div>
@@ -6349,11 +6383,12 @@ initMobileShell();
     const cerrada=caja.estado==='cerrada' && !cajaEditId;
     const ventas=await resumenVentasCaja(caja);
     const gastos=await obtenerGastosCaja(caja.fecha,caja.id);
+    const ingresos=await obtenerIngresosCaja(caja.fecha,caja.id);
     const huerfanas = caja.estado==='abierta' ? await obtenerVentasFueraDeTurno(caja) : {items:[],total:0};
     const apertura=Number(caja.apertura_efectivo)||0;
-    const esperado=apertura+ventas.efectivo-gastos.total;
-    // Total esperado = apertura + cobrado real (sin fiado) - gastos
-    window.__cajaEsperadoTotal=Math.round(apertura+ventas.total_cobrado-gastos.total);
+    const esperado=apertura+ventas.efectivo-gastos.total+ingresos.total;
+    // Total esperado = apertura + cobrado real (sin fiado) - gastos + ingresos varios
+    window.__cajaEsperadoTotal=Math.round(apertura+ventas.total_cobrado-gastos.total+ingresos.total);
     const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
       ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -6368,7 +6403,8 @@ initMobileShell();
         <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
         <div class="stat-card"><div class="label">Ventas efectivo del turno</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas</div></div>
         <div class="stat-card"><div class="label">Gastos varios</div><div class="value" style="color:var(--red)">${fmtGs(gastos.total)}</div></div>
-        <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos</div></div>
+        <div class="stat-card"><div class="label">Ingresos varios</div><div class="value" style="color:var(--green)">${fmtGs(ingresos.total)}</div></div>
+        <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos + ingresos</div></div>
         ${dif!==null?`<div class="stat-card"><div class="label">Diferencia</div><div class="value" style="color:${dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)'}">${fmtGs(dif)}</div></div>`:''}
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -6387,8 +6423,9 @@ initMobileShell();
       </div>
       ${cajaVentasHuerfanasHTML(caja,huerfanas)}
       ${cajaGastosTurnoHTML(caja,gastos)}
+      ${cajaIngresosTurnoHTML(caja,ingresos)}
       ${cajaEditAperturaHTML(caja)}
-      ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total)}`;
+      ${cajaCierreTurnoHTML(caja,ventas,esperado,gastos.total,ingresos.total)}`;
     setTimeout(()=>{actualizarTotalConteo('ci');},50);
   };
 
@@ -6423,7 +6460,7 @@ initMobileShell();
     const monto=moneyVal2('cg-monto');
     if(!descripcion){toast('Describí el gasto','err');return;}
     if(monto<=0){toast('Monto inválido','err');return;}
-    const {error}=await sb.from('bodega_caja_gastos').insert({caja_id:cajaId,fecha,descripcion,monto});
+    const {error}=await sb.from('bodega_caja_gastos').insert({caja_id:cajaId,fecha,descripcion,monto,tipo:'gasto_vario'});
     if(error){toast('Error guardando gasto: '+error.message,'err');return;}
     await recalcularCajaTurno(cajaId);
     toast('Gasto agregado');renderCaja();
@@ -6439,6 +6476,27 @@ initMobileShell();
     toast('Gasto borrado');renderCaja();
   };
 
+  window.agregarIngresoCajaTurno = async function(cajaId,fecha){
+    const descripcion=(gs('ci-ing-desc')?.value||'').trim();
+    const monto=moneyVal2('ci-ing-monto');
+    if(!descripcion){toast('Describí el ingreso','err');return;}
+    if(monto<=0){toast('Monto inválido','err');return;}
+    const {error}=await sb.from('bodega_caja_gastos').insert({caja_id:cajaId,fecha,descripcion,monto,tipo:'ingreso_vario'});
+    if(error){toast('Error guardando ingreso: '+error.message,'err');return;}
+    await recalcularCajaTurno(cajaId);
+    toast('Ingreso agregado');renderCaja();
+  };
+
+  window.borrarIngresoCajaTurno = async function(id){
+    if(!(await bgConfirm('¿Borrar este ingreso de caja?',{ title:'Borrar ingreso', confirmText:'Borrar', variant:'danger' })))return;
+    let cajaId=null;
+    try{const {data}=await sb.from('bodega_caja_gastos').select('caja_id').eq('id',id).single();cajaId=data?.caja_id||null;}catch(e){_swallow(e)}
+    const {error}=await sb.from('bodega_caja_gastos').delete().eq('id',id);
+    if(error){toast('Error: '+error.message,'err');return;}
+    if(cajaId) await recalcularCajaTurno(cajaId);
+    toast('Ingreso borrado');renderCaja();
+  };
+
   window.cerrarCajaTurno = async function(id,esperadoFinal){
     const c=leerConteo('ci');
     const qrContado=moneyVal2('ci-qr');
@@ -6450,6 +6508,7 @@ initMobileShell();
     // Diferencia = total contado vs total esperado (apertura + cobrado - gastos)
     const diferencia=totalContado-(window.__cajaEsperadoTotal||esperadoFinal);
     const gastos=await obtenerGastosCaja('',id);
+    const ingresos=await obtenerIngresosCaja('',id);
     const obj={
       estado:'cerrada',
       denominaciones_cierre:c.denoms,
@@ -6460,6 +6519,7 @@ initMobileShell();
       credito_contado:creditoContado,
       total_contado:totalContado,
       gastos_caja:gastos.total||0,
+      ingresos_caja:ingresos.total||0,
       diferencia,
       notas_cierre:gs('ci-notas')?.value||null,
       usuario_cierre:gs('ci-usuario')?.value||null,
@@ -6477,9 +6537,10 @@ initMobileShell();
       const caja=await obtenerCajaPorId(id); if(!caja) return;
       const ventas=await resumenVentasCaja(caja);
       const gastos=await obtenerGastosCaja(caja.fecha,id);
-      const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
+      const ingresos=await obtenerIngresosCaja(caja.fecha,id);
+      const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
       const diferencia=(Number(caja.efectivo_contado)||0)-esperado;
-      await sb.from('bodega_caja').update({gastos_caja:gastos.total||0,diferencia,updated_at:new Date().toISOString()}).eq('id',id);
+      await sb.from('bodega_caja').update({gastos_caja:gastos.total||0,ingresos_caja:ingresos.total||0,diferencia,updated_at:new Date().toISOString()}).eq('id',id);
     }catch(e){console.warn('No se pudo recalcular caja', e.message);}
   }
 
@@ -6538,11 +6599,13 @@ initMobileShell();
     if(!caja){toast('No encontré la caja','err');return;}
     const ventas=await resumenVentasCaja(caja);
     const gastos=await obtenerGastosCaja(caja.fecha,id);
+    const ingresos=await obtenerIngresosCaja(caja.fecha,id);
     const den=caja.denominaciones_cierre||{};
     const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
     const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
-    const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const irow=(ingresos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin ingresos</td></tr>';
+    const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
