@@ -4166,6 +4166,13 @@ function actualizarTotalConteo(prefix){
       descuadreTxt.style.color=color;
       descuadreTxt.textContent=dif===0?'✅ Cuadra perfecto':dif>0?`⚠️ Sobran ${fmtGs(Math.abs(dif))}`:`❌ Faltan ${fmtGs(Math.abs(dif))}`;
     }
+    const ventaRealEl=gs('ci-venta-real-live');
+    if(ventaRealEl){
+      const apertura=window.__cajaAperturaEfectivo||0;
+      const gastosT=window.__cajaGastosTotal||0;
+      const ingresosT=window.__cajaIngresosTotal||0;
+      ventaRealEl.textContent=fmtGs(total+gastosT-apertura-ingresosT);
+    }
   }
 }
 // Enter navega al siguiente campo de denominación
@@ -6252,6 +6259,9 @@ initMobileShell();
             <div style="font-size:22px;font-weight:900" id="ci-descuadre-live">${cerrado?`<span style="color:${difGuardada===0?'var(--green)':difGuardada>0?'var(--amber)':'var(--red)'}">${difGuardada>0?'+':''}${fmtGs(difGuardada)}</span>`:'<span style="color:var(--text2)">−</span>'}</div>
             <div style="font-size:11px;font-weight:600" id="ci-descuadre-txt">${cerrado?(difGuardada===0?'✅ Cuadra perfecto':difGuardada>0?'⚠️ Sobra efectivo':'❌ Falta efectivo'):'Contá el efectivo'}</div>
           </div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Venta efectivo real</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text)" id="ci-venta-real-live">${cerrado?fmtGs((Number(caja.efectivo_contado)||0)+gastosTotal-(Number(caja.apertura_efectivo)||0)-(ingresosTotal||0)):'−'}</div>
+            <div style="font-size:11px;color:var(--text2)">contado + gastos − apertura − ingresos</div></div>
         </div>
       </div>
 
@@ -6389,6 +6399,9 @@ initMobileShell();
     const esperado=apertura+ventas.efectivo-gastos.total+ingresos.total;
     // Total esperado = apertura + cobrado real (sin fiado) - gastos + ingresos varios
     window.__cajaEsperadoTotal=Math.round(apertura+ventas.total_cobrado-gastos.total+ingresos.total);
+    window.__cajaAperturaEfectivo=apertura;
+    window.__cajaGastosTotal=gastos.total||0;
+    window.__cajaIngresosTotal=ingresos.total||0;
     const dif=caja.estado==='cerrada'?Number(caja.diferencia||0):null;
     gs('content').innerHTML=`${cajaTabsTurnoHTML('actual')}
       ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -6601,11 +6614,14 @@ initMobileShell();
     const gastos=await obtenerGastosCaja(caja.fecha,id);
     const ingresos=await obtenerIngresosCaja(caja.fecha,id);
     const den=caja.denominaciones_cierre||{};
-    const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
+    const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('')
+      +`<tr style="font-weight:700"><td colspan="2">Total efectivo contado</td><td>${fmtGs(caja.efectivo_contado)}</td></tr>`;
     const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
     const irow=(ingresos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin ingresos</td></tr>';
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const ventaEfectivoReal=(Number(caja.efectivo_contado)||0)+(gastos.total||0)-(Number(caja.apertura_efectivo)||0)-(ingresos.total||0);
+    const totalGeneralContado=Number(caja.total_contado)||(Number(caja.efectivo_contado||0)+Number(caja.qr_contado||0)+Number(caja.transferencia_contado||0)+Number(caja.debito_contado||0)+Number(caja.credito_contado||0));
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Venta efectivo real (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
