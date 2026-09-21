@@ -6196,21 +6196,23 @@ initMobileShell();
 
   function cajaGastosTurnoHTML(caja, gastos){
     const cerrado=caja.estado==='cerrada';
+    const puedeEditar=!cerrado || window.cajaEditId===caja.id;
     const rows=(gastos.items||[]).map(g=>`<tr>
       <td>${escapeHtml(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
-      <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`}</td>
+      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar gasto" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`:'-'}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header"><h3>Gastos varios del turno</h3><span class="badge">Total: ${fmtGs(gastos.total||0)}</span></div>
       <div style="padding:14px">
         ${gastos.error?`<div class="alert alert-error">No se pudo leer bodega_caja_gastos. Ejecutá el SQL de gastos.</div>`:''}
-        ${cerrado?`<div class="alert alert-warning">Caja cerrada: los gastos quedan guardados en el historial.</div>`:`<div class="form-grid" style="align-items:end">
+        ${cerrado?`<div class="alert alert-warning">${puedeEditar?'Editando arqueo cerrado: al agregar o confirmar un borrado, el cambio se guarda inmediatamente y se recalculan los importes.':'Caja cerrada: los gastos quedan guardados en el historial.'}</div>`:''}
+        ${puedeEditar?`<div class="form-grid" style="align-items:end">
           <div class="form-group" style="grid-column:span 2"><label>Descripción</label><input id="cg-desc" placeholder="Ej: hielo, flete, merienda, cambio entregado"></div>
           <div class="form-group"><label>Monto</label><input id="cg-monto" type="number" value="0"></div>
           <button class="btn btn-primary" onclick="agregarGastoCajaTurno('${caja.id}','${caja.fecha}')">+ Agregar gasto</button>
-        </div>`}
+        </div>`:''}
       </div>
       <div style="overflow-x:auto"><table><thead><tr><th>Descripción</th><th>Monto</th><th>Hora</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>`;
@@ -6218,21 +6220,23 @@ initMobileShell();
 
   function cajaIngresosTurnoHTML(caja, ingresos){
     const cerrado=caja.estado==='cerrada';
+    const puedeEditar=!cerrado || window.cajaEditId===caja.id;
     const rows=(ingresos.items||[]).map(g=>`<tr>
       <td>${escapeHtml(g.descripcion||'Ingreso')}</td>
       <td style="font-weight:600;color:var(--green)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleString('es-PY')}</td>
-      <td>${cerrado?'-':`<button class="btn btn-danger btn-sm" onclick="borrarIngresoCajaTurno('${g.id}')">🗑</button>`}</td>
+      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar ingreso" onclick="borrarIngresoCajaTurno('${g.id}')">🗑</button>`:'-'}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin ingresos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header"><h3>Ingresos varios del turno</h3><span class="badge">Total: ${fmtGs(ingresos.total||0)}</span></div>
       <div style="padding:14px">
         ${ingresos.error?`<div class="alert alert-error">No se pudo leer bodega_caja_gastos. Ejecutá el SQL de gastos.</div>`:''}
-        ${cerrado?`<div class="alert alert-warning">Caja cerrada: los ingresos quedan guardados en el historial.</div>`:`<div class="form-grid" style="align-items:end">
+        ${cerrado?`<div class="alert alert-warning">${puedeEditar?'Editando arqueo cerrado: al agregar o confirmar un borrado, el cambio se guarda inmediatamente y se recalculan los importes.':'Caja cerrada: los ingresos quedan guardados en el historial.'}</div>`:''}
+        ${puedeEditar?`<div class="form-grid" style="align-items:end">
           <div class="form-group" style="grid-column:span 2"><label>Descripción</label><input id="ci-ing-desc" placeholder="Ej: préstamo, devolución, aporte"></div>
           <div class="form-group"><label>Monto</label><input id="ci-ing-monto" type="number" value="0"></div>
           <button class="btn btn-primary" onclick="agregarIngresoCajaTurno('${caja.id}','${caja.fecha}')">+ Agregar ingreso</button>
-        </div>`}
+        </div>`:''}
       </div>
       <div style="overflow-x:auto"><table><thead><tr><th>Descripción</th><th>Monto</th><th>Hora</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>`;
