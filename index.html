@@ -6072,12 +6072,12 @@ initMobileShell();
   }
 
   async function resumenVentasCaja(caja){
-    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:0};
+    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:0,fiadosDetalle:[]};
     if(!caja?.id) return r;
     // Cada jornada incluye todas las ventas vinculadas al arqueo, incluso al día siguiente.
     for(let desde=0;;desde+=500){
       const {data,error}=await sb.from('bodega_ventas')
-        .select('*,bodega_fiados(monto_total)').eq('caja_id',caja.id)
+        .select('*,bodega_fiados(monto_total,saldo,cliente_id,cliente_nombre),bodega_ventas_detalle(*,bodega_productos(nombre))').eq('caja_id',caja.id)
         .order('id').range(desde,desde+499);
       if(error) throw new Error('No se pudieron leer las ventas de este arqueo: '+error.message);
       for(const v of data||[]){
@@ -6086,6 +6086,19 @@ initMobileShell();
         const original=(v.bodega_fiados||[]).reduce((s,f)=>s+(Number(f.monto_total)||0),0);
         const fiado=m==='fiado'?t:Math.min(t,Math.max(0,original,m==='parcial'?t-(Number(v.monto_efectivo)||0):0));
         const cobrado=t-fiado;
+        if(fiado>0){
+          const deudas=v.bodega_fiados||[];
+          const saldoConocido=deudas.length>0 && deudas.every(f=>f.saldo!==null && f.saldo!==undefined);
+          const cliente=deudas.find(f=>f.cliente_id)||deudas[0]||{};
+          r.fiadosDetalle.push({
+            ventaId:v.id,numero:v.numero_venta||v.id,
+            clienteId:cliente.cliente_id||v.cliente_id||null,
+            clienteNombre:cliente.cliente_nombre||v.cliente_nombre||'Cliente sin identificar',
+            total:t,cobrado,fiado,descuento:Number(v.descuento)||0,
+            saldo:saldoConocido?deudas.reduce((s,f)=>s+(Number(f.saldo)||0),0):null,
+            productos:v.bodega_ventas_detalle||[]
+          });
+        }
         r.cantidad++;r.total+=t;r.fiado+=fiado;r.total_cobrado+=cobrado;
         if(m==='efectivo'||m==='parcial')r.efectivo+=cobrado;
         else if(['transferencia','qr','debito','credito'].includes(m))r[m]+=cobrado;
@@ -6098,6 +6111,33 @@ initMobileShell();
       if((data||[]).length<500)break;
     }
     return r;
+  }
+
+  function detalleFiadosArqueoHTML(ventas){
+    const grupos=new Map();
+    for(const v of ventas.fiadosDetalle||[]){
+      const key=v.clienteId?'id:'+v.clienteId:(v.clienteNombre==='Cliente sin identificar'?'venta:'+v.ventaId:'nombre:'+v.clienteNombre);
+      if(!grupos.has(key))grupos.set(key,{nombre:v.clienteNombre,ventas:[],fiado:0,saldo:0,incompleto:false});
+      const g=grupos.get(key);g.ventas.push(v);g.fiado+=v.fiado;
+      if(v.saldo===null)g.incompleto=true;else g.saldo+=v.saldo;
+    }
+    const bloques=Array.from(grupos.values()).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(g=>{
+      const ventasHTML=g.ventas.map(v=>{
+        const productos=v.productos.map(p=>{
+          const cantidad=Number(p.cantidad)||0;
+          const packs=p.es_embalaje && Number(p.uds_por_embalaje)>0;
+          const presentacion=packs?' ('+(p.cantidad_embalajes??cantidad/Number(p.uds_por_embalaje))+' embalajes × '+Number(p.uds_por_embalaje)+')':'';
+          return `<tr><td>${escapeHtml(p.bodega_productos?.nombre||'Producto sin nombre')}</td><td>${cantidad} unidades${escapeHtml(presentacion)}</td><td>${p.subtotal===null||p.subtotal===undefined?'No disponible':fmtGs(p.subtotal)}</td></tr>`;
+        }).join('')||'<tr><td colspan="3">Sin detalle de productos registrado para esta venta.</td></tr>';
+        return `<div style="margin:12px 0;break-inside:avoid"><p><strong>Venta ${escapeHtml(String(v.numero))}</strong> · Total: ${fmtGs(v.total)} · Cobrado al vender: ${fmtGs(v.cobrado)} · Fiado original: <strong>${fmtGs(v.fiado)}</strong> · Pendiente actual: ${v.saldo===null?'No disponible':fmtGs(v.saldo)}</p>
+          <div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>Producto</th><th>Cantidad</th><th>Importe de productos</th></tr></thead><tbody>${productos}</tbody></table></div>
+          ${v.descuento?'<p>Descuento de la venta: '+fmtGs(v.descuento)+'</p>':''}
+          ${v.cobrado>0?'<p style="font-size:12px">Pago parcial: el fiado corresponde al conjunto de esta venta; no se atribuye la deuda a un producto específico.</p>':''}
+          ${v.saldo===null?'<p style="font-size:12px">No se pudo determinar el saldo actual con los registros de fiado disponibles.</p>':''}</div>`;
+      }).join('');
+      return `<section style="margin:16px 0;padding:12px;border:1px solid var(--border,#ccc);border-radius:8px"><h4 style="margin:0 0 8px">${escapeHtml(g.nombre)}</h4><p>Fiado original: <strong>${fmtGs(g.fiado)}</strong> · Pendiente actual de estas ventas: <strong>${g.incompleto?'No disponible (datos incompletos)':fmtGs(g.saldo)}</strong></p>${ventasHTML}</section>`;
+    }).join('');
+    return `<div class="card" style="padding:16px;margin-bottom:16px"><h3>Fiados por cliente y producto</h3><p style="font-size:12px">Fuente: Sistema Bodega · Ventas de este arqueo. Saldos actuales al consultar: ${new Date().toLocaleString('es-PY')}. Los importes de productos son los registrados antes del descuento general de la venta. El saldo mostrado corresponde solo a estas ventas, no a toda la deuda del cliente.</p>${bloques||'<p>No hay fiados registrados en las ventas vinculadas a este arqueo. Esto no confirma que no hayan existido.</p>'}<p><strong>Total originalmente fiado: ${fmtGs(ventas.fiado)}</strong></p></div>`;
   }
 
   function resumenVentaArqueoHTML(caja,ventas){
@@ -6416,7 +6456,7 @@ initMobileShell();
           <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
         </div>
       </div>`:''}
-      ${resumenVentaArqueoHTML(caja,ventas)}
+      ${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja.estado==='abierta'?'var(--green)':'var(--amber)'}">${caja.estado}</div><div class="sub">${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}</div></div>
         <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
@@ -6629,7 +6669,7 @@ initMobileShell();
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
     const ventaEfectivoReal=(Number(caja.efectivo_contado)||0)+(gastos.total||0)-(Number(caja.apertura_efectivo)||0)-(ingresos.total||0);
     const totalGeneralContado=Number(caja.total_contado)||(Number(caja.efectivo_contado||0)+Number(caja.qr_contado||0)+Number(caja.transferencia_contado||0)+Number(caja.debito_contado||0)+Number(caja.credito_contado||0));
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
