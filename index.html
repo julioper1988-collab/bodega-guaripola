@@ -14,7 +14,7 @@
 </script>
 <title>Bodega Guaripola</title>
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#0f1117">
+<meta name="theme-color" content="#1f2534">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1720,7 +1720,7 @@ async function loadCaches(force=false){
   const [cats,provs,prods,embs]=await Promise.all([
     sb.from('bodega_categorias').select('*').order('nombre'),
     sb.from('bodega_proveedores').select('id,nombre').eq('activo',true).order('nombre'),
-    sb.from('bodega_productos').select('id,nombre,codigo_barra,stock,precio_venta,precio_mayorista,precio_costo,categoria_id,stock_minimo,unidad,proveedor_id,notas').eq('activo',true).order('nombre'),
+    sb.from('bodega_productos').select('id,nombre,codigo_barra,stock,precio_venta,precio_mayorista,precio_costo,categoria_id,stock_minimo,unidad,proveedor_id,notas,imagen_url').eq('activo',true).order('nombre'),
     sb.from('bodega_embalajes').select('*').eq('activo',true)
   ]);
   catCache=cats.data||[];provCache=provs.data||[];prodCache=prods.data||[];
@@ -10892,7 +10892,7 @@ async function revertirStockCompraReal(compraId, detalles){
     var btn=document.getElementById('bg-mobile-menu-btn');if(btn&&!btn.__bgMobileOk){btn.__bgMobileOk=true;btn.addEventListener('click',function(e){e.preventDefault();document.body.classList.toggle('bg-mobile-drawer-open');});}
     var ovl=document.getElementById('bg-mobile-overlay');if(ovl&&!ovl.__bgMobileOk){ovl.__bgMobileOk=true;ovl.addEventListener('click',function(){document.body.classList.remove('bg-mobile-drawer-open');});}
   }
-  function updateTitle(){ensureShell();var cur=document.getElementById('bg-mobile-current');if(cur)cur.textContent=pageTitle();var st=document.getElementById('bg-mobile-status');if(st){var txt=document.body.innerText||'';st.textContent=txt.indexOf('Conectado')>=0?'Conectado':'●';}}
+  function updateTitle(){ensureShell();var cur=document.getElementById('bg-mobile-current');if(cur)cur.textContent=pageTitle();var st=document.getElementById('bg-mobile-status');if(st){var txt=((document.getElementById('db-badge')||{}).textContent||'')+' '+(document.body.innerText||'');st.textContent=txt.indexOf('Conectado')>=0?'Conectado':'●';}}
   function wireMenu(){var menu=document.getElementById('macos-main-menu');if(!menu)return;menu.querySelectorAll('a[data-page]').forEach(function(a){if(a.__bgMobileClose)return;a.__bgMobileClose=true;a.addEventListener('click',function(){setTimeout(function(){document.body.classList.remove('bg-mobile-drawer-open');updateTitle();},80);});});}
   function wrapGoTo(){if(typeof window.goTo==='function'&&!window.goTo.__bgMobileUsableWrapped){var old=window.goTo;var wrapped=function(){var res=old.apply(this,arguments);Promise.resolve(res).then(function(){setTimeout(function(){updateTitle();wireMenu();},80);});return res;};for(var k in old){try{wrapped[k]=old[k];}catch(e){_swallow(e)}}wrapped.__bgMobileUsableWrapped=true;window.goTo=wrapped;}}
   function boot(){ensureShell();wireMenu();wrapGoTo();updateTitle();if(!isMobile())document.body.classList.remove('bg-mobile-drawer-open');}
@@ -14093,7 +14093,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   function apply(t){
     document.body.classList.toggle('theme-light', t==='light');
     var m=document.querySelector('meta[name="theme-color"]');
-    if(m) m.setAttribute('content', t==='light'?'#f4f6fa':'#0f1117');
+    if(m) m.setAttribute('content', t==='light'?'#f4f6fa':'#1f2534');
     var b=document.getElementById('bg-theme-btn');
     if(b) b.innerHTML=(t==='light'?'🌙':'☀️')+'<span class="lbl">'+(t==='light'?'Tema oscuro':'Tema claro')+'</span>';
   }
@@ -14836,5 +14836,756 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 })();
 
 </script>
+<!-- ══ PARCHE 6: MEJORAS DE VENTAS (vista simple, billetes, mixto, favoritos, espera, cliente, repetir/anular, stock) ══ -->
+<style id="bg-p5-css">
+#bg5-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#bg5-toolbar .btn{min-height:36px}
+#bg5-billetes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+#bg5-billetes button{flex:1 1 auto;min-height:38px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+#bg5-billetes button:active{transform:scale(.97)}
+#bg5-billetes .bg5-exacto{background:var(--accent);color:#fff;border-color:var(--accent)}
+#bg5-mix-status{margin-top:8px;padding:8px 10px;border-radius:8px;font-weight:700;font-size:13px;background:var(--bg3)}
+#bg5-favs{grid-column:1/-1;display:flex;gap:6px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
+#bg5-favs::-webkit-scrollbar{display:none}
+#bg5-favs .bg-tv-chip{border-color:var(--amber)}
+.bg5-star{background:none;border:none;cursor:pointer;font-size:16px;padding:0 4px;color:var(--amber);vertical-align:middle}
+.bg5-stock{display:block;font-size:11px;font-weight:700;margin-top:2px}
+#bg5-cli-search{margin-bottom:6px}
+/* Vista simplificada */
+.bg5-simple .bg5-hide{display:none!important}
+.bg5-simple #venta-search-row label{display:none}
+.bg5-simple #venta-search-row{align-items:end}
+.bg5-simple #v-search{font-size:16px;padding:12px 14px}
+.bg5-simple #v-qty{max-width:80px}
+.bg5-simple .pay-grid{grid-template-columns:repeat(4,1fr)!important;gap:6px}
+.bg5-simple .pay-btn{min-height:42px!important;padding:8px 4px!important;font-size:12px!important;font-weight:700}
+.bg5-simple .pay-btn svg{display:none}
+.bg5-simple #mixto-fields>div[style*="font-size:11px"]{display:none}
+.bg5-simple[data-pay="qr"] #bg5-imp-group,.bg5-simple[data-pay="debito"] #bg5-imp-group,
+.bg5-simple[data-pay="credito"] #bg5-imp-group,.bg5-simple[data-pay="fiado"] #bg5-imp-group,
+.bg5-simple[data-pay="mixto"] #bg5-imp-group{display:none!important}
+.bg5-simple[data-pay="transferencia"] #bg5-billetes{display:none}
+.bg5-simple .vuelto-display{font-size:20px;font-weight:800;margin-top:6px}
+/* ── Modelo D: solo móvil (PC sin cambios) ── */
+#bg5-back{display:none}
+@media (max-width:900px){
+  #venta-layout.bg5-simple #venta-left{padding-bottom:96px!important}
+  #venta-layout.bg5-simple #venta-table-wrap{max-height:none!important;overflow:visible!important}
+  #venta-layout.bg5-simple #venta-table{min-width:0!important;width:100%;border-collapse:separate}
+  #venta-layout.bg5-simple #venta-table thead{display:none}
+  #venta-layout.bg5-simple #venta-tbody tr{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"nom nom rm" "qty pre sub";gap:8px 10px;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  #venta-layout.bg5-simple #venta-tbody td{padding:0!important;border:0!important;text-align:left!important;width:auto!important}
+  #venta-layout.bg5-simple #venta-tbody td[colspan]{grid-column:1/-1;text-align:center!important;padding:24px 8px!important}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(1){grid-area:nom;font-weight:700;min-width:0}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(2){grid-area:qty}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(3){grid-area:pre}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(4){grid-area:sub;text-align:right!important;font-size:16px}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(5){grid-area:rm;align-self:start}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(2) button{width:38px!important;height:38px!important;font-size:18px;font-weight:700}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(2) input{width:52px!important}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(3) input{width:100%!important;max-width:120px}
+  /* Hoja de cobro a pantalla completa */
+  #venta-layout.bg5-simple #venta-right.vr-open{top:0!important;max-height:none!important;height:100dvh!important;border-radius:0!important;z-index:13000!important;transform:none!important;background:var(--bg)!important;padding-bottom:env(safe-area-inset-bottom,0px)}
+  #venta-layout.bg5-simple #venta-right.vr-open #vr-cobro-bar{display:none!important}
+  #venta-layout.bg5-simple #venta-right.vr-open #vr-detail{display:flex!important;flex-direction:column}
+  #venta-layout.bg5-simple #vr-detail .pos-total-section{order:-1}
+  #venta-layout.bg5-simple #bg5-back{display:block;order:-2;align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:700;font-size:15px;padding:14px 14px 4px;font-family:inherit;cursor:pointer}
+  #venta-layout.bg5-simple .pay-grid{grid-template-columns:repeat(4,1fr)!important}
+  #venta-layout.bg5-simple #vr-cobro-bar .cobrar-btn{background:var(--green);color:#06210f}
+  #venta-layout.bg5-simple #vr-cobro-bar .cobrar-btn{white-space:nowrap}
+  #venta-layout.bg5-simple .vr-items-mini{font-size:12px!important;white-space:nowrap}
+  #venta-layout.bg5-simple #venta-header .vtitle{display:none}
+  #venta-layout.bg5-simple #venta-header .vinfo{font-size:0;display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+  #venta-layout.bg5-simple #venta-header .vinfo .btn{padding:6px 12px!important;min-height:34px!important;font-size:13px!important}
+  #venta-layout.bg5-simple .autocomplete-wrap{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:8px;align-items:center;position:relative}
+  #venta-layout.bg5-simple .autocomplete-wrap #v-search{flex:1 1 0!important;min-width:0;width:auto!important}
+  #venta-layout.bg5-simple .autocomplete-wrap .scan-row{flex:0 0 auto!important;width:auto!important;margin:0!important}
+  #venta-layout.bg5-simple #btn-scan-venta{font-size:0!important;width:50px;min-height:48px}
+  #venta-layout.bg5-simple #btn-scan-venta::before{content:"📷";font-size:20px}
+  #venta-layout.bg5-simple #venta-search-row>.form-group:not(.autocomplete-wrap){display:none}
+  #venta-layout.bg5-simple #venta-search-row{grid-template-columns:1fr!important}
+}
+/* Tema oscuro suave (gris azulado): reemplaza el casi negro. El tema claro no cambia */
+body:not(.theme-light){
+  --bg:#1f2534; --bg2:#283044; --bg3:#232a3b; --bg4:#313a51;
+  --border:#3a4560; --border2:#47536f;
+  --text:#eef1f8; --text2:#a3acc4; --text3:#cbd2e3;
+  --accent:#5b8bff; --accent2:#4673ea;
+  --accent-bg:rgba(91,139,255,.16); --accent-glow:0 0 20px rgba(91,139,255,.22);
+  --shadow:0 2px 8px rgba(8,12,24,.25); --shadow-md:0 4px 20px rgba(8,12,24,.30); --shadow-lg:0 8px 40px rgba(8,12,24,.35);
+}
+body:not(.theme-light) #sidebar{background:#2a3247!important;border-bottom-color:rgba(255,255,255,.08)!important;box-shadow:0 1px 6px rgba(8,12,24,.3)!important}
+body:not(.theme-light) #bg-mobile-topbar{background:rgba(42,50,71,.97)!important}
+/* Arqueo: casillas del conteo de billetes en blanco con número oscuro (antes oscuro sobre oscuro) */
+input[onkeydown^="cajaDenomEnter"]{background:#fff!important;color:#111827!important;font-size:22px!important;font-weight:900!important;-webkit-text-fill-color:#111827}
+input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.45)!important}
+/* Fotos de productos */
+.bg5-thumb{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#fff;padding:2px;border:1px solid var(--border);flex:0 0 auto;vertical-align:middle;margin-right:8px}
+.ac-item .bg5-thumb{float:left;width:44px;height:44px}
+.bg-tv-chip .bg5-thumb{width:28px;height:28px;border-radius:6px;padding:1px;margin:-6px 6px -6px -6px}
+#bg5-foto-box{grid-column:1/-1;display:flex;gap:12px;align-items:center;padding:10px;border:1px dashed var(--border2);border-radius:10px}
+#bg5-foto-prev{width:96px;height:96px;border-radius:10px;object-fit:contain;background:#fff;border:1px solid var(--border)}
+#bg5-foto-box .bg5-foto-btns{display:flex;gap:6px;flex-wrap:wrap}
+/* ── Vista grilla de ventas (alternable con la lista) ── */
+#bg5-vista{display:inline-flex;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:3px;margin-left:auto}
+#bg5-vista button{border:0;background:none;color:var(--text2);font-weight:700;font-size:12px;padding:6px 10px;border-radius:7px;cursor:pointer;font-family:inherit}
+#bg5-vista button.on{background:var(--accent);color:#fff}
+#bg5-grid-panel{display:flex;flex-direction:column;gap:10px;padding:12px 16px;min-height:0;overflow:hidden}
+#bg5-cats{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:0 0 auto}
+#bg5-cats::-webkit-scrollbar{display:none}
+#bg5-cats button{flex:0 0 auto;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:9px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap}
+#bg5-cats button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#bg5-prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;align-content:start;overflow-y:auto;min-height:0;flex:1}
+.bg5-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 8px;cursor:pointer;font-family:inherit;color:var(--text);text-align:center;transition:border-color .12s,transform .08s}
+.bg5-tile:hover{border-color:var(--accent)}
+.bg5-tile:active{transform:scale(.97)}
+.bg5-tile.sin{opacity:.45}
+.bg5-tile .im{width:100%;aspect-ratio:1/1;max-height:96px;border-radius:9px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.bg5-tile .im img{width:100%;height:100%;object-fit:contain}
+.bg5-tile .ini{font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px}
+.bg5-tile .nm{font-size:12px;font-weight:600;line-height:1.25;max-height:2.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.bg5-tile .pr{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.bg5-tile .st{position:absolute;top:6px;right:6px;font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--amber);color:#111}
+.bg5-tile .st.cero{background:var(--red);color:#fff}
+.bg5-tile .qn{position:absolute;top:6px;left:6px;min-width:22px;height:22px;border-radius:999px;background:var(--green);color:#06210f;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 6px}
+#bg5-pag{display:flex;gap:6px;justify-content:center;flex:0 0 auto}
+#bg5-pag button{min-width:36px;height:34px;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
+#bg5-pag button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#bg5-pag button:disabled{opacity:.4;cursor:default}
+#bg5-cart-col{display:flex;flex-direction:column;min-height:0;background:var(--bg2);border-left:1px solid var(--border)}
+#bg5-cart-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);font-weight:800}
+#bg5-cart-head button{border:0;background:none;color:var(--text2);font-weight:700;cursor:pointer;font-family:inherit}
+#bg5-cart-foot{border-top:1px solid var(--border);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+#bg5-cart-foot .tot{display:flex;justify-content:space-between;align-items:baseline}
+#bg5-cart-foot .tot b{font-size:28px;font-weight:900;letter-spacing:-.8px;font-variant-numeric:tabular-nums}
+#bg5-cart-foot .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#bg5-cart-foot .row button{min-height:52px;border:1px solid var(--border);background:var(--bg3);color:var(--text);border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit}
+#bg5-cart-foot .cob{min-height:60px;border:0;border-radius:12px;background:var(--green);color:#06210f;font-size:20px;font-weight:900;cursor:pointer;font-family:inherit}
+#bg5-backdrop{position:fixed;inset:0;background:rgba(8,12,24,.55);z-index:880}
+@media (min-width:901px){
+  /* PC en 3 columnas: productos + buscador | carrito | cobro (siempre visible) */
+  #content > #venta-layout.bg5-grid{grid-template-columns:minmax(0,1fr) 380px!important;height:calc(100dvh - 96px)!important}
+  #venta-layout.bg5-grid #venta-left{display:grid!important;grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:auto minmax(0,1fr);border-right:0}
+  #venta-layout.bg5-grid #venta-header{grid-column:1;grid-row:1}
+  #venta-layout.bg5-grid #bg5-grid-panel{grid-column:1;grid-row:2}
+  #venta-layout.bg5-grid #bg5-cart-col{grid-column:2;grid-row:1/3}
+  #venta-layout.bg5-grid #bg5-cart-col #venta-table-wrap{flex:1;overflow-y:auto}
+  #venta-layout.bg5-grid #venta-table thead th:nth-child(3),#venta-layout.bg5-grid #venta-tbody td:nth-child(3){display:none}
+  #venta-layout.bg5-grid #venta-tbody td{padding:8px 8px!important;font-size:12px!important}
+  #venta-layout.bg5-grid #venta-tbody td .bg5-stock{font-size:10px}
+  #venta-layout.bg5-grid #bg5-cart-foot .row,#venta-layout.bg5-grid #bg5-cart-foot .cob{display:none}
+}
+@media (max-width:900px){
+  #venta-layout.bg5-grid #bg5-prods{grid-template-columns:repeat(3,1fr);gap:8px;overflow:visible}
+  #venta-layout.bg5-grid .bg5-tile{padding:8px 6px}
+  #venta-layout.bg5-grid .bg5-tile .im{max-height:none;aspect-ratio:4/3}
+  #venta-layout.bg5-grid .bg5-tile .ini{font-size:20px}
+  #venta-layout.bg5-grid .bg5-tile .nm{font-size:11px}
+  #venta-layout.bg5-grid .bg5-tile .pr{font-size:12px}
+  #venta-layout.bg5-grid #bg5-grid-panel{padding:10px 12px}
+  #venta-layout.bg5-grid #bg5-cart-col{border-left:0;background:transparent}
+  #venta-layout.bg5-grid #bg5-cart-foot{display:none}
+  #venta-layout.bg5-grid #bg5-cart-head{padding:8px 4px}
+  #bg5-vista{margin-left:0}
+}
+/* Barra de navegación inferior (celular) */
+#bg5-bottomnav{display:none}
+@media (max-width:900px){
+  #bg5-bottomnav{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:12500;background:var(--bg2);border-top:1px solid var(--border);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+  #bg5-bottomnav button{border:0;background:none;color:var(--text2);font-family:inherit;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:10px;cursor:pointer}
+  #bg5-bottomnav button span{font-size:20px;line-height:1}
+  #bg5-bottomnav button.on{color:#fff;background:var(--accent)}
+  body.bg5-has-nav #content{padding-bottom:76px!important}
+  body.bg5-has-nav #venta-right:not(.vr-open){bottom:64px!important}
+  body.bg5-has-nav #venta-layout.bg5-simple #venta-left{padding-bottom:170px!important}
+}
+/* Barra superior: sin ☰ ni "Ocultar módulos" (PC y móvil); quedan módulo, hora y estado */
+#topbar #mobile-menu-btn,#topbar #sidebar-toggle-btn{display:none!important}
+@media (max-width:900px){
+  #topbar #db-badge{display:none!important}
+  #topbar #page-title{display:none!important} /* el módulo ya se ve en la barra móvil */
+  #topbar #user-badge{font-size:12px!important;min-height:32px!important;padding:4px 10px!important;white-space:nowrap}
+}
+.bg5-hold-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
+</style>
+<script>
+(function(){
+  function n(v){ var x=parseFloat(String(v==null?'':v).replace(',','.')); return isFinite(x)?x:0; }
+  function gsx(id){ return document.getElementById(id); }
+  function esc(s){ return typeof escapeHtml==='function'?escapeHtml(s):String(s==null?'':s); }
+  function getJ(k,d){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+  function setJ(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+  function delK(k){ try{ localStorage.removeItem(k); }catch(e){} }
+  var K_HOLD='bg_ventas_espera', K_LAST='bg_ultima_venta', K_FAV='bg_fav_prods';
+
+  function subtotal(){ return (cart||[]).reduce(function(s,c){ return s+n(c.subtotalCalculado!=null?c.subtotalCalculado:(n(c.precio)*n(c.cantidad))); },0); }
+  function totalFinal(){ return Math.max(0, subtotal()-n(gsx('v-desc')&&gsx('v-desc').value)); }
+  var MIX_IDS=['v-efec','v-transf','v-qr','v-debito','v-credito-mix'];
+  function sumaMixto(){ return MIX_IDS.reduce(function(s,id){ return s+n(gsx(id)&&gsx(id).value); },0); }
+  function enVentas(){ return !!gsx('v-search'); }
+
+  /* ── 1) Billetes rápidos ─────────────────────────────────────── */
+  window.bg5Billete=function(v){
+    var imp=gsx('v-importe'); if(!imp) return;
+    if(v==='exacto') imp.value=Math.round(totalFinal());
+    else if(v==='clear') imp.value=0;
+    else imp.value=n(imp.value)+v;
+    if(selectedPay!=='efectivo' && selectedPay!=='parcial') selectPay('efectivo');
+    updateVTotals();
+  };
+  function injectBilletes(){
+    var imp=gsx('v-importe'); if(!imp || gsx('bg5-billetes')) return;
+    imp.setAttribute('inputmode','numeric');
+    var d=document.createElement('div'); d.id='bg5-billetes';
+    d.innerHTML='<button type="button" class="bg5-exacto" onclick="bg5Billete(\'exacto\')">Exacto</button>'+
+      [2000,5000,10000,20000,50000,100000].map(function(b){ return '<button type="button" onclick="bg5Billete('+b+')">+'+(b/1000)+'k</button>'; }).join('')+
+      '<button type="button" onclick="bg5Billete(\'clear\')">✕</button>';
+    var g=imp.closest('.form-group')||imp.parentElement; g.id='bg5-imp-group'; g.appendChild(d);
+  }
+
+  /* ── 2) Validación pago mixto ────────────────────────────────── */
+  function pintarMixto(){
+    var mix=gsx('mixto-fields'); if(!mix) return;
+    var st=gsx('bg5-mix-status');
+    if(!st){ st=document.createElement('div'); st.id='bg5-mix-status'; mix.appendChild(st); }
+    var tot=totalFinal(), asig=sumaMixto(), dif=asig-tot;
+    st.textContent = dif===0 ? '✓ Completo: '+fmtGs(asig)
+      : dif<0 ? 'Asignado '+fmtGs(asig)+' · Falta '+fmtGs(-dif)
+      : 'Asignado '+fmtGs(asig)+' · Sobra '+fmtGs(dif);
+    st.style.color = dif===0 ? 'var(--green)' : dif<0 ? 'var(--red)' : 'var(--amber)';
+  }
+  document.addEventListener('input',function(e){
+    var id=e.target&&e.target.id;
+    if(MIX_IDS.indexOf(id)>=0) pintarMixto();
+  },true);
+
+  /* ── 5) Sin descuento: se oculta la sección y queda en 0 ────── */
+  function ocultarDescuento(){
+    var d=gsx('v-desc'); if(!d) return;
+    var sec=d.closest('.section')||d.closest('.form-group'); if(!sec) return;
+    // Al editar una venta vieja con descuento se respeta y se muestra
+    if(window.__ventaEditandoId && n(d.value)>0){ sec.classList.remove('bg5-hide'); return; }
+    if(!window.__ventaEditandoId) d.value=0;
+    sec.classList.add('bg5-hide');
+  }
+
+  /* ── Vista simplificada ──────────────────────────────────────── */
+  function simplificar(){
+    var lay=gsx('venta-layout'); if(!lay) return;
+    lay.classList.add('bg5-simple');
+    lay.setAttribute('data-pay',selectedPay||'efectivo');
+    var s=gsx('v-search');
+    if(s && !s.dataset.bg5){ s.dataset.bg5='1'; s.placeholder='🔍 Buscar o escanear producto  (+5 = cantidad)'; }
+  }
+  var origSP=window.selectPay;
+  selectPay=window.selectPay=function(p){
+    var r=origSP.apply(this,arguments);
+    var lay=gsx('venta-layout'); if(lay) lay.setAttribute('data-pay',selectedPay||'efectivo');
+    // Móvil: transferencia completa el importe con el total
+    var imp=gsx('v-importe');
+    if(movil() && selectedPay==='transferencia' && imp && !n(imp.value)) { imp.value=Math.round(totalFinal()); updateVTotals(); }
+    return r;
+  };
+
+  /* ── Modelo D (móvil): COBRAR abre la hoja de cobro ──────────── */
+  function movil(){ return window.innerWidth<=900; }
+  window.bg5AbrirCobro=function(e){
+    if(e) e.stopPropagation();
+    if(!cart.length){ toast('No hay productos','err'); return; }
+    var vr=gsx('venta-right'); if(vr) vr.classList.add('vr-open');
+    if(vr) vr.scrollTop=0;
+    backdrop();
+  };
+  window.bg5CerrarCobro=function(){ var vr=gsx('venta-right'); if(vr) vr.classList.remove('vr-open'); backdrop(); };
+  function modeloD(){
+    var bar=gsx('vr-cobro-bar'), btn=bar&&bar.querySelector('.cobrar-btn');
+    if(btn && !btn.dataset.bg5){
+      btn.dataset.bg5='1';
+      btn.setAttribute('onclick','bg5AbrirCobro(event)');
+      if(/^\s*COBRAR\s*$/.test(btn.textContent)) btn.textContent='COBRAR →';
+    }
+    var det=gsx('vr-detail');
+    if(det && !gsx('bg5-back')){
+      var b=document.createElement('button');
+      b.id='bg5-back'; b.type='button'; b.textContent='← Volver al carrito';
+      b.setAttribute('onclick','bg5CerrarCobro()');
+      det.insertBefore(b,det.firstChild);
+    }
+  }
+
+  var origUVT=updateVTotals;
+  updateVTotals=window.updateVTotals=function(){
+    var r=origUVT.apply(this,arguments);
+    try{ if(selectedPay==='mixto') pintarMixto(); pintarPie(); }catch(e){}
+    return r;
+  };
+
+  /* ── 6) Cliente con autocompletar ────────────────────────────── */
+  function injectCliente(){
+    var box=gsx('v-cliente-box'); if(!box || gsx('bg5-cli-search')) return;
+    var inp=document.createElement('input');
+    inp.id='bg5-cli-search'; inp.setAttribute('list','bg5-cli-dl'); inp.autocomplete='off';
+    inp.placeholder='🔍 Buscar cliente por nombre o RUC...';
+    var dl=document.createElement('datalist'); dl.id='bg5-cli-dl';
+    dl.innerHTML=(clienteCache||[]).map(function(c){ return '<option value="'+esc(c.nombre)+'">'+esc(c.ruc||'')+'</option>'; }).join('');
+    inp.addEventListener('change',function(){
+      var q=String(inp.value||'').trim().toLowerCase(); if(!q) return;
+      var c=(clienteCache||[]).find(function(x){ return String(x.nombre||'').toLowerCase()===q || String(x.ruc||'').toLowerCase()===q; });
+      var sel=gsx('v-cliente-id');
+      if(c && sel){ sel.value=c.id; sel.dispatchEvent(new Event('change',{bubbles:true})); }
+      else if(typeof toast==='function') toast('Cliente no encontrado. Usá “+ Cliente” para crearlo.','err');
+    });
+    box.parentNode.insertBefore(inp,box);
+    box.parentNode.insertBefore(dl,box);
+  }
+
+  /* ── 3) Favoritos fijos (por dispositivo) ────────────────────── */
+  function favKey(p,e){ return String(p)+'|'+(e||''); }
+  window.bg5ToggleFav=function(i){
+    var c=cart[i]; if(!c) return;
+    var favs=getJ(K_FAV,[]), k=favKey(c.producto_id,c.embalaje_id);
+    var ix=favs.findIndex(function(f){ return favKey(f.p,f.e)===k; });
+    if(ix>=0) favs.splice(ix,1); else favs.push({p:c.producto_id,e:c.embalaje_id||null,nom:c.nombre});
+    setJ(K_FAV,favs.slice(0,20));
+    renderVentaTable(); pintarFavs();
+  };
+  window.bg5AddFav=function(i){ var f=getJ(K_FAV,[])[i]; if(f) addToVenta(f.p,f.e||null,1); };
+  function pintarFavs(){
+    var row=gsx('venta-search-row'); if(!row) return;
+    var favs=getJ(K_FAV,[]).filter(function(f){ return (prodCache||[]).some(function(p){ return p.id===f.p; }); });
+    var cont=gsx('bg5-favs');
+    if(!favs.length){ if(cont) cont.remove(); return; }
+    if(!cont){ cont=document.createElement('div'); cont.id='bg5-favs'; row.parentNode.insertBefore(cont,row.nextSibling); }
+    var all=getJ(K_FAV,[]);
+    cont.innerHTML=favs.map(function(f){
+      return '<button type="button" class="bg-tv-chip" onclick="bg5AddFav('+all.indexOf(all.find(function(x){return favKey(x.p,x.e)===favKey(f.p,f.e);}))+')">⭐ '+esc(f.nom)+'</button>';
+    }).join('');
+  }
+
+  /* ── 8) Stock por fila + estrella favorito ───────────────────── */
+  var origRVT=renderVentaTable;
+  renderVentaTable=window.renderVentaTable=function(){
+    var r=origRVT.apply(this,arguments);
+    try{
+      var tb=gsx('venta-tbody'); if(!tb || !cart.length) return r;
+      var favs=getJ(K_FAV,[]).map(function(f){ return favKey(f.p,f.e); });
+      Array.prototype.forEach.call(tb.children,function(tr,i){
+        var c=cart[i], td=tr.children[0]; if(!c||!td) return;
+        var prod=(prodCache||[]).find(function(p){ return p.id===c.producto_id; });
+        var star=document.createElement('button');
+        star.type='button'; star.className='bg5-star'; star.title='Favorito';
+        star.textContent=favs.indexOf(favKey(c.producto_id,c.embalaje_id))>=0?'★':'☆';
+        star.setAttribute('onclick','bg5ToggleFav('+i+')');
+        td.insertBefore(star,td.firstChild);
+        var iu=imgDe(c.producto_id); if(iu) star.insertAdjacentHTML('afterend',thumbHtml(iu,c.nombre));
+        if(!prod) return;
+        var pedidas=cart.filter(function(x){ return x.producto_id===c.producto_id; })
+          .reduce(function(s,x){ return s+n(x.cantidad)*Math.max(1,n(x.uds)||1); },0);
+        var stock=n(prod.stock), queda=stock-pedidas, min=n(prod.stock_minimo);
+        var msg='', col='';
+        if(queda<0){ msg='⚠ Stock insuficiente: hay '+stock; col='var(--red)'; }
+        else if(min>0 && queda<=min){ msg='Stock bajo: quedan '+queda; col='var(--amber)'; }
+        if(msg){ var s=document.createElement('span'); s.className='bg5-stock'; s.style.color=col; s.textContent=msg; td.appendChild(s); }
+      });
+    }catch(e){}
+    try{ if(gsx('bg5-prods')) pintarGrilla(); }catch(e){}
+    return r;
+  };
+
+  /* ── 4) Ventas en espera ─────────────────────────────────────── */
+  function limpiarVentaActual(){
+    cart=[];
+    ['v-desc','v-importe'].concat(MIX_IDS).forEach(function(id){ var el=gsx(id); if(el) el.value=0; });
+    var sel=gsx('v-cliente-id'); if(sel) sel.value='';
+    var cs=gsx('bg5-cli-search'); if(cs) cs.value='';
+    delK('bg_draft_venta');
+    selectPay('efectivo');
+    renderVentaTable();
+  }
+  function guardarEnEspera(){
+    var lista=getJ(K_HOLD,[]);
+    var sel=gsx('v-cliente-id');
+    lista.push({
+      id:Date.now(), cart:JSON.parse(JSON.stringify(cart)), tipo:ventaTipo, pay:selectedPay,
+      clienteId:sel?sel.value:'', clienteNom:(sel&&sel.value)?sel.options[sel.selectedIndex].text:'',
+      total:totalFinal()
+    });
+    setJ(K_HOLD,lista.slice(-10));
+  }
+  window.bg5PonerEnEspera=function(){
+    if(window.__ventaEditandoId){ toast('No disponible al editar una venta','err'); return; }
+    if(!cart.length){ toast('El carrito está vacío','err'); return; }
+    guardarEnEspera(); limpiarVentaActual(); pintarToolbar();
+    toast('⏸ Venta en espera');
+    setTimeout(function(){ var s=gsx('v-search'); if(s) s.focus(); },50);
+  };
+  window.bg5VerEspera=function(){
+    var lista=getJ(K_HOLD,[]);
+    if(!lista.length){ toast('No hay ventas en espera','err'); return; }
+    openModal('Ventas en espera', lista.map(function(h){
+      var hora=new Date(h.id).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});
+      return '<div class="bg5-hold-item"><div><b>'+fmtGs(h.total)+'</b> · '+h.cart.length+' prod. · '+hora+
+        '<br><span style="font-size:12px;color:var(--text2)">'+esc(h.clienteNom||'Ocasional')+'</span></div>'+
+        '<div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="bg5Retomar('+h.id+')">Retomar</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="bg5BorrarEspera('+h.id+')">✕</button></div></div>';
+    }).join(''), null, '');
+  };
+  window.bg5BorrarEspera=function(id){
+    setJ(K_HOLD,getJ(K_HOLD,[]).filter(function(h){ return h.id!==id; }));
+    pintarToolbar();
+    if(getJ(K_HOLD,[]).length) bg5VerEspera(); else closeModal();
+  };
+  window.bg5Retomar=async function(id){
+    var lista=getJ(K_HOLD,[]), h=lista.find(function(x){ return x.id===id; }); if(!h) return;
+    closeModal();
+    if(!enVentas()){ await goTo('ventas'); await new Promise(function(r){ setTimeout(r,500); }); }
+    if(cart.length){ guardarEnEspera(); toast('La venta actual quedó en espera'); }
+    setJ(K_HOLD,getJ(K_HOLD,[]).filter(function(x){ return x.id!==id; }));
+    if(h.tipo && h.tipo!==ventaTipo){
+      ventaTipo=h.tipo;
+      document.querySelectorAll('#venta-header button[onclick^="setVTipo"]').forEach(function(b){
+        var on=b.getAttribute('onclick').indexOf(h.tipo)>=0;
+        b.classList.toggle('btn-primary',on); b.classList.toggle('btn-secondary',!on);
+      });
+    }
+    cart=h.cart;
+    var sel=gsx('v-cliente-id'); if(sel) sel.value=h.clienteId||'';
+    selectPay(h.pay||'efectivo');
+    renderVentaTable(); pintarToolbar();
+  };
+
+  /* ── 7) Repetir / anular última venta ────────────────────────── */
+  window.bg5RepetirUltima=function(){
+    var u=getJ(K_LAST,null);
+    if(!u||!u.items||!u.items.length){ toast('No hay venta anterior','err'); return; }
+    var falt=0;
+    u.items.forEach(function(it){
+      if((prodCache||[]).some(function(p){ return p.id===it.producto_id; })) addToVenta(it.producto_id,it.embalaje_id||null,n(it.cantidad)||1);
+      else falt++;
+    });
+    toast(falt?('Repetida (sin '+falt+' producto/s inactivo/s)'):'🔁 Última venta cargada con precios actuales', falt?'err':'ok');
+  };
+  window.bg5AnularUltima=async function(){
+    var u=getJ(K_LAST,null);
+    if(!u||!u.numero){ toast('No hay venta reciente para anular','err'); return; }
+    var q=await sb.from('bodega_ventas').select('id,numero_venta,total_final').eq('numero_venta',u.numero).limit(1);
+    var v=q.data&&q.data[0];
+    if(!v){ toast('No se encontró la venta N° '+u.numero,'err'); delK(K_LAST); pintarToolbar(); return; }
+    if(!(await bgConfirm('¿Anular la venta N° <b>'+v.numero_venta+'</b> por <b>'+fmtGs(v.total_final)+'</b>?<br><span style="font-size:12px;color:var(--text2)">Se devuelve el stock y se elimina el fiado si corresponde.</span>',{title:'Anular última venta',confirmText:'Sí, anular',cancelText:'No',variant:'danger'}))) return;
+    var ok=await borrarVenta(v.id,true);
+    if(!ok) return;
+    delK(K_LAST); _dashCache=null;
+    toast('↩ Venta N° '+v.numero_venta+' anulada y stock devuelto');
+    await loadCaches(true); pintarToolbar();
+  };
+
+  if(!window.__bgP5Fin && typeof window.finalizarVenta==='function'){
+    window.__bgP5Fin=true;
+    var origFin=window.finalizarVenta;
+    window.finalizarVenta=finalizarVenta=async function(){
+      var editando=!!window.__ventaEditandoId;
+      if(!editando && cart.length && selectedPay==='mixto'){
+        var tot=totalFinal(), asig=sumaMixto();
+        if(asig<tot){ toast('Pago mixto: faltan '+fmtGs(tot-asig)+' por asignar','err'); pintarMixto(); return; }
+        if(asig>tot && !(await bgConfirm('Los montos del pago mixto suman <b>'+fmtGs(asig)+'</b> y el total es <b>'+fmtGs(tot)+'</b>.<br>¿Cobrar igual?',{title:'Pago mixto',confirmText:'Cobrar',cancelText:'Corregir',variant:'warning'}))) return;
+      }
+      var snap=(!editando && cart.length)?{tipo:ventaTipo,items:cart.map(function(c){ return {producto_id:c.producto_id,embalaje_id:c.embalaje_id||null,cantidad:c.cantidad}; })}:null;
+      var prevNum=ventaNum;
+      var r=await origFin.apply(this,arguments);
+      if(snap && !cart.length){
+        snap.numero=(ventaNum!==prevNum)?ventaNum-1:null; snap.ts=Date.now();
+        setJ(K_LAST,snap); pintarToolbar();
+      }
+      return r;
+    };
+  }
+
+  /* ── Barra de acciones ───────────────────────────────────────── */
+  function pintarToolbar(){
+    var hdr=gsx('venta-header'); if(!hdr) return;
+    var tb=gsx('bg5-toolbar');
+    if(!tb){ tb=document.createElement('div'); tb.id='bg5-toolbar'; hdr.appendChild(tb); }
+    var nh=getJ(K_HOLD,[]).length, u=getJ(K_LAST,null);
+    tb.innerHTML=
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="bg5PonerEnEspera()">⏸ Poner en espera</button>'+
+      (nh?'<button type="button" class="btn btn-primary btn-sm" onclick="bg5VerEspera()">📋 En espera ('+nh+')</button>':'')+
+      (u&&u.items?'<button type="button" class="btn btn-secondary btn-sm" onclick="bg5RepetirUltima()">🔁 Repetir última</button>':'')+
+      (u&&u.numero?'<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5AnularUltima()">↩ Anular N° '+u.numero+'</button>':'');
+  }
+
+  /* ── Acceso al Panel de inicio: logo + primer ítem del menú Inicio ── */
+  function accesoInicio(){
+    var logo=document.querySelector('#sidebar .logo');
+    if(logo && !logo.dataset.bg5){ logo.dataset.bg5='1'; logo.style.cursor='pointer'; logo.title='Ir al panel de inicio';
+      logo.addEventListener('click',function(){ goTo('inicio'); }); }
+    var sub=document.querySelector('#macos-main-menu .mac-submenu');
+    if(sub && !gsx('nav-panel-inicio')){
+      var a=document.createElement('a'); a.href='#'; a.id='nav-panel-inicio'; a.textContent='🏠 Panel de inicio';
+      a.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); goTo('inicio');
+        document.querySelectorAll('.mac-menu-group.open').forEach(function(g){ g.classList.remove('open'); });
+        document.body.classList.remove('bg-mobile-drawer-open'); });
+      sub.insertBefore(a,sub.firstChild);
+    }
+  }
+
+  /* ── Fotos de productos (Supabase Storage, bucket "productos") ── */
+  var BUCKET='productos';
+  function imgDe(id){ var p=(prodCache||[]).find(function(x){ return String(x.id)===String(id); }); return p&&p.imagen_url||''; }
+  function thumbHtml(url,alt){ return url?'<img class="bg5-thumb" src="'+esc(url)+'" alt="'+esc(alt||'')+'" loading="lazy" decoding="async">':''; }
+  // Reduce la foto a 400px y la pasa a WebP (≈20–40 KB)
+  function comprimir(file){
+    return new Promise(function(res,rej){
+      var img=new Image(), url=URL.createObjectURL(file);
+      img.onload=function(){
+        var max=400, r=Math.min(1,max/Math.max(img.width,img.height));
+        var c=document.createElement('canvas'); c.width=Math.round(img.width*r); c.height=Math.round(img.height*r);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+        c.toBlob(function(b){ b?res(b):rej(new Error('No se pudo procesar la imagen')); },'image/webp',0.8);
+      };
+      img.onerror=function(){ URL.revokeObjectURL(url); rej(new Error('Archivo de imagen inválido')); };
+      img.src=url;
+    });
+  }
+  var fotoPend=null; // {blob} | {quitar:true} | null
+  window.bg5FotoElegir=async function(inp){
+    var f=inp.files&&inp.files[0]; if(!f) return;
+    try{
+      var b=await comprimir(f); fotoPend={blob:b};
+      var pv=gsx('bg5-foto-prev'); if(pv) pv.src=URL.createObjectURL(b);
+      var t=gsx('bg5-foto-txt'); if(t) t.textContent='Lista para guardar ('+Math.round(b.size/1024)+' KB)';
+    }catch(e){ toast(e.message,'err'); }
+    inp.value='';
+  };
+  window.bg5FotoQuitar=function(){
+    fotoPend={quitar:true};
+    var pv=gsx('bg5-foto-prev'); if(pv) pv.removeAttribute('src');
+    var t=gsx('bg5-foto-txt'); if(t) t.textContent='Se quitará al guardar';
+  };
+  function injectFoto(){
+    var nom=gsx('p-nom'); if(!nom || gsx('bg5-foto-box')) return;
+    var grid=nom.closest('.form-grid')||nom.closest('.form-group').parentElement; if(!grid) return;
+    fotoPend=null;
+    var actual=(window.__bg5ProdActual&&window.__bg5ProdActual.imagen_url)||'';
+    var d=document.createElement('div'); d.id='bg5-foto-box';
+    d.innerHTML='<img id="bg5-foto-prev" alt="Foto del producto"'+(actual?' src="'+esc(actual)+'"':'')+'>'+
+      '<div style="min-width:0"><div style="font-weight:700;margin-bottom:4px">Foto del producto</div>'+
+      '<div id="bg5-foto-txt" style="font-size:12px;color:var(--text2);margin-bottom:8px">'+(actual?'Foto cargada':'Sin foto')+'</div>'+
+      '<div class="bg5-foto-btns">'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">📷 Sacar foto<input type="file" accept="image/*" capture="environment" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">🖼️ Elegir archivo<input type="file" accept="image/*" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5FotoQuitar()">Quitar</button>'+
+      '</div></div>';
+    grid.insertBefore(d,grid.firstChild);
+  }
+  function rutaDeUrl(u){ var m=String(u||'').match(/\/object\/public\/productos\/(.+)$/); return m?decodeURIComponent(m[1].split('?')[0]):null; }
+  async function aplicarFoto(prodId,anterior){
+    var pend=fotoPend; fotoPend=null;
+    if(!pend||!prodId) return;
+    try{
+      var url=null;
+      if(pend.blob){
+        var path=prodId+'/'+Date.now()+'.webp';
+        var up=await sb.storage.from(BUCKET).upload(path,pend.blob,{contentType:'image/webp',cacheControl:'31536000',upsert:false});
+        if(up.error) throw up.error;
+        url=sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+      }
+      var r=await sb.from('bodega_productos').update({imagen_url:url}).eq('id',prodId);
+      if(r.error) throw r.error;
+      var viejo=rutaDeUrl(anterior); if(viejo) sb.storage.from(BUCKET).remove([viejo]).catch(function(){});
+      var p=(prodCache||[]).find(function(x){ return String(x.id)===String(prodId); }); if(p) p.imagen_url=url;
+      toast(url?'📷 Foto guardada':'Foto quitada');
+      if(gsx('btn-scan-productos')||document.querySelector('.productos-card')) try{ renderProductos(); }catch(e){}
+    }catch(e){ toast('El producto se guardó, pero la foto no: '+(e.message||e),'err'); }
+  }
+  function hookProdModal(){
+    if(typeof window.openProdModal==='function' && !window.openProdModal.__bg5){
+      var o=window.openProdModal;
+      var w=function(prod){ window.__bg5ProdActual=prod||null; return o.apply(this,arguments); };
+      w.__bg5=true; window.openProdModal=w;
+    }
+    if(typeof window.saveProd==='function' && !window.saveProd.__bg5){
+      var os=window.saveProd;
+      var ws=async function(id){
+        var nombre=(gsx('p-nom')&&gsx('p-nom').value||'').trim();
+        var anterior=(window.__bg5ProdActual&&window.__bg5ProdActual.imagen_url)||null;
+        var pend=fotoPend;
+        var r=await os.apply(this,arguments);
+        var cerrado=!(gsx('modal-overlay')&&gsx('modal-overlay').classList.contains('show')&&gsx('p-nom'));
+        if(pend && cerrado){
+          fotoPend=pend;
+          var pid=id;
+          if(!pid && nombre){
+            var q=await sb.from('bodega_productos').select('id').eq('nombre',nombre).order('created_at',{ascending:false}).limit(1);
+            pid=q.data&&q.data[0]&&q.data[0].id;
+          }
+          await aplicarFoto(pid,anterior);
+        }
+        return r;
+      };
+      ws.__bg5=true; window.saveProd=ws;
+    }
+  }
+  function pintarThumbs(){
+    // Lista de productos
+    document.querySelectorAll('button[onclick^="editProd("]').forEach(function(b){
+      var tr=b.closest('tr'); if(!tr||tr.dataset.bg5img) return;
+      var id=(b.getAttribute('onclick').match(/editProd\('([^']+)'/)||[])[1]; if(!id) return;
+      tr.dataset.bg5img='1';
+      var p=(prodCache||[]).find(function(x){ return String(x.id)===String(id); }); if(!p||!p.imagen_url) return;
+      var td=Array.prototype.find.call(tr.children,function(c){ return c.textContent.trim()===String(p.nombre).trim(); });
+      if(td) td.insertAdjacentHTML('afterbegin',thumbHtml(p.imagen_url,p.nombre));
+    });
+    // Buscador de ventas
+    var list=gsx('v-ac-list');
+    if(list && list.style.display!=='none' && typeof acResults!=='undefined'){
+      list.querySelectorAll('.ac-item').forEach(function(it,i){
+        if(it.dataset.bg5img) return; it.dataset.bg5img='1';
+        var r=acResults[i]; var u=r&&imgDe(r.prodId); if(u) it.insertAdjacentHTML('afterbegin',thumbHtml(u,''));
+      });
+    }
+    // Favoritos y más vendidos
+    document.querySelectorAll('#bg5-favs .bg-tv-chip, #bg-top-vendidos .bg-tv-chip').forEach(function(ch){
+      if(ch.dataset.bg5img) return; ch.dataset.bg5img='1';
+      var m=(ch.getAttribute('onclick')||'').match(/(?:addToVenta\('([^']+)'|bg5AddFav\((\d+)\))/); if(!m) return;
+      var id=m[1]||((getJ(K_FAV,[])[+m[2]]||{}).p);
+      var u=imgDe(id); if(u) ch.insertAdjacentHTML('afterbegin',thumbHtml(u,''));
+    });
+  }
+
+  /* ── Vista grilla de ventas ──────────────────────────────────── */
+  var K_VISTA='bg_venta_vista', gCat='', gPag=1;
+  function vistaGrilla(){ try{ return localStorage.getItem(K_VISTA)!=='lista'; }catch(e){ return true; } }
+  window.bg5SetVista=function(v){ try{ localStorage.setItem(K_VISTA,v); }catch(e){} aplicarVista(); };
+  function precioDe(p){ return n(ventaTipo==='mayorista'&&n(p.precio_mayorista)>0?p.precio_mayorista:p.precio_venta); }
+  function iniciales(t){ var w=String(t||'?').split(/\s+/).filter(function(x){ return /^[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(x); }); return (w.length>1?w[0][0]+w[1][0]:String(w[0]||t||'?').slice(0,2)).toUpperCase(); }
+  function porPagina(){ if(movil()) return 9; var g=gsx('bg5-prods'); if(!g) return 20; var cols=Math.max(1,Math.floor((g.clientWidth+10)/142)); var rows=Math.max(2,Math.floor((g.clientHeight+10)/196)); return cols*rows; }
+  function listaGrilla(){
+    var q=(gsx('v-search')&&gsx('v-search').value||'').trim();
+    if(/^\+\d+$/.test(q)) q='';
+    var base=q?(typeof bgFilterProductos==='function'?bgFilterProductos(q,300):(prodCache||[]).filter(function(p){ return String(p.nombre).toLowerCase().indexOf(q.toLowerCase())>=0||String(p.codigo_barra||'')===q; })):(prodCache||[]).slice();
+    if(gCat) base=base.filter(function(p){ return String(p.categoria_id)===String(gCat); });
+    if(!q){
+      var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{};
+      base.sort(function(a,b){ return (n(b.stock)>0)-(n(a.stock)>0) || n((m[b.id]||{}).prom)-n((m[a.id]||{}).prom) || (b.imagen_url?1:0)-(a.imagen_url?1:0) || String(a.nombre).localeCompare(String(b.nombre)); });
+    }
+    return base;
+  }
+  window.bg5Cat=function(id){ gCat=id; gPag=1; pintarGrilla(); };
+  window.bg5Pag=function(pg){ gPag=pg; pintarGrilla(); var g=gsx('bg5-prods'); if(g) g.scrollTop=0; };
+  window.bg5Tile=function(id){ addToVenta(id,null,1); try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){} };
+  function pintarGrilla(){
+    var g=gsx('bg5-prods'); if(!g) return;
+    var cats=gsx('bg5-cats');
+    if(cats){
+      var usadas={}; (prodCache||[]).forEach(function(p){ if(p.categoria_id) usadas[p.categoria_id]=1; });
+      var cs=(typeof catCache!=='undefined'?catCache:[]).filter(function(c){ return usadas[c.id]; });
+      cats.innerHTML='<button class="'+(gCat?'':'on')+'" onclick="bg5Cat(\'\')">Todos</button>'+cs.map(function(c){
+        var on=String(gCat)===String(c.id);
+        return '<button class="'+(on?'on':'')+'" style="'+(on?'':'border-color:'+esc(c.color||'var(--border)')+'66')+'" onclick="bg5Cat(\''+esc(c.id)+'\')">'+esc(c.nombre)+'</button>';
+      }).join('');
+    }
+    var all=listaGrilla(), pp=porPagina(), pages=Math.max(1,Math.ceil(all.length/pp));
+    if(gPag>pages) gPag=pages;
+    var enCarro={}; (cart||[]).forEach(function(c){ enCarro[c.producto_id]=(enCarro[c.producto_id]||0)+n(c.cantidad)*Math.max(1,n(c.uds)||1); });
+    g.innerHTML=all.slice((gPag-1)*pp,gPag*pp).map(function(p){
+      var st=n(p.stock), col=(typeof getCatColor==='function'?getCatColor(p.categoria_id):'#6b7280');
+      var im=p.imagen_url?'<img src="'+esc(p.imagen_url)+'" alt="" loading="lazy" decoding="async">':'<span class="ini">'+esc(iniciales(p.nombre))+'</span>';
+      return '<button type="button" class="bg5-tile'+(st<=0?' sin':'')+'" onclick="bg5Tile(\''+esc(p.id)+'\')" title="'+esc(p.nombre)+'">'+
+        (enCarro[p.id]?'<span class="qn">'+enCarro[p.id]+'</span>':'')+
+        (st<=0?'<span class="st cero">Sin stock</span>':(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'<span class="st">'+st+'</span>':''))+
+        '<div class="im" style="'+(p.imagen_url?'':'background:'+esc(col))+'">'+im+'</div>'+
+        '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(precioDe(p))+'</div></button>';
+    }).join('')||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">No hay productos para mostrar</div>';
+    var pg=gsx('bg5-pag');
+    if(pg){
+      var a=Math.max(1,Math.min(gPag-2,pages-4)), b=Math.min(pages,a+4), h='<button '+(gPag<=1?'disabled':'')+' onclick="bg5Pag('+(gPag-1)+')">‹</button>';
+      for(var i=a;i<=b;i++) h+='<button class="'+(i===gPag?'on':'')+'" onclick="bg5Pag('+i+')">'+i+'</button>';
+      pg.innerHTML=pages>1?h+'<button '+(gPag>=pages?'disabled':'')+' onclick="bg5Pag('+(gPag+1)+')">›</button>':'';
+    }
+    pintarPie();
+  }
+  function pintarPie(){
+    var t=gsx('bg5-cart-total'); if(t) t.textContent=fmtGs(totalFinal());
+    var ni=(cart||[]).reduce(function(s,c){ return s+n(c.cantidad); },0);
+    var it=gsx('bg5-cart-items'); if(it) it.textContent='Items: '+ni;
+    var h=gsx('bg5-cart-n'); if(h) h.textContent=(cart||[]).length;
+  }
+  window.bg5Cliente=function(){ bg5AbrirCobro(); setTimeout(function(){ var c=gsx('bg5-cli-search'); if(c) c.focus(); },80); };
+  function armarGrilla(){
+    var lay=gsx('venta-layout'), left=gsx('venta-left'), tw=gsx('venta-table-wrap'), hdr=gsx('venta-header');
+    if(!lay||!left||!tw||!hdr) return;
+    lay.classList.add('bg5-grid');
+    if(!gsx('bg5-grid-panel')){
+      var gp=document.createElement('div'); gp.id='bg5-grid-panel';
+      gp.innerHTML='<div id="bg5-cats"></div><div id="bg5-prods"></div><div id="bg5-pag"></div>';
+      hdr.parentNode.insertBefore(gp,hdr.nextSibling);
+    }
+    if(!gsx('bg5-cart-col')){
+      var cc=document.createElement('div'); cc.id='bg5-cart-col';
+      cc.innerHTML='<div id="bg5-cart-head"><span>Carrito (<span id="bg5-cart-n">0</span>)</span><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>';
+      left.appendChild(cc); cc.appendChild(tw);
+      var f=document.createElement('div'); f.id='bg5-cart-foot';
+      f.innerHTML='<div class="tot"><span id="bg5-cart-items" style="color:var(--text2);font-weight:700">Items: 0</span><b id="bg5-cart-total">Gs. 0</b></div>'+
+        '<div class="row"><button type="button" onclick="bg5Cliente()">👤 Cliente</button><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>'+
+        '<button type="button" class="cob" onclick="bg5AbrirCobro()">💳 Cobrar (F4)</button>';
+      cc.appendChild(f);
+    }
+    pintarGrilla();
+  }
+  function desarmarGrilla(){
+    var lay=gsx('venta-layout'), tw=gsx('venta-table-wrap'), hdr=gsx('venta-header');
+    if(lay) lay.classList.remove('bg5-grid');
+    if(tw&&hdr&&gsx('bg5-cart-col')){ hdr.parentNode.insertBefore(tw,hdr.nextSibling); gsx('bg5-cart-col').remove(); }
+    var gp=gsx('bg5-grid-panel'); if(gp) gp.remove();
+  }
+  function botonVista(){
+    var info=document.querySelector('#venta-header .vinfo'); if(!info||gsx('bg5-vista')) return;
+    var g=vistaGrilla(), d=document.createElement('span'); d.id='bg5-vista';
+    d.innerHTML='<button type="button" class="'+(g?'on':'')+'" onclick="bg5SetVista(\'grilla\')">▦ Grilla</button><button type="button" class="'+(g?'':'on')+'" onclick="bg5SetVista(\'lista\')">☰ Lista</button>';
+    info.appendChild(d);
+  }
+  function aplicarVista(){
+    var v=gsx('bg5-vista'); if(v) v.remove();
+    botonVista();
+    if(vistaGrilla()) armarGrilla(); else desarmarGrilla();
+  }
+  // Buscar filtra también la grilla
+  document.addEventListener('input',function(e){ if(e.target&&e.target.id==='v-search'&&gsx('bg5-prods')){ gPag=1; pintarGrilla(); } },true);
+  window.addEventListener('resize',function(){ if(gsx('bg5-prods')) pintarGrilla(); });
+  // Fondo oscuro detrás del cobro en PC
+  function backdrop(){
+    var on=false; // el cobro en PC queda fijo en la 3ª columna: sin fondo oscuro
+    var b=gsx('bg5-backdrop');
+    if(on&&!b){ b=document.createElement('div'); b.id='bg5-backdrop'; b.onclick=function(){ bg5CerrarCobro(); backdrop(); }; document.body.appendChild(b); }
+    if(!on&&b) b.remove();
+  }
+
+  /* ── Barra de navegación inferior (celular) ──────────────────── */
+  function bottomNav(){
+    if(!gsx('bg5-bottomnav')){
+      var nv=document.createElement('nav'); nv.id='bg5-bottomnav';
+      nv.innerHTML='<button type="button" data-p="ventas" onclick="goTo(\'ventas\')"><span>🛒</span>Venta</button>'+
+        '<button type="button" data-p="productos" onclick="goTo(\'productos\')"><span>📦</span>Stock</button>'+
+        '<button type="button" data-p="clientes" onclick="goTo(\'clientes\')"><span>👥</span>Fiado</button>'+
+        '<button type="button" onclick="var b=document.getElementById(\'bg-mobile-menu-btn\');if(b)b.click();"><span>⋯</span>Más</button>';
+      document.body.appendChild(nv); document.body.classList.add('bg5-has-nav');
+    }
+    var cur=gsx('v-search')?'ventas':(document.querySelector('.productos-card')?'productos':'');
+    document.querySelectorAll('#bg5-bottomnav button[data-p]').forEach(function(b){ b.classList.toggle('on',b.dataset.p===cur); });
+  }
+
+  /* ── Inyección al renderizar la pantalla de ventas ───────────── */
+  function enhance(){
+    try{ accesoInicio(); hookProdModal(); injectFoto(); pintarThumbs(); bottomNav(); backdrop(); }catch(e){}
+    if(!enVentas()) return;
+    try{ simplificar(); modeloD(); ocultarDescuento(); injectBilletes(); injectCliente(); if(!gsx('bg5-vista')) aplicarVista(); else if(vistaGrilla()&&!gsx('bg5-grid-panel')) armarGrilla(); if(!gsx('bg5-toolbar')) pintarToolbar(); if(!gsx('bg5-favs')) pintarFavs(); if(selectedPay==='mixto'&&!gsx('bg5-mix-status')) pintarMixto(); }catch(e){ console.warn('P5:',e); }
+  }
+  var t=null;
+  new MutationObserver(function(){ if(t) return; t=setTimeout(function(){ t=null; enhance(); },60); })
+    .observe(document.body,{childList:true,subtree:true});
+  enhance();
+})();
+</script>
+<!-- ══ FIN PARCHE 6 ══ -->
 </body>
 </html>
