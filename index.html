@@ -3022,6 +3022,7 @@ async function loadVentaStats(){
     const m={};(data||[]).forEach(r=>m[r.producto_id]={ayer:r.vendido_ayer||0,prom:Number(r.prom_dia)||0});
     ventaStatsMap=m;ventaStatsLoaded=true;
     if(gs('compra-prod-list'))renderCPList(gs('cp-search')?.value||'');
+    try{ document.dispatchEvent(new Event('bg:ventastats')); }catch(e){_swallow(e);}
   }catch(e){_swallow(e);}
 }
 function ventaStatsBadge(prodId){
@@ -14479,6 +14480,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   }
   hookAll();
   [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('bg:ventastats',function(){ if(gsx('v-search')) pintarTopVendidos(); });
   document.addEventListener('click',function(){ setTimeout(hookAll,120); },true);
 })();
 </script>
@@ -15464,10 +15466,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(/^\+\d+$/.test(q)) q='';
     var base=q?(typeof bgFilterProductos==='function'?bgFilterProductos(q,300):(prodCache||[]).filter(function(p){ return String(p.nombre).toLowerCase().indexOf(q.toLowerCase())>=0||String(p.codigo_barra||'')===q; })):(prodCache||[]).slice();
     if(gCat) base=base.filter(function(p){ return String(p.categoria_id)===String(gCat); });
-    if(!q){
-      var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{};
-      base.sort(function(a,b){ return (n(b.stock)>0)-(n(a.stock)>0) || n((m[b.id]||{}).prom)-n((m[a.id]||{}).prom) || (b.imagen_url?1:0)-(a.imagen_url?1:0) || String(a.nombre).localeCompare(String(b.nombre)); });
-    }
+    // Más vendidos primero, también al buscar
+    var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{};
+    base.sort(function(a,b){ return (n(b.stock)>0)-(n(a.stock)>0) || n((m[b.id]||{}).prom)-n((m[a.id]||{}).prom) || (b.imagen_url?1:0)-(a.imagen_url?1:0) || String(a.nombre).localeCompare(String(b.nombre)); });
     return base;
   }
   window.bg5Cat=function(id){ gCat=id; gPag=1; pintarGrilla(); };
@@ -15552,6 +15553,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   // Buscar filtra también la grilla
   document.addEventListener('input',function(e){ if(e.target&&e.target.id==='v-search'&&gsx('bg5-prods')){ gPag=1; pintarGrilla(); } },true);
   window.addEventListener('resize',function(){ if(gsx('bg5-prods')) pintarGrilla(); });
+  document.addEventListener('bg:ventastats',function(){ if(gsx('bg5-prods')) pintarGrilla(); });
   // Fondo oscuro detrás del cobro en PC
   function backdrop(){
     var on=false; // el cobro en PC queda fijo en la 3ª columna: sin fondo oscuro
