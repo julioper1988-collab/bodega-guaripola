@@ -3022,6 +3022,7 @@ async function loadVentaStats(){
     const m={};(data||[]).forEach(r=>m[r.producto_id]={ayer:r.vendido_ayer||0,prom:Number(r.prom_dia)||0});
     ventaStatsMap=m;ventaStatsLoaded=true;
     if(gs('compra-prod-list'))renderCPList(gs('cp-search')?.value||'');
+    try{ document.dispatchEvent(new Event('bg:ventastats')); }catch(e){_swallow(e);}
   }catch(e){_swallow(e);}
 }
 function ventaStatsBadge(prodId){
@@ -14479,6 +14480,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   }
   hookAll();
   [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('bg:ventastats',function(){ if(gsx('v-search')) pintarTopVendidos(); });
   document.addEventListener('click',function(){ setTimeout(hookAll,120); },true);
 })();
 </script>
@@ -15464,10 +15466,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(/^\+\d+$/.test(q)) q='';
     var base=q?(typeof bgFilterProductos==='function'?bgFilterProductos(q,300):(prodCache||[]).filter(function(p){ return String(p.nombre).toLowerCase().indexOf(q.toLowerCase())>=0||String(p.codigo_barra||'')===q; })):(prodCache||[]).slice();
     if(gCat) base=base.filter(function(p){ return String(p.categoria_id)===String(gCat); });
-    if(!q){
-      var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{};
-      base.sort(function(a,b){ return (n(b.stock)>0)-(n(a.stock)>0) || n((m[b.id]||{}).prom)-n((m[a.id]||{}).prom) || (b.imagen_url?1:0)-(a.imagen_url?1:0) || String(a.nombre).localeCompare(String(b.nombre)); });
-    }
+    // Más vendidos primero, también al buscar
+    var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{};
+    base.sort(function(a,b){ return (n(b.stock)>0)-(n(a.stock)>0) || n((m[b.id]||{}).prom)-n((m[a.id]||{}).prom) || (b.imagen_url?1:0)-(a.imagen_url?1:0) || String(a.nombre).localeCompare(String(b.nombre)); });
     return base;
   }
   window.bg5Cat=function(id){ gCat=id; gPag=1; pintarGrilla(); };
@@ -15552,6 +15553,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   // Buscar filtra también la grilla
   document.addEventListener('input',function(e){ if(e.target&&e.target.id==='v-search'&&gsx('bg5-prods')){ gPag=1; pintarGrilla(); } },true);
   window.addEventListener('resize',function(){ if(gsx('bg5-prods')) pintarGrilla(); });
+  document.addEventListener('bg:ventastats',function(){ if(gsx('bg5-prods')) pintarGrilla(); });
   // Fondo oscuro detrás del cobro en PC
   function backdrop(){
     var on=false; // el cobro en PC queda fijo en la 3ª columna: sin fondo oscuro
@@ -15587,5 +15589,180 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
 })();
 </script>
 <!-- ══ FIN PARCHE 6 ══ -->
+<!-- ══ PARCHE 8: grilla de productos en Compras (móvil) ══ -->
+<style id="bg-p7-css">
+#bgc-vista{display:flex;gap:6px;padding:8px 10px 0}
+#bgc-vista button{flex:1;padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text2);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#bgc-vista button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#compra-prod-list.bgc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;padding:8px;align-content:start}
+#compra-prod-list.bgc-grid .bg5-tile .rot{font-size:10px;color:var(--text2)}
+#compra-prod-list.bgc-grid .bg5-tile .pk{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+#compra-prod-list.bgc-grid .bg5-tile .pk button{padding:3px 7px;border:1px solid var(--teal);border-radius:999px;background:transparent;color:var(--teal);font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+#compra-prod-list.bgc-grid .bgc-mas{grid-column:1/-1;padding:10px;border:1px dashed var(--border);border-radius:10px;background:transparent;color:var(--text2);font:inherit;font-weight:700;cursor:pointer}
+@media (max-width:900px){
+  #compra-prod-list.bgc-grid{grid-template-columns:repeat(3,1fr);max-height:55dvh!important}
+  #compra-prod-list.bgc-grid .bg5-tile{padding:8px 6px}
+  #compra-prod-list.bgc-grid .bg5-tile .im{max-height:none;aspect-ratio:4/3}
+  #compra-prod-list.bgc-grid .bg5-tile .ini{font-size:20px}
+  #compra-prod-list.bgc-grid .bg5-tile .nm{font-size:11px}
+  #compra-prod-list.bgc-grid .bg5-tile .pr{font-size:12px}
+}
+/* Compras móvil en 2 pasos: 1) productos + cargados  2) proveedor/factura/guardar */
+@media (max-width:900px){
+  .compra-main-layout.bgc-m{display:block!important;height:auto!important;padding-bottom:90px!important}
+  .compra-main-layout.bgc-m .compra-order-card{margin-top:12px!important;height:auto!important;min-height:0!important;max-height:none!important}
+  .compra-main-layout.bgc-p1 .bgc-meta,.compra-main-layout.bgc-p1 .bgc-foot,.compra-main-layout.bgc-p1 #comp-total-top-wrap{display:none!important}
+  .compra-main-layout.bgc-p1 #ccomp-items{max-height:none!important;min-height:0!important;height:auto!important;overflow:visible!important}
+  .compra-main-layout.bgc-p1 #compra-prod-list{max-height:46dvh!important}
+  .compra-main-layout.bgc-p2 #prod-picker,.compra-main-layout.bgc-p2 #ccomp-items,.compra-main-layout.bgc-p2 #bgc-bar{display:none!important}
+  .compra-main-layout.bgc-p2 .compra-order-card{margin-top:0!important}
+  .compra-main-layout.bgc-p1 #bgc-p2-head{display:none!important}
+  #bgc-bar{position:fixed;left:0;right:0;z-index:60;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-top:2px solid var(--accent);border-radius:14px 14px 0 0;box-shadow:0 -8px 25px rgba(0,0,0,.35)}
+  #bgc-bar .inf{flex:1;min-width:0}
+  #bgc-bar .tot{font-size:17px;font-weight:900;color:var(--accent2)}
+  #bgc-bar .cnt{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #bgc-bar .go{padding:12px 16px;border:0;border-radius:12px;background:var(--green);color:#06210f;font:inherit;font-size:15px;font-weight:900;cursor:pointer}
+  #bgc-bar .go:disabled{opacity:.45}
+  #bgc-p2-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
+  #bgc-p2-head button{padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg3);color:var(--text);font:inherit;font-weight:800;cursor:pointer}
+  #bgc-p2-head span{flex:1;text-align:right;font-size:12px;color:var(--text2)}
+}
+</style>
+<script>
+(function(){
+  var K='bg_compra_vista', LOTE=30, limite=LOTE, ultimaQ=null;
+  function gx(id){ return document.getElementById(id); }
+  function n(v){ v=Number(v); return isFinite(v)?v:0; }
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function movil(){ return window.innerWidth<=900; }
+  // Por defecto: grilla en móvil, lista en PC
+  function grilla(){ var v=null; try{ v=localStorage.getItem(K); }catch(e){} return v?v==='grilla':movil(); }
+  function rot(p){ var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{}; return n((m[p.id]||{}).prom); }
+  function qty(){ try{ if(typeof window.currentCompraQtyPublic==='function') return window.currentCompraQtyPublic()||1; }catch(e){} return parseInt((gx('cp-qty')||{}).value)||1; }
+  function ini(t){ var w=String(t||'?').split(/\s+/).filter(Boolean); return (w.length>1?w[0][0]+w[1][0]:String(w[0]||'?').slice(0,2)).toUpperCase(); }
+  function repintar(){ if(typeof renderCPList==='function') renderCPList((gx('cp-search')||{}).value||''); }
+
+  window.bgcSetVista=function(v){ try{ localStorage.setItem(K,v); }catch(e){} repintar(); };
+  window.bgcMas=function(){ limite+=LOTE; repintar(); };
+  window.bgcAdd=function(id,emb,ev){
+    if(ev) ev.stopPropagation();
+    var c=gx('content'), wy=window.scrollY, cy=c?c.scrollTop:0, l=gx('compra-prod-list'), ly=l?l.scrollTop:0;
+    addToCompra(id,emb||null,qty());
+    // En móvil: sin teclado y sin saltar de la grilla
+    if(movil()) setTimeout(function(){
+      var a=document.activeElement; if(a&&a.blur&&/INPUT|TEXTAREA/.test(a.tagName)) a.blur();
+      window.scrollTo(0,wy); if(c) c.scrollTop=cy; var l2=gx('compra-prod-list'); if(l2) l2.scrollTop=ly;
+    },150);
+    try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+  };
+
+  function toolbar(list){
+    var t=gx('bgc-vista');
+    if(!t){ t=document.createElement('div'); t.id='bgc-vista'; list.parentNode.insertBefore(t,list); }
+    var g=grilla();
+    t.innerHTML='<button type="button" class="'+(g?'on':'')+'" onclick="bgcSetVista(\'grilla\')">▦ Grilla</button><button type="button" class="'+(g?'':'on')+'" onclick="bgcSetVista(\'lista\')">☰ Lista</button>';
+  }
+
+  function pintar(list,q){
+    if(q!==ultimaQ){ limite=LOTE; ultimaQ=q; }
+    var base=q?(typeof bgFilterProductos==='function'?bgFilterProductos(q,300):(prodCache||[]).filter(function(p){ return String(p.nombre).toLowerCase().indexOf(q.toLowerCase())>=0||String(p.codigo_barra||'')===q; })):(prodCache||[]).slice();
+    // Más vendidos primero
+    base.sort(function(a,b){ return rot(b)-rot(a) || String(a.nombre).localeCompare(String(b.nombre)); });
+    var enOrden={}; (typeof compraItems!=='undefined'?compraItems:[]).forEach(function(c){ enOrden[c.producto_id]=(enOrden[c.producto_id]||0)+n(c.cantidad)*Math.max(1,n(c.uds)||1); });
+    list.classList.add('bgc-grid');
+    list.innerHTML=base.slice(0,limite).map(function(p){
+      var st=n(p.stock), col=(typeof getCatColor==='function'?getCatColor(p.categoria_id):'#6b7280');
+      var embs=(typeof embCache!=='undefined'&&embCache&&embCache[p.id])||[];
+      var r=rot(p);
+      var im=p.imagen_url?'<img src="'+esc(p.imagen_url)+'" alt="" loading="lazy" decoding="async">':'<span class="ini">'+esc(ini(p.nombre))+'</span>';
+      return '<div role="button" tabindex="0" class="bg5-tile" onclick="bgcAdd(\''+esc(p.id)+'\',null)" title="'+esc(p.nombre)+'">'+
+        (enOrden[p.id]?'<span class="qn">'+enOrden[p.id]+'</span>':'')+
+        '<span class="st'+(st<=0?' cero':'')+'">'+st+'</span>'+
+        '<div class="im" style="'+(p.imagen_url?'':'background:'+esc(col))+'">'+im+'</div>'+
+        '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(p.precio_costo||0)+'</div>'+
+        (r>0?'<div class="rot">Vende '+r+'/día</div>':'')+
+        (embs.length?'<div class="pk">'+embs.slice(0,3).map(function(e){ return '<button type="button" onclick="bgcAdd(\''+esc(p.id)+'\',\''+esc(e.id)+'\',event)">x'+n(e.cantidad)+'</button>'; }).join('')+'</div>':'')+
+        '</div>';
+    }).join('')+(base.length>limite?'<button type="button" class="bgc-mas" onclick="bgcMas()">Ver más ('+(base.length-limite)+')</button>':'')
+      ||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">Sin resultados</div>';
+  }
+
+  function hook(){
+    if(typeof window.renderCPList!=='function' || window.renderCPList.__bgcGrid) return;
+    var orig=window.renderCPList;
+    var w=function(q){
+      var list=gx('compra-prod-list');
+      if(list) toolbar(list);
+      if(!list || !grilla()){ if(list) list.classList.remove('bgc-grid'); return orig.apply(this,arguments); }
+      if(typeof ventaStatsLoaded!=='undefined' && !ventaStatsLoaded && typeof loadVentaStats==='function'){ ventaStatsLoaded=true; loadVentaStats(); }
+      pintar(list,String(q||'').trim());
+    };
+    w.__bgcGrid=true;
+    window.renderCPList=renderCPList=w;
+  }
+
+  /* ── Compras móvil en 2 pasos (como Ventas) ── */
+  var paso=1;
+  function layout(){ return document.querySelector('.compra-main-layout'); }
+  function itemsN(){ return (typeof compraItems!=='undefined'&&compraItems)?compraItems.length:0; }
+  function totalTxt(){ var t=gx('comp-total'); return t?t.textContent:'Gs. 0'; }
+  function navH(){ var b=gx('bg5-bottomnav'); if(!b||getComputedStyle(b).display==='none') return 0; return Math.round(b.getBoundingClientRect().height); }
+  function setHTML(el,h){ if(el && el.__bgcH!==h){ el.__bgcH=h; el.innerHTML=h; } }
+  window.bgcPaso=function(p){
+    if(p===2 && !itemsN()){ if(typeof toast==='function') toast('Agregá al menos un producto','err'); return; }
+    paso=p; aplicarPasos(); window.scrollTo(0,0); var c=gx('content'); if(c) c.scrollTop=0;
+  };
+  window.bgcVerCargados=function(){ var it=gx('ccomp-items'); if(it) it.scrollIntoView({behavior:'smooth',block:'start'}); };
+  function aplicarPasos(){
+    var lay=layout(); if(!lay) return;
+    if(!movil()){
+      lay.classList.remove('bgc-m','bgc-p1','bgc-p2');
+      var b0=gx('bgc-bar'); if(b0) b0.remove();
+      return;
+    }
+    if(!lay.dataset.bgcInit){ lay.dataset.bgcInit='1'; paso=1; }
+    var prov=gx('comp-prov'), tot=gx('comp-total');
+    var meta=prov&&(prov.closest('.compra-order-meta')||(prov.closest('.form-grid')||{}).parentElement);
+    var foot=tot&&(tot.closest('.compra-footer')||tot.closest('#compra-footer-guardar')||tot.parentElement.parentElement);
+    if(meta) meta.classList.add('bgc-meta');
+    if(foot) foot.classList.add('bgc-foot');
+    lay.classList.add('bgc-m');
+    lay.classList.toggle('bgc-p1',paso===1);
+    lay.classList.toggle('bgc-p2',paso===2);
+    var card=meta&&meta.parentElement;
+    if(card && !gx('bgc-p2-head')){
+      var h=document.createElement('div'); h.id='bgc-p2-head';
+      card.insertBefore(h,meta);
+    }
+    var ph=gx('bgc-p2-head');
+    setHTML(ph,'<button type="button" onclick="bgcPaso(1)">← Productos</button><span>'+itemsN()+' producto'+(itemsN()!==1?'s':'')+' · '+esc(totalTxt())+'</span>');
+    var bar=gx('bgc-bar');
+    if(!bar){ bar=document.createElement('div'); bar.id='bgc-bar'; lay.appendChild(bar); }
+    var bt=navH()+'px'; if(bar.style.bottom!==bt) bar.style.bottom=bt;
+    var n0=itemsN();
+    setHTML(bar,'<div class="inf" onclick="bgcVerCargados()"><div class="tot">'+esc(totalTxt())+'</div><div class="cnt">'+(n0?n0+' producto'+(n0!==1?'s':'')+' cargado'+(n0!==1?'s':'')+' · ver':'Sin productos cargados')+'</div></div>'+
+      '<button type="button" class="go" '+(n0?'':'disabled')+' onclick="bgcPaso(2)">GUARDAR →</button>');
+  }
+  var pend=0;
+  function programar(){ if(pend) return; pend=setTimeout(function(){ pend=0; aplicarPasos(); },60); }
+  function observar(){
+    var c=gx('content'); if(!c || c.__bgcObs) return;
+    c.__bgcObs=true;
+    new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){ var t=muts[i].target; if(t.id==='bgc-bar'||t.id==='bgc-p2-head'||(t.closest&&t.closest('#bgc-bar,#bgc-p2-head'))) continue; programar(); return; }
+    }).observe(c,{childList:true,subtree:true,characterData:true});
+  }
+  window.addEventListener('resize',programar);
+  function hookAll(){
+    hook();
+    observar(); programar();
+    if(gx('compra-prod-list') && !gx('bgc-vista')) repintar();
+  }
+  hookAll();
+  [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('click',function(){ setTimeout(hookAll,150); },true);
+})();
+</script>
+<!-- ══ FIN PARCHE 8 ══ -->
 </body>
 </html>
