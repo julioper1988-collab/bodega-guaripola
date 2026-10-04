@@ -15589,5 +15589,100 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
 })();
 </script>
 <!-- ══ FIN PARCHE 6 ══ -->
+<!-- ══ PARCHE 8: grilla de productos en Compras (móvil) ══ -->
+<style id="bg-p7-css">
+#bgc-vista{display:flex;gap:6px;padding:8px 10px 0}
+#bgc-vista button{flex:1;padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text2);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#bgc-vista button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#compra-prod-list.bgc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;padding:8px;align-content:start}
+#compra-prod-list.bgc-grid .bg5-tile .rot{font-size:10px;color:var(--text2)}
+#compra-prod-list.bgc-grid .bg5-tile .pk{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+#compra-prod-list.bgc-grid .bg5-tile .pk button{padding:3px 7px;border:1px solid var(--teal);border-radius:999px;background:transparent;color:var(--teal);font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+#compra-prod-list.bgc-grid .bgc-mas{grid-column:1/-1;padding:10px;border:1px dashed var(--border);border-radius:10px;background:transparent;color:var(--text2);font:inherit;font-weight:700;cursor:pointer}
+@media (max-width:900px){
+  #compra-prod-list.bgc-grid{grid-template-columns:repeat(3,1fr);max-height:55dvh!important}
+  #compra-prod-list.bgc-grid .bg5-tile{padding:8px 6px}
+  #compra-prod-list.bgc-grid .bg5-tile .im{max-height:none;aspect-ratio:4/3}
+  #compra-prod-list.bgc-grid .bg5-tile .ini{font-size:20px}
+  #compra-prod-list.bgc-grid .bg5-tile .nm{font-size:11px}
+  #compra-prod-list.bgc-grid .bg5-tile .pr{font-size:12px}
+}
+</style>
+<script>
+(function(){
+  var K='bg_compra_vista', LOTE=30, limite=LOTE, ultimaQ=null;
+  function gx(id){ return document.getElementById(id); }
+  function n(v){ v=Number(v); return isFinite(v)?v:0; }
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function movil(){ return window.innerWidth<=900; }
+  // Por defecto: grilla en móvil, lista en PC
+  function grilla(){ var v=null; try{ v=localStorage.getItem(K); }catch(e){} return v?v==='grilla':movil(); }
+  function rot(p){ var m=(typeof ventaStatsMap!=='undefined'&&ventaStatsMap)||{}; return n((m[p.id]||{}).prom); }
+  function qty(){ try{ if(typeof window.currentCompraQtyPublic==='function') return window.currentCompraQtyPublic()||1; }catch(e){} return parseInt((gx('cp-qty')||{}).value)||1; }
+  function ini(t){ var w=String(t||'?').split(/\s+/).filter(Boolean); return (w.length>1?w[0][0]+w[1][0]:String(w[0]||'?').slice(0,2)).toUpperCase(); }
+  function repintar(){ if(typeof renderCPList==='function') renderCPList((gx('cp-search')||{}).value||''); }
+
+  window.bgcSetVista=function(v){ try{ localStorage.setItem(K,v); }catch(e){} repintar(); };
+  window.bgcMas=function(){ limite+=LOTE; repintar(); };
+  window.bgcAdd=function(id,emb,ev){
+    if(ev) ev.stopPropagation();
+    addToCompra(id,emb||null,qty());
+    try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+  };
+
+  function toolbar(list){
+    var t=gx('bgc-vista');
+    if(!t){ t=document.createElement('div'); t.id='bgc-vista'; list.parentNode.insertBefore(t,list); }
+    var g=grilla();
+    t.innerHTML='<button type="button" class="'+(g?'on':'')+'" onclick="bgcSetVista(\'grilla\')">▦ Grilla</button><button type="button" class="'+(g?'':'on')+'" onclick="bgcSetVista(\'lista\')">☰ Lista</button>';
+  }
+
+  function pintar(list,q){
+    if(q!==ultimaQ){ limite=LOTE; ultimaQ=q; }
+    var base=q?(typeof bgFilterProductos==='function'?bgFilterProductos(q,300):(prodCache||[]).filter(function(p){ return String(p.nombre).toLowerCase().indexOf(q.toLowerCase())>=0||String(p.codigo_barra||'')===q; })):(prodCache||[]).slice();
+    // Más vendidos primero
+    base.sort(function(a,b){ return rot(b)-rot(a) || String(a.nombre).localeCompare(String(b.nombre)); });
+    var enOrden={}; (typeof compraItems!=='undefined'?compraItems:[]).forEach(function(c){ enOrden[c.producto_id]=(enOrden[c.producto_id]||0)+n(c.cantidad)*Math.max(1,n(c.uds)||1); });
+    list.classList.add('bgc-grid');
+    list.innerHTML=base.slice(0,limite).map(function(p){
+      var st=n(p.stock), col=(typeof getCatColor==='function'?getCatColor(p.categoria_id):'#6b7280');
+      var embs=(typeof embCache!=='undefined'&&embCache&&embCache[p.id])||[];
+      var r=rot(p);
+      var im=p.imagen_url?'<img src="'+esc(p.imagen_url)+'" alt="" loading="lazy" decoding="async">':'<span class="ini">'+esc(ini(p.nombre))+'</span>';
+      return '<div role="button" tabindex="0" class="bg5-tile" onclick="bgcAdd(\''+esc(p.id)+'\',null)" title="'+esc(p.nombre)+'">'+
+        (enOrden[p.id]?'<span class="qn">'+enOrden[p.id]+'</span>':'')+
+        '<span class="st'+(st<=0?' cero':'')+'">'+st+'</span>'+
+        '<div class="im" style="'+(p.imagen_url?'':'background:'+esc(col))+'">'+im+'</div>'+
+        '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(p.precio_costo||0)+'</div>'+
+        (r>0?'<div class="rot">Vende '+r+'/día</div>':'')+
+        (embs.length?'<div class="pk">'+embs.slice(0,3).map(function(e){ return '<button type="button" onclick="bgcAdd(\''+esc(p.id)+'\',\''+esc(e.id)+'\',event)">x'+n(e.cantidad)+'</button>'; }).join('')+'</div>':'')+
+        '</div>';
+    }).join('')+(base.length>limite?'<button type="button" class="bgc-mas" onclick="bgcMas()">Ver más ('+(base.length-limite)+')</button>':'')
+      ||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">Sin resultados</div>';
+  }
+
+  function hook(){
+    if(typeof window.renderCPList!=='function' || window.renderCPList.__bgcGrid) return;
+    var orig=window.renderCPList;
+    var w=function(q){
+      var list=gx('compra-prod-list');
+      if(list) toolbar(list);
+      if(!list || !grilla()){ if(list) list.classList.remove('bgc-grid'); return orig.apply(this,arguments); }
+      if(typeof ventaStatsLoaded!=='undefined' && !ventaStatsLoaded && typeof loadVentaStats==='function'){ ventaStatsLoaded=true; loadVentaStats(); }
+      pintar(list,String(q||'').trim());
+    };
+    w.__bgcGrid=true;
+    window.renderCPList=renderCPList=w;
+  }
+  function hookAll(){
+    hook();
+    if(gx('compra-prod-list') && !gx('bgc-vista')) repintar();
+  }
+  hookAll();
+  [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
+  document.addEventListener('click',function(){ setTimeout(hookAll,150); },true);
+})();
+</script>
+<!-- ══ FIN PARCHE 8 ══ -->
 </body>
 </html>
