@@ -1764,6 +1764,8 @@ async function loadCaches(force=false){
   _cacheTs=Date.now();
   lsSet('bg_cache_offline',JSON.stringify({ts:_cacheTs,cats:catCache,provs:provCache,prods:prodCache,embs:ed||[]}));
   bgAplicarStockPendiente(); // ventas sin conexión aún no enviadas
+  // mantener guardada la caja abierta para poder vender sin conexión
+  try{ if(typeof window.hayCajaAbiertaParaVender==='function') window.hayCajaAbiertaParaVender(); }catch(e){_swallow(e)}
 }
 
 // ─── Modo sin conexión ───
@@ -6651,7 +6653,7 @@ initMobileShell();
     const obj={fecha,estado:'abierta',numero_caja:numero,nombre_turno:gs('ap-turno')?.value||null,usuario_apertura:gs('ap-usuario')?.value||null,apertura_efectivo:c.total,denominaciones_apertura:c.denoms,notas_apertura:gs('ap-notas')?.value||null,opened_at:new Date().toISOString(),updated_at:new Date().toISOString()};
     const {error}=await sb.from('bodega_caja').insert(obj);
     if(error){toast('Error al abrir caja: '+error.message,'err');return;}
-    window.cajaEditId=null;window.cajaTabTurno='actual';toast('Caja abierta');renderCaja();
+    window.cajaEditId=null;window.cajaTabTurno='actual';toast('Caja abierta');window.hayCajaAbiertaParaVender&&window.hayCajaAbiertaParaVender();renderCaja();
   };
 
   window.agregarGastoCajaTurno = async function(cajaId,fecha){
@@ -6728,6 +6730,7 @@ initMobileShell();
     const {error}=await sb.from('bodega_caja').update(obj).eq('id',id);
     if(error){toast('Error al guardar cierre: '+error.message,'err');return;}
     toast('Cierre guardado. Diferencia: '+fmtGs(diferencia));
+    window.hayCajaAbiertaParaVender&&window.hayCajaAbiertaParaVender();
     window.cajaEditId=null;window.cajaTabTurno='actual';renderCaja();
   };
 
@@ -8034,7 +8037,7 @@ initMobileShell();
         .limit(1);
       if(error){
         console.warn('Sin conexión, usando caja cacheada:', error);
-        return _cajaDesdeCache();
+        return _cajaDesdeCache(bgEsErrorRed(error));
       }
       const caja = Array.isArray(data) && data.length > 0 ? data[0] : false;
       // Guardar en cache si hay caja abierta, limpiar si no
@@ -8043,21 +8046,22 @@ initMobileShell();
       return caja;
     }catch(e){
       console.warn('Error verificando caja, usando cache:', e);
-      return _cajaDesdeCache();
+      return _cajaDesdeCache(bgEsErrorRed(e));
     }
   }
 
-  function _cajaDesdeCache(){
+  function _cajaDesdeCache(sinRed){
     try{
       const raw = lsGet('bg_caja_activa');
-      if(!raw) return false;
-      const caja = JSON.parse(raw);
+      const caja = raw ? JSON.parse(raw) : null;
       if(caja && caja.id && caja.estado === 'abierta'){
         console.log('[Offline] Usando caja cacheada:', caja.numero_caja||caja.id);
         return caja;
       }
-      return false;
-    }catch(e){ return false; }
+    }catch(e){ _swallow(e); }
+    // Sin red y sin dato guardado: permitir vender; al enviarse se asigna la caja abierta en el servidor
+    if(sinRed) return {id:null, estado:'abierta', offline:true};
+    return false;
   }
 
   window.hayCajaAbiertaParaVender = hayCajaAbiertaParaVender;
