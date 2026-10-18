@@ -1,5 +1,5 @@
 /* ── Service Worker — Bodega Guaripola v2 ── */
-const CACHE_NAME = 'guaripola-v4';
+const CACHE_NAME = 'guaripola-v5';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
@@ -90,32 +90,11 @@ self.addEventListener('fetch', event => {
   const url = event.request.url;
   const method = event.request.method;
 
-  // Supabase POST/PATCH/DELETE offline: encolar para sync posterior
+  // Supabase POST/PATCH/DELETE: directo a la red, sin encolar.
+  // (La cola anterior respondía 202 falso: la app mostraba error y luego la
+  //  request se reenviaba con token vencido → ventas duplicadas o perdidas.)
   if((url.includes('supabase.co') || url.includes('supabase.io')) &&
      (method === 'POST' || method === 'PATCH' || method === 'DELETE')){
-    event.respondWith(
-      fetch(event.request.clone()).catch(async () => {
-        // Sin red: encolar la request
-        try{
-          const body = await event.request.clone().text();
-          await dbAdd({
-            url,
-            method,
-            headers: Object.fromEntries(event.request.headers.entries()),
-            body,
-            ts: Date.now()
-          });
-          console.log('[SW] Request encolada offline:', method, url);
-        }catch(e){
-          console.error('[SW] Error encolando:', e);
-        }
-        // Responder con 202 para que la app no rompa
-        return new Response(JSON.stringify({offline:true, queued:true}), {
-          status: 202,
-          headers: {'Content-Type':'application/json'}
-        });
-      })
-    );
     return;
   }
 
@@ -123,7 +102,7 @@ self.addEventListener('fetch', event => {
   if(url.includes('supabase.co') || url.includes('supabase.io')){
     event.respondWith(
       fetch(event.request).catch(() =>
-        new Response(JSON.stringify({data:[], error:{message:'Sin conexión'}}), {
+        new Response(JSON.stringify({message:'Sin conexión', code:'offline', details:null, hint:null}), {
           status: 503,
           headers: {'Content-Type':'application/json'}
         })

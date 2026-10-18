@@ -1715,10 +1715,17 @@ async function initSB(url,key){
     if(error)throw error;
     document.getElementById('setup').style.display='none';
     document.getElementById('loading').style.display='none';
-    document.getElementById('db-badge').textContent='● Conectado';
-    document.getElementById('db-badge').style.color='var(--green)';
+    bgSetOnlineBadge(true);
     // los datos se cargan tras confirmar sesión Auth (ver cargarUsuariosInicial / loginUsuarioSistema)
   }catch(e){
+    // Sin internet: seguir con datos guardados en el dispositivo
+    if(sb && bgEsErrorRed(e)){
+      window.__bgOffline=true;
+      document.getElementById('setup').style.display='none';
+      document.getElementById('loading').style.display='none';
+      bgSetOnlineBadge(false);
+      return;
+    }
     document.getElementById('setup').style.display='flex';
     document.getElementById('loading').style.display='none';
     showCfgErr('Error: '+e.message);
@@ -1737,11 +1744,45 @@ async function loadCaches(force=false){
     sb.from('bodega_productos').select('id,nombre,codigo_barra,stock,precio_venta,precio_mayorista,precio_costo,categoria_id,stock_minimo,unidad,proveedor_id,notas,imagen_url').eq('activo',true).order('nombre'),
     sb.from('bodega_embalajes').select('*').eq('activo',true)
   ]);
-  catCache=cats.data||[];provCache=provs.data||[];prodCache=prods.data||[];
+  let cd=cats.data,pd=provs.data,prd=prods.data,ed=embs.data;
+  if(cats.error||provs.error||prods.error||embs.error){
+    // Sin conexión: usar la última copia guardada en el dispositivo
+    let snap=null; try{ snap=JSON.parse(lsGet('bg_cache_offline')||'null'); }catch(e){_swallow(e)}
+    if(snap){ cd=snap.cats; pd=snap.provs; prd=snap.prods; ed=snap.embs; }
+    if(snap || !prodCache.length){
+      catCache=cd||[];provCache=pd||[];prodCache=prd||[];
+      embCache={};
+      (ed||[]).forEach(e=>{if(!embCache[e.producto_id])embCache[e.producto_id]=[];embCache[e.producto_id].push(e);});
+    }
+    _cacheTs=0;
+    return;
+  }
+  catCache=cd||[];provCache=pd||[];prodCache=prd||[];
   embCache={};
-  (embs.data||[]).forEach(e=>{if(!embCache[e.producto_id])embCache[e.producto_id]=[];embCache[e.producto_id].push(e);});
+  (ed||[]).forEach(e=>{if(!embCache[e.producto_id])embCache[e.producto_id]=[];embCache[e.producto_id].push(e);});
   _cacheTs=Date.now();
+  lsSet('bg_cache_offline',JSON.stringify({ts:_cacheTs,cats:catCache,provs:provCache,prods:prodCache,embs:ed||[]}));
 }
+
+// ─── Modo sin conexión ───
+function bgEsErrorRed(e){
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return true;
+  const m=String((e&&e.message)||e||'');
+  return /fetch|network|conexi|load failed|timeout/i.test(m);
+}
+function bgSetOnlineBadge(on){
+  const b=document.getElementById('db-badge'); if(!b) return;
+  b.textContent=on?'● Conectado':'● Sin conexión';
+  b.style.color=on?'var(--green)':'var(--amber)';
+}
+window.addEventListener('offline',function(){ window.__bgOffline=true; bgSetOnlineBadge(false); if(typeof toast==='function') toast('Sin conexión: mostrando datos guardados. No se pueden registrar cambios.','err'); });
+window.addEventListener('online',function(){
+  const eraOffline=window.__bgOffline; window.__bgOffline=false; bgSetOnlineBadge(true);
+  if(typeof toast==='function') toast('✓ Conexión restablecida');
+  // Si arrancó sin conexión y nadie entró todavía, recargar para iniciar normal
+  if(eraOffline && typeof usuarioActual!=='undefined' && !usuarioActual){ location.reload(); return; }
+  if(typeof loadCaches==='function') loadCaches(true);
+});
 
 // Forzar recarga del caché (llamar después de guardar productos/embalajes)
 function invalidarCache(){ _cacheTs=0; }
@@ -5879,7 +5920,17 @@ initMobileShell();
   async function cargarUsuariosInicial(){
     try{
       const {data,error}=await sb.from('bodega_usuarios_login').select('*').order('nombre');
-      if(error){usuariosDisponibles=false;return;}
+      if(error){
+        // Sin conexión: entrar con el último usuario que inició sesión en este dispositivo
+        let perfilOff=null; try{ perfilOff=lsGet('bg_usuario_actual') && JSON.parse(lsGet('bg_usuario_offline')||'null'); }catch(e){_swallow(e)}
+        if(bgEsErrorRed(error) && perfilOff){
+          usuarioActual=perfilOff; initUsuariosNav(); initUserBadge(); applyUsuarioPermisos();
+          await loadCaches(true); goTo('inicio');
+          toast('Sin conexión: modo consulta con datos guardados','err');
+          return;
+        }
+        usuariosDisponibles=false;return;
+      }
       usuariosDisponibles=true;
       const usuarios=data||[];
       initUsuariosNav(); initUserBadge();
@@ -5887,7 +5938,7 @@ initMobileShell();
       const {data:sess}=await sb.auth.getSession();
       if(sess?.session?.user){
         const {data:perfil}=await sb.from('bodega_usuarios').select('*').eq('auth_id',sess.session.user.id).maybeSingle();
-        if(perfil){usuarioActual=perfil;applyUsuarioPermisos();await loadCaches(true);goTo('inicio');return;}
+        if(perfil){usuarioActual=perfil;lsSet('bg_usuario_offline',JSON.stringify(perfil));applyUsuarioPermisos();await loadCaches(true);goTo('inicio');return;}
       }
       if(!usuarios.length){usuarioActual={nombre:'Administrador',rol:'admin',modulos:{}};applyUsuarioPermisos();await loadCaches(true);goTo('inicio');return;}
       mostrarLoginUsuarios(usuarios);
@@ -5926,12 +5977,12 @@ initMobileShell();
     const {data:{user}}=await sb.auth.getUser();
     const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
     if(error||!data){toast('No se pudo cargar el perfil','err');return;}
-    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
+    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
   };
   function mostrarMenuUsuario(){
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
   }
-  window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){_swallow(e)}lsRemove('bg_usuario_actual');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){_swallow(e)}usuarioActual=null;closeModal();cargarUsuariosInicial();};
+  window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){_swallow(e)}lsRemove('bg_usuario_actual');lsRemove('bg_usuario_offline');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){_swallow(e)}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
   async function renderUsuarios(){
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
