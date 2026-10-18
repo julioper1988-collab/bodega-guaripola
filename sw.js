@@ -1,5 +1,5 @@
 /* ── Service Worker — Bodega Guaripola v2 ── */
-const CACHE_NAME = 'guaripola-v3';
+const CACHE_NAME = 'guaripola-v4';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
@@ -9,7 +9,9 @@ const PRECACHE = [
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js',
+  'https://unpkg.com/@zxing/library@0.23.0/umd/index.min.js'
 ];
 
 /* ── IndexedDB helpers ── */
@@ -148,7 +150,21 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Assets propios (index.html, manifest, icons): cache-first + background update
+  // HTML (navegación): network-first para recibir siempre la última versión
+  if(event.request.mode === 'navigate'){
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if(response && response.status === 200){
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(c => c.put('./index.html', clone));
+        }
+        return response;
+      }).catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Assets propios (manifest, icons): cache-first + background update
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(response => {

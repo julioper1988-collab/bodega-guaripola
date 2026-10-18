@@ -20,7 +20,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script id="bg-safehtml-global-fix">
 // ── Función única global de escape HTML ──
 function escapeHtml(s){
@@ -620,7 +620,21 @@ window.safeHtml = escapeHtml;
   },600);
 })();
 </script>
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script>
+/* ZXing (escáner) se carga bajo demanda, solo al abrir la cámara */
+window.bgLoadZXing=function(){
+  if(window.ZXing) return Promise.resolve(true);
+  if(window.__zxingP) return window.__zxingP;
+  window.__zxingP=new Promise(function(res){
+    var s=document.createElement('script');
+    s.src='https://unpkg.com/@zxing/library@0.23.0/umd/index.min.js';
+    s.onload=function(){res(true);};
+    s.onerror=function(){window.__zxingP=null;res(false);};
+    document.head.appendChild(s);
+  });
+  return window.__zxingP;
+};
+</script>
 <style>
 /* ═══════════════════════════════════════════════════════════════
    BODEGA GUARIPOLA — DARK PROFESSIONAL THEME
@@ -2530,7 +2544,17 @@ async function saveProd(id=null){
   const obj={codigo_barra:gs('p-cod').value||null,nombre:gs('p-nom').value.trim(),categoria_id:gs('p-cat').value||null,proveedor_id:gs('p-prov').value||null,unidad:gs('p-uni').value,stock:parseInt(gs('p-stock').value)||0,stock_minimo:parseInt(gs('p-stmin').value)||0,precio_costo:parseFloat(gs('p-costo').value)||0,precio_venta:parseFloat(gs('p-venta').value)||0,precio_mayorista:parseFloat(gs('p-mayor').value)||0,notas:gs('p-notas').value||null};
   if(!obj.nombre){toast('Nombre obligatorio','err');return;}
   let err;
-  if(id)({error:err}=await sb.from('bodega_productos').update(obj).eq('id',id));
+  if(id){
+    // Stock: no pisar ventas concurrentes; solo se ajusta (atómico) si el usuario lo cambió
+    const stEl=gs('p-stock'),stOrig=parseInt(stEl?.defaultValue)||0;
+    delete obj.stock;
+    if(stEl && (parseInt(stEl.value)||0)!==stOrig){
+      const nv=parseInt(stEl.value)||0;
+      ({error:err}=await sb.rpc('ajustar_stock',{p_producto_id:id,p_tipo:'inventario',p_cantidad:nv,p_delta:0,p_set:nv,p_motivo:'Edición de producto',p_ref_tipo:'ajuste_manual'}));
+      if(err){toast('Error: '+err.message,'err');return;}
+    }
+    ({error:err}=await sb.from('bodega_productos').update(obj).eq('id',id));
+  }
   else({error:err}=await sb.from('bodega_productos').insert(obj));
   if(err){toast('Error: '+err.message,'err');return;}
   _dashCache=null;toast(id?'Actualizado':'Creado');closeModal();await loadCaches(true);renderProductos();
@@ -3229,13 +3253,11 @@ async function confirmarFinalizar(compraId){
   const {data:det}=await sb.from('bodega_compras_detalle').select('*,bodega_productos(stock,precio_costo)').eq('compra_id',compraId);
   await sb.from('bodega_compras').update({estado:'finalizado'}).eq('id',compraId);
   for(const d of(det||[])){
-    const sa=d.bodega_productos?.stock||0;
-    const ns=sa+d.cantidad; // d.cantidad ya está en unidades
+    // d.cantidad ya está en unidades
     // Costo unitario: si uds_por_embalaje > 1, dividir entre las unidades del pack
     const uds=Math.max(1,parseInt(d.uds_por_embalaje)||1);
     const costoUnitario=(parseFloat(d.costo_unitario)||0)/uds;
-    await sb.from('bodega_productos').update({stock:ns,precio_costo:costoUnitario}).eq('id',d.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'entrada',cantidad:d.cantidad,motivo:'Compra finalizada',stock_anterior:sa,stock_nuevo:ns,referencia_id:compraId,referencia_tipo:'compra'});
+    await sb.rpc('ajustar_stock',{p_producto_id:d.producto_id,p_tipo:'entrada',p_cantidad:d.cantidad,p_delta:d.cantidad,p_motivo:'Compra finalizada',p_ref_id:compraId,p_ref_tipo:'compra',p_precio_costo:costoUnitario});
   }
   _dashCache=null;toast('✓ Compra finalizada — stock actualizado');await loadCaches(true);renderHistorialCompras();
 }
@@ -3364,12 +3386,12 @@ async function saveAjuste(){
   const prodId=gs('aj-prod-id').value,tipo=gs('aj-tipo').value,cant=parseInt(gs('aj-cant').value)||1,motivo=gs('aj-motivo').value;
   if(!prodId){toast('Seleccioná un producto','err');return;}
   const p=prodCache.find(x=>x.id===prodId);
-  let ns=p.stock;
-  if(tipo==='ajuste_positivo'||tipo==='entrada')ns+=cant;
-  else if(tipo==='ajuste_negativo'||tipo==='salida')ns-=cant;
-  else if(tipo==='inventario')ns=cant;
-  await sb.from('bodega_productos').update({stock:ns}).eq('id',prodId);
-  await sb.from('bodega_ajustes_stock').insert({producto_id:prodId,tipo,cantidad:cant,motivo,stock_anterior:p.stock,stock_nuevo:ns,referencia_tipo:'ajuste_manual'});
+  let delta=0,setv=null;
+  if(tipo==='ajuste_positivo'||tipo==='entrada')delta=cant;
+  else if(tipo==='ajuste_negativo'||tipo==='salida')delta=-cant;
+  else if(tipo==='inventario')setv=cant;
+  const {error}=await sb.rpc('ajustar_stock',{p_producto_id:prodId,p_tipo:tipo,p_cantidad:cant,p_delta:delta,p_set:setv,p_motivo:motivo,p_ref_tipo:'ajuste_manual'});
+  if(error){toast('Error: '+error.message,'err');return;}
   _dashCache=null;toast('Ajuste guardado');closeModal();await loadCaches(true);renderAjustes();
 }
 
@@ -3632,11 +3654,8 @@ async function borrarVenta(id, silencioso=false){
   if(dErr){toast('Error: '+dErr.message,'err');return false;}
 
   for(const d of detalles||[]){
-    const p=prodCache.find(x=>x.id===d.producto_id);
-    if(!p) continue;
-    const ns=(p.stock||0)+(d.cantidad||0);
-    await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'entrada',cantidad:d.cantidad,motivo:'Venta borrada',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:id,referencia_tipo:'venta_borrada'});
+    if(!d.producto_id) continue;
+    await sb.rpc('ajustar_stock',{p_producto_id:d.producto_id,p_tipo:'entrada',p_cantidad:d.cantidad||0,p_delta:d.cantidad||0,p_motivo:'Venta borrada',p_ref_id:id,p_ref_tipo:'venta_borrada'});
   }
 
   await sb.from('bodega_fiados').delete().eq('venta_id',id);
@@ -3694,10 +3713,8 @@ async function borrarCompra(id, silencioso=false){
 
   if(compra?.estado==='finalizado'){
     for(const d of detalles||[]){
-      const p=prodCache.find(x=>x.id===d.producto_id); if(!p) continue;
-      const ns=Math.max(0,(p.stock||0)-(d.cantidad||0));
-      await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
-      await sb.from('bodega_ajustes_stock').insert({producto_id:d.producto_id,tipo:'salida',cantidad:d.cantidad,motivo:'Compra borrada',stock_anterior:p.stock,stock_nuevo:ns,referencia_id:id,referencia_tipo:'compra_borrada'});
+      if(!d.producto_id) continue;
+      await sb.rpc('ajustar_stock',{p_producto_id:d.producto_id,p_tipo:'salida',p_cantidad:d.cantidad||0,p_delta:-(d.cantidad||0),p_motivo:'Compra borrada',p_ref_id:id,p_ref_tipo:'compra_borrada',p_min_cero:true});
     }
   }
   await sb.from('bodega_compras_detalle').delete().eq('compra_id',id);
@@ -4509,6 +4526,7 @@ initMobileShell();
     const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'},torch:false},audio:false};
     try{
       // Safari/iPhone no suele tener BarcodeDetector. Por eso primero probamos ZXing.
+      await bgLoadZXing();
       if(window.ZXing && ZXing.BrowserMultiFormatReader){
         // Configurar hints para lectura desde cualquier ángulo
         const hints = new Map();
@@ -4731,6 +4749,7 @@ initMobileShell();
     const constraints={video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:'continuous'},torch:false},audio:false};
 
     try{
+      await bgLoadZXing();
       if(window.ZXing && ZXing.BrowserMultiFormatReader){
         const hints2 = new Map();
         const formats2 = [
@@ -7965,20 +7984,17 @@ async function revertirStockCompraReal(compraId, detalles){
     const p = prodCache.find(x => x.id === d.producto_id);
     if(!p) continue;
     const cant = parseInt(d.cantidad) || 0;
-    const stockAnt = parseInt(p.stock)||0;
-    const ns = Math.max(0, stockAnt - cant);
-    await sb.from('bodega_productos').update({stock: ns}).eq('id', d.producto_id);
-    await sb.from('bodega_ajustes_stock').insert({
-      producto_id: d.producto_id,
-      tipo: 'salida',
-      cantidad: cant,
-      motivo: 'Edición de compra — reversa anterior',
-      stock_anterior: stockAnt,
-      stock_nuevo: ns,
-      referencia_id: compraId,
-      referencia_tipo: 'compra_editada_reversa'
+    const {data: ns} = await sb.rpc('ajustar_stock', {
+      p_producto_id: d.producto_id,
+      p_tipo: 'salida',
+      p_cantidad: cant,
+      p_delta: -cant,
+      p_motivo: 'Edición de compra — reversa anterior',
+      p_ref_id: compraId,
+      p_ref_tipo: 'compra_editada_reversa',
+      p_min_cero: true
     });
-    p.stock = ns; // actualizar caché local inmediatamente
+    if(ns != null) p.stock = ns; // actualizar caché local inmediatamente
   }
   await loadCaches(true);
 }
@@ -8440,19 +8456,16 @@ async function revertirStockCompraReal(compraId, detalles){
       const p=prodCache.find(x=>x.id===d.producto_id);
       if(!p) continue;
       const cant=Number(d.cantidad)||0;
-      const ns=(Number(p.stock)||0)+cant;
-      await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
-      await sb.from('bodega_ajustes_stock').insert({
-        producto_id:d.producto_id,
-        tipo:'entrada',
-        cantidad:cant,
-        motivo:'Edición de venta: reversa anterior',
-        stock_anterior:p.stock,
-        stock_nuevo:ns,
-        referencia_id:ventaId,
-        referencia_tipo:'venta_editada_reversa'
+      const {data:ns}=await sb.rpc('ajustar_stock',{
+        p_producto_id:d.producto_id,
+        p_tipo:'entrada',
+        p_cantidad:cant,
+        p_delta:cant,
+        p_motivo:'Edición de venta: reversa anterior',
+        p_ref_id:ventaId,
+        p_ref_tipo:'venta_editada_reversa'
       });
-      p.stock=ns;
+      if(ns!=null) p.stock=ns;
     }
   }
 
@@ -8461,19 +8474,16 @@ async function revertirStockCompraReal(compraId, detalles){
       const p=prodCache.find(x=>x.id===c.producto_id);
       if(!p) continue;
       const cant=(Number(c.cantidad)||0)*(Number(c.uds)||1);
-      const ns=(Number(p.stock)||0)-cant;
-      await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
-      await sb.from('bodega_ajustes_stock').insert({
-        producto_id:c.producto_id,
-        tipo:'salida',
-        cantidad:cant,
-        motivo:esFiado?'Venta fiada editada':'Venta editada',
-        stock_anterior:p.stock,
-        stock_nuevo:ns,
-        referencia_id:ventaId,
-        referencia_tipo:'venta_editada'
+      const {data:ns}=await sb.rpc('ajustar_stock',{
+        p_producto_id:c.producto_id,
+        p_tipo:'salida',
+        p_cantidad:cant,
+        p_delta:-cant,
+        p_motivo:esFiado?'Venta fiada editada':'Venta editada',
+        p_ref_id:ventaId,
+        p_ref_tipo:'venta_editada'
       });
-      p.stock=ns;
+      if(ns!=null) p.stock=ns;
     }
   }
 
@@ -9352,9 +9362,9 @@ async function revertirStockCompraReal(compraId, detalles){
       for(const d of detAnt||[]){
         const p=prodCache.find(x=>String(x.id)===String(d.producto_id));
         if(p){
-          const ns=(p.stock||0)+(Number(d.cantidad)||0);
-          await sb.from('bodega_productos').update({stock:ns}).eq('id',d.producto_id);
-          p.stock=ns; // actualizar caché local
+          const cantAnt=Number(d.cantidad)||0;
+          const {data:ns}=await sb.rpc('ajustar_stock',{p_producto_id:d.producto_id,p_tipo:'entrada',p_cantidad:cantAnt,p_delta:cantAnt,p_motivo:'Edición de venta: reversa anterior',p_ref_id:ventaId,p_ref_tipo:'venta_editada_reversa'});
+          if(ns!=null) p.stock=ns; // actualizar caché local
         }
       }
 
@@ -9379,15 +9389,12 @@ async function revertirStockCompraReal(compraId, detalles){
         const cantUds=(Number(c.cantidad)||0)*(Number(c.uds)||1);
         const p=prodCache.find(x=>String(x.id)===String(c.producto_id));
         if(p){
-          const stockAnt=p.stock||0;
-          const ns=stockAnt-cantUds; // permitir negativo para detectar errores de stock
-          await sb.from('bodega_productos').update({stock:ns}).eq('id',c.producto_id);
-          await sb.from('bodega_ajustes_stock').insert({
-            producto_id:c.producto_id,tipo:'salida',cantidad:cantUds,
-            motivo:'Venta editada',stock_anterior:stockAnt,stock_nuevo:ns,
-            referencia_id:ventaId,referencia_tipo:'venta_editada'
+          // permitir negativo para detectar errores de stock
+          const {data:ns}=await sb.rpc('ajustar_stock',{
+            p_producto_id:c.producto_id,p_tipo:'salida',p_cantidad:cantUds,p_delta:-cantUds,
+            p_motivo:'Venta editada',p_ref_id:ventaId,p_ref_tipo:'venta_editada'
           });
-          p.stock=ns;
+          if(ns!=null) p.stock=ns;
           if(ns<0) toast('⚠️ Stock negativo en '+c.nombre+' ('+ns+'). Verificá el inventario.','err');
         }
       }
@@ -13425,9 +13432,24 @@ window.diagnosticarStockCompras = async function(){
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
+    // Aviso de nueva versión: el SW nuevo toma control (skipWaiting) → ofrecer recargar
+    var hadCtrl=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(!hadCtrl){ hadCtrl=true; return; }
+      if(document.getElementById('bg-update-bar')) return;
+      var bar=document.createElement('div');
+      bar.id='bg-update-bar';
+      bar.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#1e40af;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 32px)';
+      bar.innerHTML='<span>🔄 Hay una nueva versión del sistema</span><button style="background:#fff;color:#1e40af;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer">Actualizar</button>';
+      bar.querySelector('button').onclick=function(){ location.reload(); };
+      document.body.appendChild(bar);
+    });
     navigator.serviceWorker.register('./sw.js')
       .then(reg => {
         console.log('[SW] Registrado:', reg.scope);
+        // Buscar versión nueva al volver a la app y cada 30 min
+        document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') reg.update().catch(function(){}); });
+        setInterval(function(){ reg.update().catch(function(){}); }, 30*60*1000);
         // Registrar background sync cuando vuelve la red
         window.addEventListener('online', function(){
           if(reg.sync){
