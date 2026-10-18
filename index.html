@@ -1753,6 +1753,7 @@ async function loadCaches(force=false){
       catCache=cd||[];provCache=pd||[];prodCache=prd||[];
       embCache={};
       (ed||[]).forEach(e=>{if(!embCache[e.producto_id])embCache[e.producto_id]=[];embCache[e.producto_id].push(e);});
+      bgAplicarStockPendiente();
     }
     _cacheTs=0;
     return;
@@ -1762,6 +1763,7 @@ async function loadCaches(force=false){
   (ed||[]).forEach(e=>{if(!embCache[e.producto_id])embCache[e.producto_id]=[];embCache[e.producto_id].push(e);});
   _cacheTs=Date.now();
   lsSet('bg_cache_offline',JSON.stringify({ts:_cacheTs,cats:catCache,provs:provCache,prods:prodCache,embs:ed||[]}));
+  bgAplicarStockPendiente(); // ventas sin conexión aún no enviadas
 }
 
 // ─── Modo sin conexión ───
@@ -1772,16 +1774,83 @@ function bgEsErrorRed(e){
 }
 function bgSetOnlineBadge(on){
   const b=document.getElementById('db-badge'); if(!b) return;
-  b.textContent=on?'● Conectado':'● Sin conexión';
-  b.style.color=on?'var(--green)':'var(--amber)';
+  if(on===undefined) on=!window.__bgOffline;
+  const n=bgVentasPendientes().length;
+  b.textContent=(on?'● Conectado':'● Sin conexión')+(n?' · '+n+' pend.':'');
+  b.style.color=on&&!n?'var(--green)':'var(--amber)';
 }
-window.addEventListener('offline',function(){ window.__bgOffline=true; bgSetOnlineBadge(false); if(typeof toast==='function') toast('Sin conexión: mostrando datos guardados. No se pueden registrar cambios.','err'); });
+
+// ─── Ventas sin conexión (cola local, idempotente por client_uuid) ───
+const BG_VP_KEY='bg_ventas_pendientes';
+function bgUuid(){
+  try{ if(crypto.randomUUID) return crypto.randomUUID(); }catch(e){_swallow(e)}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&3|8)).toString(16);});
+}
+function bgVentasPendientes(){
+  try{ return JSON.parse(localStorage.getItem(BG_VP_KEY)||'[]')||[]; }catch(e){ return []; }
+}
+function bgGuardarPendientes(list){
+  try{ localStorage.setItem(BG_VP_KEY,JSON.stringify(list)); return true; }catch(e){ return false; }
+}
+function bgAplicarStockPendiente(){
+  const m={};
+  bgVentasPendientes().forEach(v=>(v.args?.p_productos||[]).forEach(p=>{ m[p.producto_id]=(m[p.producto_id]||0)+(Number(p.cantidad)||0); }));
+  (prodCache||[]).forEach(p=>{ if(m[p.id]) p.stock=(p.stock||0)-m[p.id]; });
+}
+async function bgRegistrarVenta(args, fiados){
+  const uuid=bgUuid();
+  if(!(typeof navigator!=='undefined' && navigator.onLine===false)){
+    try{
+      const {data,error}=await sb.rpc('registrar_venta_offline',{p_client_uuid:uuid,p_venta:args,p_fiados:fiados||[]});
+      if(!error) return data;
+      if(!bgEsErrorRed(error)) return {ok:false,error:error.message};
+    }catch(e){ if(!bgEsErrorRed(e)) return {ok:false,error:e.message}; }
+  }
+  // Sin red (o la respuesta no llegó): guardar en el dispositivo con el mismo uuid
+  const list=bgVentasPendientes();
+  // caja abierta al momento de vender (se respeta al enviar)
+  try{ const cj=JSON.parse(localStorage.getItem('bg_caja_activa')||'null'); if(cj&&cj.id) args=Object.assign({},args,{p_caja_id:cj.id}); }catch(e){_swallow(e)}
+  list.push({uuid,args,fiados:fiados||[],ts:Date.now()});
+  if(!bgGuardarPendientes(list)) return {ok:false,error:'Sin conexión y no se pudo guardar en el dispositivo'};
+  window.__bgOffline=true; bgSetOnlineBadge(false);
+  return {ok:true,offline:true,venta_id:null,numero_venta:null};
+}
+let __bgSyncing=false;
+async function bgSyncVentasPendientes(){
+  if(__bgSyncing || !sb) return;
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return;
+  const list=bgVentasPendientes(); if(!list.length) return;
+  __bgSyncing=true;
+  let ok=0, fallidas=0;
+  const enviados=new Set(), errores={};
+  try{
+    for(const v of list){
+      let res=null;
+      try{ res=await sb.rpc('registrar_venta_offline',{p_client_uuid:v.uuid,p_venta:v.args,p_fiados:v.fiados||[]}); }
+      catch(e){ res={error:e}; }
+      if(res.error){
+        if(bgEsErrorRed(res.error)) break; // sigue sin red: reintentar luego
+        errores[v.uuid]=res.error.message; fallidas++; continue;
+      }
+      if(res.data?.ok){ enviados.add(v.uuid); ok++; }
+      else { errores[v.uuid]=res.data?.error||'Error'; fallidas++; }
+    }
+    // releer: pudieron agregarse ventas mientras se sincronizaba
+    bgGuardarPendientes(bgVentasPendientes().filter(x=>!enviados.has(x.uuid)).map(x=>errores[x.uuid]?Object.assign(x,{error:errores[x.uuid]}):x));
+  }finally{ __bgSyncing=false; }
+  if(ok){ window.__bgOffline=false; if(typeof toast==='function') toast('✅ '+ok+' venta(s) sin conexión enviadas'); _dashCache=null; if(typeof loadCaches==='function') loadCaches(true); }
+  if(fallidas && typeof toast==='function') toast('⚠️ '+fallidas+' venta(s) pendientes con error: '+Object.values(errores)[0],'err');
+  bgSetOnlineBadge();
+}
+setInterval(function(){ bgSyncVentasPendientes(); }, 60*1000);
+setTimeout(function(){ bgSyncVentasPendientes(); bgSetOnlineBadge(); }, 8000);
+window.addEventListener('offline',function(){ window.__bgOffline=true; bgSetOnlineBadge(false); if(typeof toast==='function') toast('Sin conexión: se puede vender (queda pendiente). Otros cambios no se guardan.','err'); });
 window.addEventListener('online',function(){
   const eraOffline=window.__bgOffline; window.__bgOffline=false; bgSetOnlineBadge(true);
   if(typeof toast==='function') toast('✓ Conexión restablecida');
   // Si arrancó sin conexión y nadie entró todavía, recargar para iniciar normal
   if(eraOffline && typeof usuarioActual!=='undefined' && !usuarioActual){ location.reload(); return; }
-  if(typeof loadCaches==='function') loadCaches(true);
+  bgSyncVentasPendientes().finally(function(){ if(typeof loadCaches==='function') loadCaches(true); });
 });
 
 // Forzar recarga del caché (llamar después de guardar productos/embalajes)
@@ -9217,7 +9286,7 @@ async function revertirStockCompraReal(compraId, detalles){
       };
     });
 
-    const {data,error}=await sb.rpc('registrar_venta_atomica',{
+    const __ventaArgs={
       p_fecha:               fechaHoyPY(),
       p_tipo:                ventaTipo,
       p_cliente_nombre:      cli.nombre||null,
@@ -9230,67 +9299,36 @@ async function revertirStockCompraReal(compraId, detalles){
       p_monto_efectivo:      selectedPay==='mixto'?parseFloat(gs('v-efec')?.value)||0:((selectedPay==='efectivo'||selectedPay==='parcial')?importe:0),
       p_monto_transferencia: selectedPay==='mixto'?parseFloat(gs('v-transf')?.value)||0:(selectedPay==='transferencia'?importe:0),
       p_monto_otro:          selectedPay==='mixto'?((parseFloat(gs('v-qr')?.value)||0)+(parseFloat(gs('v-debito')?.value)||0)+(parseFloat(gs('v-credito-mix')?.value)||0)):((selectedPay==='credito'||selectedPay==='debito'||selectedPay==='qr')?totalFinal:0)
-    });
+    };
 
-    if(error||!data?.ok){
-      toast('Error al registrar venta: '+(data?.error||error?.message||'Error desconocido'),'err');
-      return;
-    }
-
-    const ventaId    = data.venta_id;
-    const numVenta   = data.numero_venta || null;
-
-    // Registrar fiado en bodega_fiados si aplica
+    // Fiados de esta venta (se registran junto con la venta, en la misma operación)
+    const __fiados=[];
     if(selectedPay==='fiado'){
-      const {error:fE}=await sb.from('bodega_fiados').insert({
-        venta_id:    ventaId,
-        cliente_id:  cli.id||null,
-        cliente_nombre: cli.nombre,
-        monto_total: totalFinal,
-        monto_pagado:0,
-        saldo:       totalFinal,
-        estado:      'pendiente',
-        fecha:       fechaHoyPY()
-      });
-      if(fE) toast('Venta guardada, pero falló el registro de fiado: '+fE.message,'err');
+      __fiados.push({cliente_id:cli.id||null,cliente_nombre:cli.nombre,monto_total:totalFinal,fecha:fechaHoyPY()});
     }
-
     // Pago parcial: registrar fiado solo por la diferencia
     if(selectedPay==='parcial'){
-      const fiadoDiff = totalFinal - importe;
-      const {error:fE2}=await sb.from('bodega_fiados').insert({
-        venta_id:       ventaId,
-        cliente_id:     cli.id||null,
-        cliente_nombre: cli.nombre,
-        monto_total:    fiadoDiff,
-        monto_pagado:   0,
-        saldo:          fiadoDiff,
-        estado:         'pendiente',
-        fecha:          fechaHoyPY(),
-        notas:          `Pago parcial: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`
-      });
-      if(fE2) toast('Venta guardada, pero falló el fiado parcial: '+fE2.message,'err');
+      __fiados.push({cliente_id:cli.id||null,cliente_nombre:cli.nombre,monto_total:totalFinal-importe,fecha:fechaHoyPY(),
+        notas:`Pago parcial: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`});
     }
-
     // Efectivo con faltante confirmado como fiado
     if(selectedPay==='efectivo' && window.__pagoFaltanteComoParcial){
       const { faltante } = window.__pagoFaltanteComoParcial;
-      const {error:fE3}=await sb.from('bodega_fiados').insert({
-        venta_id:       ventaId,
-        cliente_id:     cli.id||null,
-        cliente_nombre: cli.nombre||'Ocasional',
-        monto_total:    faltante,
-        monto_pagado:   0,
-        saldo:          faltante,
-        estado:         'pendiente',
-        fecha:          fechaHoyPY(),
-        notas:          `Faltante de pago: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`
-      });
-      if(fE3) toast('Venta guardada, pero falló el registro del faltante como fiado: '+fE3.message,'err');
-      window.__pagoFaltanteComoParcial = null;
+      __fiados.push({cliente_id:cli.id||null,cliente_nombre:cli.nombre||'Ocasional',monto_total:faltante,fecha:fechaHoyPY(),
+        notas:`Faltante de pago: recibió ${fmtGs(importe)} de ${fmtGs(totalFinal)}`});
+    }
+    window.__pagoFaltanteComoParcial = null;
+
+    // Idempotente: si no hay red queda en cola y se envía al volver (nunca se duplica)
+    const data=await bgRegistrarVenta(__ventaArgs, __fiados);
+    if(!data?.ok){
+      toast('Error al registrar venta: '+(data?.error||'Error desconocido'),'err');
+      return;
     }
 
-    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : '';
+    const ventaId    = data.venta_id || null;
+    const numVenta   = data.numero_venta || null;
+    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · 📴 pendiente de envío' : '');
     const esFaltanteRegistrado = selectedPay==='efectivo' && importe>0 && importe<totalFinal;
     toast(selectedPay==='fiado'
       ? `✓ Fiado registrado: ${fmtGs(totalFinal)}${nTag}`
