@@ -7960,7 +7960,9 @@ initMobileShell();
       <td style="text-align:right">
         <input type="number" value="${Math.round(item.precio)}" min="0" step="100" onchange="vPriceSet(${i},this.value)" oninput="vPriceSet(${i},this.value,false)" style="width:112px;text-align:right;padding:5px;font-weight:700;color:var(--accent2)">
       </td>
-      <td style="text-align:right;font-weight:700;color:var(--accent2)">${fmtGs(item.subtotalCalculado ?? (item.precio*item.cantidad))}</td>
+      <td style="text-align:right">
+        <input type="number" value="${Math.round(item.subtotalCalculado ?? (item.precio*item.cantidad))}" min="0" step="100" onchange="vTotalSet(${i},this.value)" style="width:112px;text-align:right;padding:5px;font-weight:700;color:var(--accent2)">
+      </td>
       <td><button onclick="vRemove(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px">✕</button></td>
     </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2)">Buscá o escaneá un producto para agregar</td></tr>';
     if(gs('v-count'))gs('v-count').textContent=cart.length;
@@ -7993,8 +7995,18 @@ initMobileShell();
     else{
       const sub=cart[i].subtotalCalculado ?? (cart[i].precio*cart[i].cantidad);
       const row=gs('venta-tbody')?.children?.[i];
-      if(row&&row.children&&row.children[3])row.children[3].textContent=fmtGs(sub);
+      const inp=row&&row.children&&row.children[3]&&row.children[3].querySelector('input');
+      if(inp)inp.value=Math.round(sub);
     }
+  };
+  window.vTotalSet=vTotalSet=function(i,v){
+    if(!cart[i])return;
+    const t=Math.max(0,parseFloat(v)||0), c=Math.max(1,parseInt(cart[i].cantidad)||1);
+    cart[i].precio=t/c;
+    cart[i].precioManual=true;
+    cart[i].packInfo='Precio manual';
+    cart[i].subtotalCalculado=t;
+    renderVentaTable();
   };
 
   const renderVentasBase=window.renderVentas || renderVentas;
@@ -15000,7 +15012,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   #venta-layout.bg5-simple #venta-tbody td:nth-child(5){grid-area:rm;align-self:start}
   #venta-layout.bg5-simple #venta-tbody td:nth-child(2) button{width:38px!important;height:38px!important;font-size:18px;font-weight:700}
   #venta-layout.bg5-simple #venta-tbody td:nth-child(2) input{width:52px!important}
-  #venta-layout.bg5-simple #venta-tbody td:nth-child(3) input{width:100%!important;max-width:120px}
+  #venta-layout.bg5-simple #venta-tbody td:nth-child(3) input,#venta-layout.bg5-simple #venta-tbody td:nth-child(4) input{width:100%!important;max-width:120px}
   /* Hoja de cobro a pantalla completa */
   #venta-layout.bg5-simple #venta-right.vr-open{top:0!important;max-height:none!important;height:100dvh!important;border-radius:0!important;z-index:13000!important;transform:none!important;background:var(--bg)!important;padding-bottom:env(safe-area-inset-bottom,0px)}
   #venta-layout.bg5-simple #venta-right.vr-open #vr-cobro-bar{display:none!important}
@@ -15090,7 +15102,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   #venta-layout.bg5-grid #venta-table{min-width:0!important;width:100%}
   #venta-layout.bg5-grid #venta-table thead th{padding:8px!important;width:auto!important}
   #venta-layout.bg5-grid #venta-tbody td:nth-child(2) input{width:40px!important}
-  #venta-layout.bg5-grid #venta-tbody td:nth-child(3) input{width:78px!important}
+  #venta-layout.bg5-grid #venta-tbody td:nth-child(3) input,#venta-layout.bg5-grid #venta-tbody td:nth-child(4) input{width:78px!important}
   #venta-layout.bg5-grid #venta-tbody td{padding:8px 8px!important;font-size:12px!important}
   #venta-layout.bg5-grid #venta-tbody td .bg5-stock{font-size:10px}
   #venta-layout.bg5-grid #bg5-cart-foot .row,#venta-layout.bg5-grid #bg5-cart-foot .cob{display:none}
