@@ -39,6 +39,8 @@ header p{color:var(--text2);font-size:13px;margin-top:2px}
 .env{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
 .env .seg{margin-top:6px}.env .seg button{padding:8px;font-size:13px}
 .env.falta .small{color:var(--err);font-weight:600}
+.chk{display:flex;align-items:center;gap:10px;margin-top:16px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer}
+.chk input{width:20px;height:20px;accent-color:var(--acc)}
 .item img{width:48px;height:48px;object-fit:cover;border-radius:10px;background:var(--bg3);flex:none}
 .item .info,.pack .info{flex:1;min-width:0}
 .item .nom{font-weight:600;overflow-wrap:anywhere}
@@ -302,6 +304,9 @@ function checkout(){
     '<label>Teléfono / WhatsApp</label><input id="f-tel" class="in" type="tel" autocomplete="tel" value="'+esc(cli.telefono||'')+'">'+
     '<label>Entrega</label><div id="sh-ent">'+entHtml()+'</div>'+
     '<label>Pago</label><div id="sh-pago">'+pagoHtml()+'</div>'+
+    '<label class="chk"><input type="checkbox" id="f-fact"'+(cli.ruc?' checked':'')+'> 🧾 Necesito factura</label>'+
+    '<div class="slide'+(cli.ruc?' open':'')+'" id="sh-fact"><div><label>RUC o CI</label><input id="f-ruc" class="in" inputmode="text" placeholder="Ej: 1234567-8" value="'+esc(cli.ruc||'')+'">'+
+    '<label>Nombre o razón social</label><input id="f-razon" class="in" autocomplete="organization" value="'+esc(cli.razon||'')+'"></div></div>'+
     '<label>Notas (opcional)</label><textarea id="f-notas" class="in" rows="2" placeholder="Ej: sin sal, timbre no funciona…"></textarea>'+
     '<div id="f-err" class="err"></div>'+
     '<button class="btn" id="sendBtn"'+(c.abierto?'':' disabled')+'>'+(c.abierto?'Confirmar pedido':'Cerrado por ahora')+'</button>';
@@ -339,6 +344,7 @@ function getUbi(){
 async function enviar(){
   const v=id=>($(id)?.value||'').trim();
   const body={nombre:v('f-nom'),telefono:v('f-tel'),entrega:ent,direccion:ent==='delivery'?v('f-dir'):'',ubicacion:ent==='delivery'?v('f-ubi'):'',metodo_pago:pago,paga_con:pago==='efectivo'?v('f-paga'):'',notas:v('f-notas'),
+    factura:$('f-fact')&&$('f-fact').checked?{ruc:v('f-ruc'),razon:v('f-razon')}:null,
     items:Object.entries(cart).map(([k,c])=>{const l=line(k);return l?{origen:l.o,id:l.id,pack:l.pk||null,cantidad:c,envase:l.env?envs[k]||null:null}:null;}).filter(Boolean)};
   const sinEnv=Object.keys(cart).find(k=>{const l=line(k);return l&&l.env&&!envs[k];});
   if(sinEnv){const e=document.querySelector('[data-envq="'+CSS.escape(sinEnv)+'"]');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}
@@ -347,13 +353,15 @@ async function enviar(){
   const cer=['asadito','bodega'].filter(l=>!abierto(l)&&body.items.some(i=>i.origen===l));
   if(cer.length){err((cer[0]==='asadito'?'El asadito':'La bodega')+' está cerrado ahora. Quitá esos productos'+(proxima(cer[0])?' o pedí '+proxima(cer[0]):'')+'.');return;}
   if(body.nombre.length<2){err('Ingresá tu nombre.');return;}
+  if(body.factura&&!/^[0-9A-Za-z.]{3,15}(-[0-9])?$/.test(body.factura.ruc.replace(/\s/g,''))){err('Revisá el RUC para la factura (ej: 1234567-8).');return;}
+  if(body.factura&&body.factura.razon.length<2){err('Ingresá el nombre o razón social para la factura.');return;}
   if(body.telefono.replace(/\D/g,'').length<6){err('Ingresá tu teléfono.');return;}
   if(ent==='delivery'&&!body.direccion){err('Ingresá la dirección.');return;}
   const b=$('sendBtn');b.disabled=true;b.textContent='Enviando…';$('f-err').textContent='';
   try{
     const r=await rpc('pedidos_crear',{p:body});
     if(!r||!r.ok){err((r&&r.error)||'No se pudo enviar.');b.disabled=false;b.textContent='Confirmar pedido';if(r&&/disponible|stock/i.test(r.error||''))load();return;}
-    lsSet(LS_CLI,{nombre:body.nombre,telefono:body.telefono,direccion:body.direccion||lsGet(LS_CLI,{}).direccion});
+    lsSet(LS_CLI,{nombre:body.nombre,telefono:body.telefono,direccion:body.direccion||lsGet(LS_CLI,{}).direccion,ruc:body.factura?body.factura.ruc:'',razon:body.factura?body.factura.razon:''});
     lsSet(LS_LAST,r.token);
     cart={};lsSet(LS_CART,cart);envs={};lsSet(LS_ENV,envs);render();
     showDone(r,body);
@@ -367,7 +375,7 @@ function showDone(r,body){
   if(body&&wa){
     txt='*Pedido #'+r.numero+'* — '+body.nombre+'\n';
     for(const it of r.items||[])txt+='• '+it.cantidad+'x '+it.nombre+(it.origen==='bodega'&&!it.es_envase?' (bodega)':'')+(it.envase==='tengo'?' — tengo '+it.envases+' envase'+(it.envases>1?'s':''):'')+'\n';
-    txt+='Total: '+gs(r.total)+'\n'+(body.entrega==='delivery'?'Delivery: '+body.direccion+(body.ubicacion?'\n'+body.ubicacion:'\n📍 Te envío mi ubicación por acá'):'Retiro en local')+'\nPago: '+(PAGOS[body.metodo_pago]?PAGOS[body.metodo_pago][0]:body.metodo_pago);
+    txt+='Total: '+gs(r.total)+'\n'+(body.entrega==='delivery'?'Delivery: '+body.direccion+(body.ubicacion?'\n'+body.ubicacion:'\n📍 Te envío mi ubicación por acá'):'Retiro en local')+'\nPago: '+(PAGOS[body.metodo_pago]?PAGOS[body.metodo_pago][0]:body.metodo_pago)+(body.factura?'\n🧾 Factura: RUC '+body.factura.ruc+' · '+body.factura.razon:'');
   }
   $('box').innerHTML='<h2><span></span><button class="x" onclick="closeSheet()">✕</button></h2><div class="done"><div class="small">Pedido</div><div class="num">#'+esc(r.numero)+'</div>'+
     '<div class="estado" id="est">'+(ESTADOS[r.estado||'pendiente'])+'</div>'+(r.total?'<p style="margin-top:12px">Total: <b>'+gs(r.total)+'</b></p>':'')+
@@ -400,7 +408,7 @@ document.addEventListener('click',e=>{
   else if(t.id==='ubiBtn'){getUbi();}
 });
 // Cantidad escrita a mano
-document.addEventListener('change',e=>{const i=e.target.closest('.qn');if(i)setQty(i.dataset.k,i.value,true);});
+document.addEventListener('change',e=>{if(e.target.id==='f-fact'){$('sh-fact').classList.toggle('open',e.target.checked);if(e.target.checked)setTimeout(()=>$('f-ruc').focus(),250);return;}const i=e.target.closest('.qn');if(i)setQty(i.dataset.k,i.value,true);});
 document.addEventListener('keydown',e=>{const i=e.target.closest&&e.target.closest('.qn');if(i&&e.key==='Enter'){e.preventDefault();i.blur();}});
 document.addEventListener('focusin',e=>{const i=e.target.closest&&e.target.closest('.qn');if(i)setTimeout(()=>i.select(),0);});
 $('cartBtn').onclick=checkout;
