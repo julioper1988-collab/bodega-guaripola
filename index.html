@@ -15988,6 +15988,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var q=sb.from('pedidos_online').select('*').order('created_at',{ascending:false}).limit(150);
     if(filtro==='activos') q=q.in('estado',['pendiente','aceptado','preparando','en_camino']);
     else if(filtro==='hoy') q=q.gte('created_at',hoyISO());
+    else if(filtro==='cancelados') q=q.eq('estado','cancelado');
     var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,costo_delivery,estado').gte('created_at',hoyISO());
     if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
     var ent=(rh.data||[]).filter(function(p){return p.estado==='entregado';});
@@ -15996,7 +15997,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div><span class="ped-meta">🔥 Asadito (su caja)</span><b>'+fmtGs(sum('total_asadito'))+'</b></div>'+
       '<div><span class="ped-meta">🛒 Bodega</span><b>'+fmtGs(sum('total_bodega'))+'</b></div>'+
       '<div><span class="ped-meta">🛵 Delivery cobrado</span><b>'+fmtGs(sum('costo_delivery'))+'</b></div></div>'+
-      '<div class="ped-tabs">'+[['activos','Activos'],['hoy','Hoy'],['todos','Últimos 150']].map(function(f){return '<button class="btn btn-secondary btn-sm'+(filtro===f[0]?' on':'')+'" onclick="pedFiltro(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+
+      '<div class="ped-tabs">'+[['activos','Activos'],['hoy','Hoy'],['cancelados','Cancelados'],['todos','Últimos 150']].map(function(f){return '<button class="btn btn-secondary btn-sm'+(filtro===f[0]?' on':'')+'" onclick="pedFiltro(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+
       '<button class="btn btn-secondary btn-sm" onclick="pedRenderLista()">↻ Actualizar</button></div>';
     var ps=r.data||[];
     html+=ps.length?'<div class="ped-grid">'+ps.map(cardHtml).join('')+'</div>':'<div class="alert">No hay pedidos '+(filtro==='activos'?'activos':'')+'.</div>';
@@ -16017,6 +16018,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(bod.length&&p.estado!=='cancelado') acts+=btn(p.bodega_cargado?'🛒 Venta bodega ✓ (recargar)':'🛒 Cobrar bodega en caja',"pedCargarBodega('"+p.id+"')",p.bodega_cargado?'btn-secondary':'btn-primary');
     acts+=btn('💬 WhatsApp',"pedWa('"+p.id+"')");
     if(['pendiente','aceptado','preparando'].indexOf(p.estado)>=0) acts+=btn('Cancelar',"pedEstado('"+p.id+"','cancelado')");
+    if(p.estado==='cancelado') acts+=btn('🗑 Eliminar',"pedEliminar('"+p.id+"')");
     return '<div class="ped-card '+p.estado+'" data-id="'+p.id+'">'+
       '<div class="ped-head"><span class="ped-num">#'+p.numero+'</span><span class="ped-meta">'+hora(p.created_at)+(filtro!=='activos'?' · '+new Date(p.created_at).toLocaleDateString('es-PY'):'')+'</span><span class="ped-est '+p.estado+'">'+EST[p.estado]+'</span></div>'+
       '<div><b>'+h(p.cliente_nombre)+'</b> · <a href="tel:'+h(p.cliente_telefono)+'">'+h(p.cliente_telefono)+'</a></div>'+
@@ -16038,6 +16040,12 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     toast('Pedido: '+EST[est]);
     if(est==='aceptado'||est==='en_camino'){var p=await getPed(id);if(p)pedWaMsg(p,est);}
     pedRenderLista(); pedPoll();
+  };
+  window.pedEliminar=async function(id){
+    if(!(await bgConfirm('¿Eliminar este pedido cancelado? No se puede deshacer.',{title:'Eliminar pedido',confirmText:'Eliminar',variant:'warning'})))return;
+    var r=await sb.from('pedidos_online').delete().eq('id',id).eq('estado','cancelado');
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast('Pedido eliminado'); pedRenderLista();
   };
   function pedWaMsg(p,est){
     var m={aceptado:'¡Hola '+p.cliente_nombre+'! Recibimos tu pedido #'+p.numero+' ✅ Total: '+fmtGs(p.total)+'. '+(p.entrega==='delivery'?'Te avisamos cuando salga.':'Te avisamos cuando esté listo para retirar.'),
