@@ -7443,16 +7443,17 @@ initMobileShell();
           <div class="form-group"><label>Teléfono</label><input id="edit-cli-tel" value="${esc(data.telefono||'')}"></div>
           <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="edit-cli-dir" value="${esc(data.direccion||'')}"></div>
           <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="edit-cli-notas" rows="2">${esc(data.notas||'')}</textarea></div>
+          <div class="form-group" style="grid-column:1/-1"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="edit-cli-costo" style="width:auto" ${data.al_costo?'checked':''}> Vender al precio de costo (sin ganancia)</label></div>
         </div>
       `,()=>guardarEdicionCliente(clienteId),'Guardar');
     }catch(e){toast('Error: '+(e.message||e),'err');}
   };
   window.guardarEdicionCliente = async function(clienteId){
-    const obj={nombre:gs('edit-cli-nombre').value.trim(),ruc:gs('edit-cli-ruc').value.trim()||null,dv:gs('edit-cli-dv').value.trim()||null,telefono:gs('edit-cli-tel').value.trim()||null,direccion:gs('edit-cli-dir').value.trim()||null,notas:gs('edit-cli-notas').value||null};
+    const obj={nombre:gs('edit-cli-nombre').value.trim(),ruc:gs('edit-cli-ruc').value.trim()||null,dv:gs('edit-cli-dv').value.trim()||null,telefono:gs('edit-cli-tel').value.trim()||null,direccion:gs('edit-cli-dir').value.trim()||null,notas:gs('edit-cli-notas').value||null,al_costo:!!gs('edit-cli-costo')?.checked};
     if(!obj.nombre){toast('Nombre obligatorio','err');return;}
     const {error}=await sb.from('bodega_clientes').update(obj).eq('id',clienteId);
     if(error){toast('Error: '+error.message,'err');return;}
-    toast('Cliente actualizado');closeModal();renderClientes();
+    toast('Cliente actualizado');closeModal();if(typeof cargarClientes==='function')await cargarClientes();renderClientes();
   };
   const oldGoTo=window.goTo || goTo;
   window.goTo=async function(page){
@@ -7884,10 +7885,29 @@ initMobileShell();
     if(!emb) return 0;
     return ventaTipo==='mayorista' && Number(emb.precio_mayorista)>0 ? Number(emb.precio_mayorista) : Number(emb.precio_venta)||0;
   }
+  function clienteAlCosto(){
+    const id=(gs('v-cliente-id')||{}).value;
+    return !!(id && (clienteCache||[]).find(c=>String(c.id)===String(id))?.al_costo);
+  }
+  window.clienteAlCosto=clienteAlCosto;
   function aplicarPrecioPackAutomaticoItem(item){
-    if(!item || item.embalaje_id || item.precioManual) return;
+    if(!item || item.precioManual) return;
     const prod=prodCache.find(p=>p.id===item.producto_id);
     if(!prod) return;
+    const qty0=Math.max(1,Number(item.cantidad)||1);
+    const emb=item.embalaje_id ? (embCache[item.producto_id]||[]).find(e=>String(e.id)===String(item.embalaje_id)) : null;
+    // Cliente marcado "al costo" (yo mismo, asaditos): sin ganancia
+    if(clienteAlCosto()){
+      const costo=Number(emb ? emb.precio_costo : prod.precio_costo)||0;
+      item.precio=costo; item.subtotalCalculado=costo*qty0; item.packInfo='Al costo'; item.alCosto=true;
+      return;
+    }
+    if(item.embalaje_id){
+      if(item.alCosto && emb){ const pv=ventaPrecioPack(emb); item.precio=pv; delete item.subtotalCalculado; item.packInfo=''; }
+      item.alCosto=false;
+      return;
+    }
+    item.alCosto=false;
     const qty=Math.max(1,Number(item.cantidad)||1);
     const unit=ventaPrecioNormalProducto(prod);
     const packs=(embCache[item.producto_id]||[])
@@ -7937,6 +7957,7 @@ initMobileShell();
     cart.forEach(aplicarPrecioPackAutomaticoItem);
   }
   window.aplicarPrecioPackAutomatico=aplicarPrecioPackAutomatico;
+  document.addEventListener('change',e=>{ if(e.target&&e.target.id==='v-cliente-id'&&cart.length) renderVentaTable(); });
 
   const addToVentaBase=window.addToVenta || addToVenta;
   window.addToVenta=addToVenta=function(prodId,embId,qty=1){
