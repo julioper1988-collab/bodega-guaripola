@@ -13,6 +13,8 @@ create table if not exists public.pedidos_config (
   whatsapp text,
   mensaje text,
   metodos_pago jsonb not null default '["efectivo","transferencia","qr","tarjeta"]'::jsonb,
+  -- horarios por local: {"asadito":{"1":["17:30","23:30"],...},"bodega":{...}}; 0=domingo, "24:00"=medianoche, día ausente=cerrado
+  horarios jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 insert into public.pedidos_config (id) values (1) on conflict do nothing;
@@ -48,6 +50,41 @@ alter table public.pedidos_online enable row level security;
 create policy auth_all on public.pedidos_config for all to authenticated using (true) with check (true);
 create policy auth_all on public.pedidos_online for all to authenticated using (true) with check (true);
 
+-- ¿Está abierto el local ahora? (hora de Paraguay). Sin horario cargado = abierto. Soporta horarios que pasan la medianoche.
+create or replace function public.pedidos_local_abierto(p_local text, p_ts timestamptz default now())
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  h jsonb;
+  t timestamp := p_ts at time zone 'America/Asuncion';
+  dow int := extract(dow from t);
+  ayer int := (extract(dow from t)::int + 6) % 7;
+  m int := extract(hour from t) * 60 + extract(minute from t);
+  r jsonb; a int; c int;
+begin
+  select horarios->p_local into h from pedidos_config where id = 1;
+  if h is null then return true; end if;  -- local sin horario cargado: siempre abierto
+  r := h->(dow::text);
+  if r is not null then
+    a := split_part(r->>0,':',1)::int*60 + split_part(r->>0,':',2)::int;
+    c := split_part(r->>1,':',1)::int*60 + split_part(r->>1,':',2)::int;
+    if c <= a then c := c + 1440; end if;
+    if m >= a and m < c then return true; end if;
+  end if;
+  r := h->(ayer::text);
+  if r is not null then
+    a := split_part(r->>0,':',1)::int*60 + split_part(r->>0,':',2)::int;
+    c := split_part(r->>1,':',1)::int*60 + split_part(r->>1,':',2)::int;
+    if c <= a then c := c + 1440; end if;
+    if c > 1440 and m < c - 1440 then return true; end if;
+  end if;
+  return false;
+end $$;
+
 -- Catálogo público (sin costos ni stock exacto)
 create or replace function public.pedidos_catalogo()
 returns jsonb
@@ -58,7 +95,9 @@ set search_path = public
 as $$
   select jsonb_build_object(
     'config', (select jsonb_build_object('abierto',abierto,'costo_delivery',costo_delivery,
-                 'pedido_minimo',pedido_minimo,'whatsapp',whatsapp,'mensaje',mensaje,'metodos_pago',metodos_pago)
+                 'pedido_minimo',pedido_minimo,'whatsapp',whatsapp,'mensaje',mensaje,'metodos_pago',metodos_pago,'horarios',horarios,
+                 'abierto_asadito',pedidos_local_abierto('asadito'),'abierto_bodega',pedidos_local_abierto('bodega'),
+                 'ahora',to_char(now() at time zone 'America/Asuncion','YYYY-MM-DD"T"HH24:MI:SS'))
                from pedidos_config where id = 1),
     'asadito', coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nombre',p.nombre,
                  'categoria',p.categoria,'precio',p.precio_venta) order by p.categoria, p.nombre)
@@ -134,6 +173,10 @@ begin
       return jsonb_build_object('ok', false, 'error', 'Cantidad inválida.');
     end if;
 
+    if v_origen in ('asadito','bodega') and not pedidos_local_abierto(v_origen) then
+      return jsonb_build_object('ok', false, 'error', case when v_origen = 'asadito' then 'El asadito' else 'La bodega' end
+        || ' está cerrado ahora. Quitá esos productos o pedí más tarde.');
+    end if;
     v_pack := null; v_uds := 1;
     begin
       if v_origen = 'asadito' then

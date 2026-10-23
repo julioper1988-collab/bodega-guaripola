@@ -22,6 +22,12 @@ header p{color:var(--text2);font-size:13px;margin-top:2px}
 .tabs{display:flex;gap:8px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5}
 .tab{flex:1;padding:12px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2);font-weight:600;cursor:pointer}
 .tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.tab small{display:block;font-size:11px;font-weight:600;opacity:.85;margin-top:2px}
+.tab small::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:5px;vertical-align:1px}
+.tab small.cl::before{background:var(--err)}
+.hor{font-size:12px;color:var(--text2);margin:4px 0 2px}
+.cerrado .qty{display:none}
+.cerrado .item{opacity:.6}
 .search{width:100%;padding:12px 14px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2);margin-bottom:8px}
 .cat{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:16px 0 6px;font-weight:700}
 .item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
@@ -88,8 +94,8 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 4px}
 <div class="wrap">
   <div id="msg"></div>
   <div class="tabs">
-    <button class="tab on" data-t="asadito">🔥 Asadito</button>
-    <button class="tab" data-t="bodega">🛒 Bodega</button>
+    <button class="tab on" data-t="asadito">🔥 Asadito<small id="st-asadito"></small></button>
+    <button class="tab" data-t="bodega">🛒 Bodega<small id="st-bodega"></small></button>
   </div>
   <input id="q" class="search hide" placeholder="Buscar en la bodega…" autocomplete="off">
   <div id="list"><div class="empty">Cargando menú…</div></div>
@@ -135,10 +141,42 @@ async function load(){
     for(const k of Object.keys(cart)){const l=line(k);if(!l||!l.disponible)delete cart[k];}
     lsSet(LS_CART,cart);
     const c=cat.config||{};
+    if(c.ahora)skew=Date.parse(c.ahora+'Z')-Date.now();
+    // si el asadito está cerrado y la bodega abierta, arrancar en bodega
+    if(primeraVez){primeraVez=false;if(!abierto('asadito')&&abierto('bodega'))tab='bodega';}
     $('msg').innerHTML=(!c.abierto?'<div class="banner closed">⏸ En este momento no estamos recibiendo pedidos.</div>':'')+
       (c.mensaje?'<div class="banner">'+esc(c.mensaje)+'</div>':'');
     render();
   }catch(e){$('list').innerHTML='<div class="empty">No se pudo cargar el menú. <br><button class="btn sec" onclick="load()">Reintentar</button></div>';}
+}
+
+// ─── Horarios (hora de Paraguay tomada del servidor) ───
+const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],DC=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+let skew=0,primeraVez=true;
+function pyNow(){return new Date(Date.now()+skew);} // usar getUTC*: es la hora de pared de Paraguay
+const mins=x=>{const [h,m]=String(x).split(':').map(Number);return h*60+(m||0);};
+const hhmm=x=>x==='24:00'?'00:00':x;
+function hor(l){const h=(cat.config&&cat.config.horarios||{})[l];return h||null;} // null = sin horario (siempre abierto)
+function abierto(l,d){
+  const h=hor(l);if(!h)return true;d=d||pyNow();
+  const dw=d.getUTCDay(),m=d.getUTCHours()*60+d.getUTCMinutes();
+  const en=(r,off)=>{if(!r)return false;let a=mins(r[0]),c=mins(r[1]);if(c<=a)c+=1440;return off?(c>1440&&m<c-1440):(m>=a&&m<c);};
+  return en(h[dw],false)||en(h[(dw+6)%7],true);
+}
+function proxima(l){
+  const h=hor(l);if(!h)return '';const d=pyNow(),dw=d.getUTCDay(),m=d.getUTCHours()*60+d.getUTCMinutes();
+  for(let i=0;i<8;i++){const r=h[(dw+i)%7];if(!r)continue;if(i===0&&mins(r[0])<=m)continue;
+    return (i===0?'hoy':i===1?'mañana':'el '+DIAS[(dw+i)%7])+' a las '+hhmm(r[0]);}
+  return '';
+}
+function horarioTxt(l){
+  const h=hor(l);if(!h)return '';const g=[];
+  for(const i of [1,2,3,4,5,6,0]){const r=h[i],k=r?r.join('-'):'';const u=g[g.length-1];
+    if(u&&u.k===k)u.fin=i;else g.push({k,ini:i,fin:i,r});}
+  return g.filter(x=>x.r).map(x=>(x.ini===x.fin?DC[x.ini]:DC[x.ini]+' a '+DC[x.fin])+' '+hhmm(x.r[0])+'–'+hhmm(x.r[1])).join(' · ');
+}
+function estadoTabs(){
+  for(const l of ['asadito','bodega']){const e=$('st-'+l);if(!e)continue;const ab=abierto(l);e.textContent=ab?'Abierto':'Cerrado';e.classList.toggle('cl',!ab);}
 }
 
 function qtyHtml(k,n){
@@ -151,8 +189,11 @@ function render(){
   $('q').classList.toggle('hide',tab!=='bodega');
   let items=cat[tab]||[];
   if(tab==='bodega'&&q){const t=q.toLowerCase();items=items.filter(p=>p.nombre.toLowerCase().includes(t)||String(p.categoria).toLowerCase().includes(t));}
-  const L=$('list');
-  if(!items.length){L.innerHTML='<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div>';renderBar();return;}
+  const L=$('list'),ab=abierto(tab),ht=horarioTxt(tab);
+  estadoTabs();
+  L.classList.toggle('cerrado',!ab);
+  const cab=(!ab?'<div class="banner closed">🔒 '+(tab==='asadito'?'El asadito':'La bodega')+' está cerrado ahora.'+(proxima(tab)?' Abre '+proxima(tab)+'.':'')+'</div>':'')+(ht?'<div class="hor">🕐 '+esc(ht)+'</div>':'');
+  if(!items.length){L.innerHTML=cab+'<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div>';renderBar();return;}
   let h='',last=null;
   for(const p of items){
     if(p.categoria!==last){last=p.categoria;h+='<div class="cat">'+esc(last)+'</div>';}
@@ -165,7 +206,7 @@ function render(){
         return '<div class="pack"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr">'+gs(pc.precio)+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'</div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
       '</div>';
   }
-  L.innerHTML=h;L.classList.remove('fade');void L.offsetWidth;L.classList.add('fade');
+  L.innerHTML=cab+h;L.classList.remove('fade');void L.offsetWidth;L.classList.add('fade');
   renderBar();
 }
 function totals(){
@@ -203,7 +244,7 @@ function linesHtml(){
   for(const o of ['asadito','bodega']){
     const ks=Object.keys(cart).filter(k=>k.startsWith(o+':')&&line(k));
     if(!ks.length)continue;
-    h+='<div class="sub">'+(o==='asadito'?'🔥 Asadito':'🛒 Bodega')+'</div>';
+    h+='<div class="sub">'+(o==='asadito'?'🔥 Asadito':'🛒 Bodega')+(abierto(o)?'':' · <span style="color:var(--err)">cerrado ahora'+(proxima(o)?', abre '+proxima(o):'')+'</span>')+'</div>';
     for(const k of ks){const l=line(k);h+='<div class="item"><div class="row"><div class="info"><div class="nom">'+esc(l.nombre)+'</div><div class="pr" data-st="'+esc(k)+'">'+gs(l.precio*cart[k])+'</div></div><div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k])+'</div></div></div>';}
   }
   return h;
@@ -284,6 +325,8 @@ async function enviar(){
   const body={nombre:v('f-nom'),telefono:v('f-tel'),entrega:ent,direccion:ent==='delivery'?v('f-dir'):'',ubicacion:ent==='delivery'?v('f-ubi'):'',metodo_pago:pago,paga_con:pago==='efectivo'?v('f-paga'):'',notas:v('f-notas'),
     items:Object.entries(cart).map(([k,c])=>{const l=line(k);return l?{origen:l.o,id:l.id,pack:l.pk||null,cantidad:c}:null;}).filter(Boolean)};
   const err=m=>{const e=$('f-err');e.textContent=m;bump(e);};
+  const cer=['asadito','bodega'].filter(l=>!abierto(l)&&body.items.some(i=>i.origen===l));
+  if(cer.length){err((cer[0]==='asadito'?'El asadito':'La bodega')+' está cerrado ahora. Quitá esos productos'+(proxima(cer[0])?' o pedí '+proxima(cer[0]):'')+'.');return;}
   if(body.nombre.length<2){err('Ingresá tu nombre.');return;}
   if(body.telefono.replace(/\D/g,'').length<6){err('Ingresá tu teléfono.');return;}
   if(ent==='delivery'&&!body.direccion){err('Ingresá la dirección.');return;}
@@ -349,6 +392,8 @@ if(IN_APP){const d=document.createElement('div');d.className='banner';d.innerHTM
   d.addEventListener('click',e=>{const a=e.target.closest('a');if(a)a.href=linkNavegador();});}
 load().then(resumeLast);
 setInterval(()=>{if(!$('sheet').classList.contains('on'))load();},5*60e3);
+// abrir/cerrar a la hora justa sin recargar
+let ultimo='';setInterval(()=>{if(!cat.config)return;const k=abierto('asadito')+'|'+abierto('bodega');if(ultimo&&k!==ultimo&&!$('sheet').classList.contains('on'))render();ultimo=k;estadoTabs();},30e3);
 </script>
 </body>
 </html>
