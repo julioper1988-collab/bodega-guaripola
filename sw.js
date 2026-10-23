@@ -1,5 +1,5 @@
 /* ── Service Worker — Bodega Guaripola v2 ── */
-const CACHE_NAME = 'guaripola-v6';
+const CACHE_NAME = 'guaripola-v7';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
@@ -208,4 +208,36 @@ self.addEventListener('message', event => {
   if(event.data?.type === 'SKIP_WAITING'){
     self.skipWaiting();
   }
+});
+
+/* ── Notificaciones push (pedidos online) ── */
+self.addEventListener('push', event => {
+  let d = {};
+  try{ d = event.data ? event.data.json() : {}; }catch(e){ d = {title:'Guaripola', body: event.data && event.data.text()}; }
+  event.waitUntil(self.registration.showNotification(d.title || 'Pedido nuevo', {
+    body: d.body || '',
+    tag: d.tag || 'pedido',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [300, 150, 300, 150, 300],
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    data: { url: d.url || './index.html#pedidos' }
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || './index.html#pedidos', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const list = await self.clients.matchAll({type:'window', includeUncontrolled:true});
+    for(const c of list){
+      if(c.url.startsWith(self.registration.scope) && !c.url.includes('pedidos.html')){
+        await c.focus();
+        c.postMessage({type:'OPEN_PEDIDOS'});
+        return;
+      }
+    }
+    await self.clients.openWindow(url);
+  })());
 });
