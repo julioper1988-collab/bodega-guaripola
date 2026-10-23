@@ -65,7 +65,11 @@ as $$
                from productos p where p.activo and p.vender_online and p.precio_venta > 0), '[]'::jsonb),
     'bodega', coalesce((select jsonb_agg(jsonb_build_object('id',b.id,'nombre',b.nombre,
                  'categoria',coalesce(c.nombre,'Otros'),'precio',b.precio_venta,'imagen_url',b.imagen_url,
-                 'disponible',coalesce(b.stock,0) > 0) order by c.nombre, b.nombre)
+                 'disponible',coalesce(b.stock,0) > 0,
+                 'packs',(select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'cantidad',e.cantidad,'precio',e.precio_venta,
+                            'disponible',coalesce(b.stock,0) >= e.cantidad) order by e.cantidad), '[]'::jsonb)
+                          from bodega_embalajes e where e.producto_id = b.id and e.activo and e.cantidad > 1 and e.precio_venta > 0))
+                 order by c.nombre, b.nombre)
                from bodega_productos b left join bodega_categorias c on c.id = b.categoria_id
                where b.activo and b.vender_online and b.precio_venta > 0), '[]'::jsonb)
   );
@@ -88,6 +92,9 @@ declare
   v_precio numeric;
   v_stock int;
   v_ok boolean;
+  v_pack uuid;
+  v_uds int;
+  v_usado jsonb := '{}'::jsonb;
   v_tot_a numeric := 0;
   v_tot_b numeric := 0;
   v_deliv numeric := 0;
@@ -127,6 +134,7 @@ begin
       return jsonb_build_object('ok', false, 'error', 'Cantidad inválida.');
     end if;
 
+    v_pack := null; v_uds := 1;
     begin
       if v_origen = 'asadito' then
         select nombre, precio_venta, (activo and vender_online) into v_nombre, v_precio, v_ok
@@ -135,6 +143,12 @@ begin
       elsif v_origen = 'bodega' then
         select nombre, precio_venta, (activo and vender_online), coalesce(stock,0) into v_nombre, v_precio, v_ok, v_stock
           from bodega_productos where id = (it->>'id')::uuid;
+        if nullif(it->>'pack','') is not null then
+          select e.id, e.cantidad, e.precio_venta, v_ok and e.activo into v_pack, v_uds, v_precio, v_ok
+            from bodega_embalajes e where e.id = (it->>'pack')::uuid and e.producto_id = (it->>'id')::uuid and e.cantidad > 1;
+          if v_pack is null then v_ok := false; end if;
+          v_nombre := v_nombre || ' (pack x' || v_uds || ')';
+        end if;
       else
         v_ok := false;
       end if;
@@ -144,12 +158,17 @@ begin
     if not coalesce(v_ok, false) or coalesce(v_precio,0) <= 0 then
       return jsonb_build_object('ok', false, 'error', 'Un producto ya no está disponible. Actualizá la página.');
     end if;
-    if v_stock is not null and v_stock < v_cant then
-      return jsonb_build_object('ok', false, 'error', 'Sin stock suficiente de '||v_nombre||' (quedan '||greatest(v_stock,0)||').');
+    if v_stock is not null then
+      -- stock en unidades, sumando unidades sueltas y packs del mismo producto
+      v_usado := jsonb_set(v_usado, array[it->>'id'], to_jsonb(coalesce((v_usado->>(it->>'id'))::int, 0) + v_cant * v_uds));
+      if v_stock < (v_usado->>(it->>'id'))::int then
+        return jsonb_build_object('ok', false, 'error', 'Sin stock suficiente de '||v_nombre||' (quedan '||greatest(v_stock,0)||' unidades).');
+      end if;
     end if;
 
     v_items := v_items || jsonb_build_object('origen',v_origen,'id',it->>'id','nombre',v_nombre,
-                 'precio',v_precio,'cantidad',v_cant,'subtotal',v_precio * v_cant);
+                 'precio',v_precio,'cantidad',v_cant,'subtotal',v_precio * v_cant)
+               || case when v_pack is not null then jsonb_build_object('pack',v_pack,'pack_uds',v_uds) else '{}'::jsonb end;
     if v_origen = 'asadito' then v_tot_a := v_tot_a + v_precio * v_cant;
     else v_tot_b := v_tot_b + v_precio * v_cant; end if;
     v_ok := null; v_precio := null;

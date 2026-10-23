@@ -16068,7 +16068,10 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     setTimeout(async function(){
       try{ cart=[]; }catch(e){}
       var falta=[];
-      bod.forEach(function(i){ if(prodCache.find(function(x){return x.id===i.id;})) addToVenta(i.id,null,Number(i.cantidad)||1); else falta.push(i.nombre); });
+      bod.forEach(function(i){
+        var okP=prodCache.find(function(x){return x.id===i.id;}), okE=!i.pack||(embCache[i.id]||[]).some(function(e){return e.id===i.pack;});
+        if(okP&&okE) addToVenta(i.id,i.pack||null,Number(i.cantidad)||1); else falta.push(i.nombre);
+      });
       var el=g('v-cliente'); if(el) el.value='Pedido #'+p.numero+' · '+p.cliente_nombre;
       if(typeof selectPay==='function') selectPay({transferencia:'transferencia',qr:'qr',tarjeta:'debito'}[p.metodo_pago]||'efectivo');
       if(typeof renderVentaTable==='function') renderVentaTable();
