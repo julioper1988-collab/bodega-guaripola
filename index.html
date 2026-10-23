@@ -16117,6 +16117,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="form-group"><label>Pedido mínimo (Gs.)</label><input id="pc-min" inputmode="numeric" value="'+(Number(c.pedido_minimo)||0)+'"></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>WhatsApp del local (para que el cliente avise)</label><input id="pc-wa" placeholder="595981123456" value="'+h(c.whatsapp||'')+'"></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Formas de pago aceptadas</label><div class="ped-acts">'+Object.keys(PAGO_LBL).map(function(m){var on=(c.metodos_pago||['efectivo','transferencia']).indexOf(m)>=0;return '<label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-right:12px"><input type="checkbox" class="pc-pago" value="'+m+'" style="width:auto" '+(on?'checked':'')+'> '+PAGO_LBL[m]+'</label>';}).join('')+'</div></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>Horarios de pedidos (hora de Paraguay)</label>'+horariosHtml(c.horarios||{})+'<div class="ped-meta">Fuera de horario la página muestra ese local como cerrado y no acepta sus productos. Cierre 00:00 = medianoche.</div></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Mensaje en la página (horario, zona de delivery, alias de transferencia…)</label><textarea id="pc-msg" rows="3">'+h(c.mensaje||'')+'</textarea></div>'+
       '</div><button class="btn btn-primary" onclick="pedGuardarConfig()">Guardar</button>'+
       '<div class="alert" style="margin-top:14px">Link para tus clientes (Instagram, WhatsApp, QR):<br><b>'+h(URL_PUBLICA)+'</b><br><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="pedCopiarLink()">Copiar link</button> <a class="btn btn-secondary btn-sm" style="margin-top:8px" target="_blank" rel="noopener" href="'+h(URL_PUBLICA)+'">Abrir</a></div>'+
@@ -16131,10 +16132,32 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '</div></div>';
     pedPushEstado();
   }
+  var DIAS_H=[[1,'Lunes'],[2,'Martes'],[3,'Miércoles'],[4,'Jueves'],[5,'Viernes'],[6,'Sábado'],[0,'Domingo']];
+  function horariosHtml(hs){
+    return '<div class="ped-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">'+[['asadito','🔥 Asadito'],['bodega','🛒 Bodega']].map(function(L){
+      var h=hs[L[0]]||{};
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px"><b>'+L[1]+'</b>'+DIAS_H.map(function(d){
+        var r=h[d[0]], on=!!r, a=r?r[0]:'18:00', c=r?(r[1]==='24:00'?'00:00':r[1]):'23:00';
+        return '<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><label style="display:flex;gap:6px;align-items:center;width:110px;margin:0;cursor:pointer"><input type="checkbox" class="ph-on" data-l="'+L[0]+'" data-d="'+d[0]+'" style="width:auto" '+(on?'checked':'')+'> '+d[1]+'</label>'+
+          '<input type="time" class="ph-a" data-l="'+L[0]+'" data-d="'+d[0]+'" value="'+a+'" style="width:auto;padding:4px 6px"> a <input type="time" class="ph-c" data-l="'+L[0]+'" data-d="'+d[0]+'" value="'+c+'" style="width:auto;padding:4px 6px"></div>';
+      }).join('')+'</div>';
+    }).join('')+'</div>';
+  }
+  function leerHorarios(){
+    var out={asadito:{},bodega:{}};
+    document.querySelectorAll('.ph-on').forEach(function(cb){
+      if(!cb.checked) return;
+      var l=cb.dataset.l, d=cb.dataset.d, q=function(c){return document.querySelector('.'+c+'[data-l="'+l+'"][data-d="'+d+'"]').value;};
+      var a=q('ph-a')||'00:00', c=q('ph-c')||'00:00'; if(c==='00:00') c='24:00';
+      out[l][d]=[a,c];
+    });
+    return out;
+  }
   window.pedGuardarConfig=async function(){
     var num=function(id){return Number(String(g(id).value).replace(/\D/g,''))||0;};
     var obj={abierto:g('pc-abierto').checked,costo_delivery:num('pc-deliv'),pedido_minimo:num('pc-min'),whatsapp:waNum(g('pc-wa').value)||null,mensaje:g('pc-msg').value.trim()||null,metodos_pago:[].slice.call(document.querySelectorAll('.pc-pago:checked')).map(function(x){return x.value;}),updated_at:new Date().toISOString()};
     if(!obj.metodos_pago.length){toast('Elegí al menos una forma de pago','err');return;}
+    obj.horarios=leerHorarios();
     var r=await sb.from('pedidos_config').update(obj).eq('id',1);
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast('Configuración guardada'); pedRenderConfig();
