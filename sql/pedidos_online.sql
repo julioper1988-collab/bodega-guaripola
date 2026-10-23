@@ -12,6 +12,7 @@ create table if not exists public.pedidos_config (
   pedido_minimo numeric not null default 0,
   whatsapp text,
   mensaje text,
+  metodos_pago jsonb not null default '["efectivo","transferencia","qr","tarjeta"]'::jsonb,
   updated_at timestamptz not null default now()
 );
 insert into public.pedidos_config (id) values (1) on conflict do nothing;
@@ -27,7 +28,7 @@ create table if not exists public.pedidos_online (
   entrega text not null check (entrega in ('retiro','delivery')),
   direccion text,
   ubicacion text,
-  metodo_pago text not null check (metodo_pago in ('efectivo','transferencia')),
+  metodo_pago text not null check (metodo_pago in ('efectivo','transferencia','qr','tarjeta')),
   paga_con numeric,
   notas text,
   items jsonb not null,
@@ -57,7 +58,7 @@ set search_path = public
 as $$
   select jsonb_build_object(
     'config', (select jsonb_build_object('abierto',abierto,'costo_delivery',costo_delivery,
-                 'pedido_minimo',pedido_minimo,'whatsapp',whatsapp,'mensaje',mensaje)
+                 'pedido_minimo',pedido_minimo,'whatsapp',whatsapp,'mensaje',mensaje,'metodos_pago',metodos_pago)
                from pedidos_config where id = 1),
     'asadito', coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nombre',p.nombre,
                  'categoria',p.categoria,'precio',p.precio_venta) order by p.categoria, p.nombre)
@@ -105,7 +106,7 @@ begin
   if length(v_tel) < 6 then return jsonb_build_object('ok', false, 'error', 'Ingresá un teléfono válido.'); end if;
   if coalesce(v_ent,'') not in ('retiro','delivery') then return jsonb_build_object('ok', false, 'error', 'Elegí retiro o delivery.'); end if;
   if v_ent = 'delivery' and v_dir is null then return jsonb_build_object('ok', false, 'error', 'Ingresá la dirección.'); end if;
-  if coalesce(v_pago,'') not in ('efectivo','transferencia') then return jsonb_build_object('ok', false, 'error', 'Elegí método de pago.'); end if;
+  if coalesce(v_pago,'') not in ('efectivo','transferencia','qr','tarjeta') or not (coalesce(cfg.metodos_pago,'[]'::jsonb) ? v_pago) then return jsonb_build_object('ok', false, 'error', 'Elegí método de pago.'); end if;
   if jsonb_typeof(p->'items') is distinct from 'array' or jsonb_array_length(p->'items') = 0 or jsonb_array_length(p->'items') > 50 then
     return jsonb_build_object('ok', false, 'error', 'El carrito está vacío.');
   end if;
@@ -155,7 +156,7 @@ begin
   end loop;
 
   if v_tot_a + v_tot_b < coalesce(cfg.pedido_minimo, 0) then
-    return jsonb_build_object('ok', false, 'error', 'El pedido mínimo es Gs. '||to_char(cfg.pedido_minimo,'FM999G999G999'));
+    return jsonb_build_object('ok', false, 'error', 'El pedido mínimo es Gs. '||replace(to_char(cfg.pedido_minimo,'FM999,999,999'),',','.'));
   end if;
   if v_ent = 'delivery' then v_deliv := coalesce(cfg.costo_delivery, 0); end if;
 
