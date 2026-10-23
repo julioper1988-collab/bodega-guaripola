@@ -4325,6 +4325,7 @@ async function resumenVentasDia(fecha){
   const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:(data||[]).length};
   (data||[]).forEach(v=>{
     const m=(v.metodo_pago||'').toLowerCase();const t=Number(v.total_final)||0;
+    if(m==='retiro'){ r.retiro=(r.retiro||0)+t; return; } // retiro del dueño: no entra a caja
     r.total+=t; // total histórico incluyendo fiado
     if(m==='fiado'){
       r.fiado+=t; // fiado no entra a caja
@@ -6225,6 +6226,7 @@ initMobileShell();
       for(const v of data||[]){
         const m=String(v.metodo_pago||'').toLowerCase();
         const t=Number(v.total_final)||0;
+        if(m==='retiro'){ r.retiro=(r.retiro||0)+t; continue; } // retiro del dueño: no entra a caja
         const original=(v.bodega_fiados||[]).reduce((s,f)=>s+(Number(f.monto_total)||0),0);
         const fiado=m==='fiado'?t:Math.min(t,Math.max(0,original,m==='parcial'?t-(Number(v.monto_efectivo)||0):0));
         const cobrado=t-fiado;
@@ -7151,14 +7153,15 @@ initMobileShell();
       const totalVentas = productoQ ? totalDetalle : ventasFiltradas.reduce((s,v)=>s+(Number(v.total_final)||0),0);
       const cantProductos=detalles.reduce((s,d)=>s+(Number(d.cantidad)||0),0);
       const totalFiado = ventasFiltradas.filter(v=>repNorm(v.metodo_pago)==='fiado').reduce((s,v)=>s+(Number(v.total_final)||0),0);
-      const totalCobrado = totalVentas - (productoQ ? detalles.filter(d=>repNorm(ventasMap[d.venta_id]?.metodo_pago)==='fiado').reduce((s,d)=>s+repLineTotal(d),0) : totalFiado);
+      const totalRetiro = ventasFiltradas.filter(v=>repNorm(v.metodo_pago)==='retiro').reduce((s,v)=>s+(Number(v.total_final)||0),0);
+      const totalCobrado = totalVentas - (productoQ ? detalles.filter(d=>['fiado','retiro'].includes(repNorm(ventasMap[d.venta_id]?.metodo_pago))).reduce((s,d)=>s+repLineTotal(d),0) : totalFiado+totalRetiro);
       const costo=detalles.reduce((s,d)=>s+(Number(d.cantidad)||0)*repProductCost(d),0);
       const margen=repMargin(totalVentas,costo);
       const comprasFinalizadas=compras.filter(c=>c.estado==='finalizado').reduce((s,c)=>s+(Number(c.total)||0),0);
       const gastosTotal=gastos.reduce((s,g)=>s+(Number(g.monto)||0),0);
       document.getElementById('rep-stats').innerHTML=`
         <div class="stat-card"><div class="label">Total vendido</div><div class="value" style="color:var(--green)">${repMoney(totalVentas)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
-        <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}</div></div>
+        <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}${totalRetiro?` · Retiros: ${repMoney(totalRetiro)}`:''}</div></div>
         <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos)}</div><div class="sub">unidades filtradas</div></div>
         <div class="stat-card"><div class="label">Margen estimado</div><div class="value" style="color:${margen.gan>=0?'var(--green)':'var(--red)'}">${margen.pct.toFixed(1)}%</div><div class="sub">${repMoney(margen.gan)}</div></div>
         <div class="stat-card"><div class="label">Compras / gastos caja</div><div class="value" style="color:var(--amber)">${repMoney(comprasFinalizadas)}</div><div class="sub">Gastos caja: ${repMoney(gastosTotal)}</div></div>
@@ -7444,12 +7447,13 @@ initMobileShell();
           <div class="form-group" style="grid-column:1/-1"><label>Dirección</label><input id="edit-cli-dir" value="${esc(data.direccion||'')}"></div>
           <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="edit-cli-notas" rows="2">${esc(data.notas||'')}</textarea></div>
           <div class="form-group" style="grid-column:1/-1"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="edit-cli-costo" style="width:auto" ${data.al_costo?'checked':''}> Vender al precio de costo (sin ganancia)</label></div>
+          <div class="form-group" style="grid-column:1/-1"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="edit-cli-retiro" style="width:auto" ${data.retiro?'checked':''}> Retiro del dueño (no cobra, no genera deuda, no suma a caja)</label></div>
         </div>
       `,()=>guardarEdicionCliente(clienteId),'Guardar');
     }catch(e){toast('Error: '+(e.message||e),'err');}
   };
   window.guardarEdicionCliente = async function(clienteId){
-    const obj={nombre:gs('edit-cli-nombre').value.trim(),ruc:gs('edit-cli-ruc').value.trim()||null,dv:gs('edit-cli-dv').value.trim()||null,telefono:gs('edit-cli-tel').value.trim()||null,direccion:gs('edit-cli-dir').value.trim()||null,notas:gs('edit-cli-notas').value||null,al_costo:!!gs('edit-cli-costo')?.checked};
+    const obj={nombre:gs('edit-cli-nombre').value.trim(),ruc:gs('edit-cli-ruc').value.trim()||null,dv:gs('edit-cli-dv').value.trim()||null,telefono:gs('edit-cli-tel').value.trim()||null,direccion:gs('edit-cli-dir').value.trim()||null,notas:gs('edit-cli-notas').value||null,al_costo:!!gs('edit-cli-costo')?.checked,retiro:!!gs('edit-cli-retiro')?.checked};
     if(!obj.nombre){toast('Nombre obligatorio','err');return;}
     const {error}=await sb.from('bodega_clientes').update(obj).eq('id',clienteId);
     if(error){toast('Error: '+error.message,'err');return;}
@@ -7890,6 +7894,11 @@ initMobileShell();
     return !!(id && (clienteCache||[]).find(c=>String(c.id)===String(id))?.al_costo);
   }
   window.clienteAlCosto=clienteAlCosto;
+  // Cliente marcado "retiro" (el dueño): no cobra, no genera deuda, no suma a caja
+  window.clienteEsRetiro=function(){
+    const id=(gs('v-cliente-id')||{}).value;
+    return !!(id && (clienteCache||[]).find(c=>String(c.id)===String(id))?.retiro);
+  };
   function aplicarPrecioPackAutomaticoItem(item){
     if(!item || item.precioManual) return;
     const prod=prodCache.find(p=>p.id===item.producto_id);
@@ -9248,6 +9257,10 @@ async function revertirStockCompraReal(compraId, detalles){
       if(!cli.nombre && cNom) cli.nombre = cNom;
     }
 
+    const __esRetiro=!!(cli.id && (clienteCache||[]).find(x=>String(x.id)===String(cli.id))?.retiro);
+    const __payPrev=selectedPay;
+    if(__esRetiro) selectedPay='retiro';
+
     // Validar fiado y parcial
     if(selectedPay==='fiado' && !cli.id && !cli.nombre){
       toast('Para vender fiado elegí o creá un cliente','err');
@@ -9358,6 +9371,7 @@ async function revertirStockCompraReal(compraId, detalles){
 
     // Idempotente: si no hay red queda en cola y se envía al volver (nunca se duplica)
     const data=await bgRegistrarVenta(__ventaArgs, __fiados);
+    if(__esRetiro) selectedPay=__payPrev;
     if(!data?.ok){
       toast('Error al registrar venta: '+(data?.error||'Error desconocido'),'err');
       return;
@@ -9367,7 +9381,9 @@ async function revertirStockCompraReal(compraId, detalles){
     const numVenta   = data.numero_venta || null;
     const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · 📴 pendiente de envío' : '');
     const esFaltanteRegistrado = selectedPay==='efectivo' && importe>0 && importe<totalFinal;
-    toast(selectedPay==='fiado'
+    toast(__esRetiro
+      ? `✓ Retiro registrado (sin cobro): ${fmtGs(totalFinal)}${nTag}`
+      : selectedPay==='fiado'
       ? `✓ Fiado registrado: ${fmtGs(totalFinal)}${nTag}`
       : selectedPay==='parcial'
         ? `✓ Cobrado ${fmtGs(importe)} · Fiado: ${fmtGs(totalFinal-importe)}${nTag}`
@@ -15437,7 +15453,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var origFin=window.finalizarVenta;
     window.finalizarVenta=finalizarVenta=async function(){
       var editando=!!window.__ventaEditandoId;
-      if(!editando && cart.length && selectedPay==='mixto'){
+      if(!editando && cart.length && selectedPay==='mixto' && !(window.clienteEsRetiro && clienteEsRetiro())){
         var tot=totalFinal(), asig=sumaMixto();
         if(asig<tot){ toast('Pago mixto: faltan '+fmtGs(tot-asig)+' por asignar','err'); pintarMixto(); return; }
         if(asig>tot && !(await bgConfirm('Los montos del pago mixto suman <b>'+fmtGs(asig)+'</b> y el total es <b>'+fmtGs(tot)+'</b>.<br>¿Cobrar igual?',{title:'Pago mixto',confirmText:'Cobrar',cancelText:'Corregir',variant:'warning'}))) return;
