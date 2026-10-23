@@ -305,7 +305,7 @@ function checkout(){
     '<label>Entrega</label><div id="sh-ent">'+entHtml()+'</div>'+
     '<label>Pago</label><div id="sh-pago">'+pagoHtml()+'</div>'+
     '<label class="chk"><input type="checkbox" id="f-fact"'+(cli.ruc?' checked':'')+'> 🧾 Necesito factura</label>'+
-    '<div class="slide'+(cli.ruc?' open':'')+'" id="sh-fact"><div><label>RUC o CI</label><input id="f-ruc" class="in" inputmode="text" placeholder="Ej: 1234567-8" value="'+esc(cli.ruc||'')+'">'+
+    '<div class="slide'+(cli.ruc?' open':'')+'" id="sh-fact"><div><label>RUC o CI</label><input id="f-ruc" class="in" inputmode="text" placeholder="Ej: 1234567-8" value="'+esc(cli.ruc||'')+'"><div id="ruc-hint" class="small" style="margin-top:4px"></div>'+
     '<label>Nombre o razón social</label><input id="f-razon" class="in" autocomplete="organization" value="'+esc(cli.razon||'')+'"></div></div>'+
     '<label>Notas (opcional)</label><textarea id="f-notas" class="in" rows="2" placeholder="Ej: sin sal, timbre no funciona…"></textarea>'+
     '<div id="f-err" class="err"></div>'+
@@ -406,6 +406,28 @@ document.addEventListener('click',e=>{
   else if(t.dataset.env){envs[t.dataset.env]=t.dataset.v;lsSet(LS_ENV,envs);const ev=document.querySelector('[data-envq="'+CSS.escape(t.dataset.env)+'"]');if(ev)ev.outerHTML=envHtml(t.dataset.env);$('sh-tot').innerHTML=totHtml();renderBar();}
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
+});
+// RUC: buscar en el padrón de la DNIT y completar razón social y dígito verificador
+let rucT=null,rucAuto='';
+document.addEventListener('input',e=>{
+  if(e.target.id!=='f-ruc')return;
+  clearTimeout(rucT);const v=e.target.value.replace(/[^0-9A-Za-z-]/g,''),h=$('ruc-hint');
+  if(v.split('-')[0].length<4){if(h)h.textContent='';return;}
+  if(h)h.textContent='Buscando…';
+  rucT=setTimeout(async()=>{
+    try{
+      const r=await rpc('pedidos_ruc',{p:v});
+      if(!$('f-ruc')||$('f-ruc').value.replace(/[^0-9A-Za-z-]/g,'')!==v)return; // ya cambió
+      if(r&&r.razon){
+        const full=r.ruc+(r.dv!=null?'-'+r.dv:'');
+        if(!v.includes('-'))$('f-ruc').value=full;
+        const z=$('f-razon');if(!z.value.trim()||z.value===rucAuto){z.value=r.razon;rucAuto=r.razon;bump(z);}
+        const act=!r.estado||/ACTIVO/i.test(r.estado);
+        h.innerHTML=act?'<span style="color:var(--ok)">✓ '+esc(r.razon)+'</span>':'<span style="color:var(--err)">⚠️ RUC '+esc(r.estado)+'</span>';
+        if(v.includes('-')&&r.dv!=null&&v.split('-')[1]!==String(r.dv))h.innerHTML+='<br><span style="color:var(--err)">El dígito verificador debería ser '+r.dv+' ('+esc(full)+')</span>';
+      }else{const z=$('f-razon');if(rucAuto&&z.value===rucAuto){z.value='';rucAuto='';}h.textContent='No encontramos ese RUC. Escribí el nombre o razón social.';}
+    }catch(err){h.textContent='';}
+  },450);
 });
 // Cantidad escrita a mano
 document.addEventListener('change',e=>{if(e.target.id==='f-fact'){$('sh-fact').classList.toggle('open',e.target.checked);if(e.target.checked)setTimeout(()=>$('f-ruc').focus(),250);return;}const i=e.target.closest('.qn');if(i)setQty(i.dataset.k,i.value,true);});

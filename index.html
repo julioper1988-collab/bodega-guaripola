@@ -16142,7 +16142,25 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="ped-acts"><button class="btn btn-secondary btn-sm" onclick="pedTonoProbar()">▶ Probar tono</button><button class="btn btn-primary btn-sm" onclick="pedPushActivar()">Activar avisos</button><button class="btn btn-secondary btn-sm" onclick="pedPushProbar()">Enviar prueba</button><button class="btn btn-secondary btn-sm" onclick="pedPushDesactivar()">Desactivar</button></div>'+
       '</div></div>';
     pedPushEstado();
+    var d=document.createElement('div');d.className='card';d.style.cssText='max-width:640px;margin-top:14px';
+    d.innerHTML='<div class="card-header"><h3>🧾 Padrón de RUC (DNIT)</h3></div><div style="padding:14px"><p class="ped-meta" style="margin-bottom:10px">Con esto la página completa sola la razón social cuando el cliente escribe su RUC. Conviene actualizarlo una vez al mes.</p><div id="ruc-estado" class="ped-meta" style="margin-bottom:10px">Cargando…</div><button class="btn btn-secondary btn-sm" onclick="pedRucActualizar()">⟳ Actualizar padrón</button></div>';
+    b.appendChild(d);pedRucEstado();
   }
+  async function pedRucEstado(){
+    var el=g('ruc-estado');if(!el)return;
+    var r=await sb.from('ruc_padron_log').select('*').order('archivo');
+    var L=r.data||[];if(!L.length){el.textContent='Todavía no se importó.';return;}
+    var ok=L.filter(function(x){return x.estado==='ok';}),err=L.filter(function(x){return x.estado==='error';}),corriendo=L.some(function(x){return x.estado==='descargando'||x.estado==='importando';});
+    var total=ok.reduce(function(a,x){return a+(x.filas||0);},0),ult=L.reduce(function(a,x){return x.updated_at>a?x.updated_at:a;},'');
+    el.innerHTML='Archivos listos: <b>'+ok.length+'/10</b> · '+total.toLocaleString('es-PY')+' RUC · última actualización '+new Date(ult).toLocaleString('es-PY')+
+      (err.length?'<br><span style="color:var(--red)">Con error: '+err.map(function(x){return 'ruc'+x.archivo;}).join(', ')+'</span>':'')+(corriendo?'<br>⏳ Importando…':'');
+    if(corriendo)setTimeout(pedRucEstado,5000);
+  }
+  window.pedRucActualizar=async function(){
+    if(!(await bgConfirm('Se descargan los 10 archivos de la DNIT (tarda unos minutos). ¿Continuar?',{title:'Actualizar padrón RUC',confirmText:'Actualizar'})))return;
+    for(var n=0;n<10;n++){ var r=await sb.functions.invoke('ruc-importar',{body:{archivo:n}}); if(r.error){toast('Error: '+r.error.message,'err');break;} await new Promise(function(res){setTimeout(res,8000);}); }
+    toast('Actualización iniciada');pedRucEstado();
+  };
   var DIAS_H=[[1,'Lunes'],[2,'Martes'],[3,'Miércoles'],[4,'Jueves'],[5,'Viernes'],[6,'Sábado'],[0,'Domingo']];
   function horariosHtml(hs){
     return '<div class="ped-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">'+[['asadito','🔥 Asadito'],['bodega','🛒 Bodega']].map(function(L){
