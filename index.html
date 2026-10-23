@@ -16025,6 +16025,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div><b>'+h(p.cliente_nombre)+'</b> · <a href="tel:'+h(p.cliente_telefono)+'">'+h(p.cliente_telefono)+'</a></div>'+
       '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
+      (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
       (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
       (bod.length?'<div class="ped-sec">🛒 Bodega · '+fmtGs(p.total_bodega)+'</div>'+bod.map(li).join(''):'')+
@@ -16072,7 +16073,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
         var okP=prodCache.find(function(x){return x.id===i.id;}), okE=!i.pack||(embCache[i.id]||[]).some(function(e){return e.id===i.pack;});
         if(okP&&okE) addToVenta(i.id,i.pack||null,Number(i.cantidad)||1); else falta.push(i.nombre);
       });
-      var el=g('v-cliente'); if(el) el.value='Pedido #'+p.numero+' · '+p.cliente_nombre;
+      var el=g('v-cliente'); if(el) el.value='Pedido #'+p.numero+' · '+(p.factura_ruc?(p.factura_razon||p.cliente_nombre)+' · RUC '+p.factura_ruc:p.cliente_nombre);
       if(typeof selectPay==='function') selectPay({transferencia:'transferencia',qr:'qr',tarjeta:'debito'}[p.metodo_pago]||'efectivo');
       if(typeof renderVentaTable==='function') renderVentaTable();
       if(typeof updateVTotals==='function') updateVTotals();

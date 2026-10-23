@@ -42,7 +42,9 @@ create table if not exists public.pedidos_online (
   total numeric not null default 0,
   estado text not null default 'pendiente'
     check (estado in ('pendiente','aceptado','preparando','en_camino','entregado','cancelado')),
-  bodega_cargado boolean not null default false
+  bodega_cargado boolean not null default false,
+  factura_ruc text,      -- si el cliente pide factura
+  factura_razon text
 );
 create index if not exists pedidos_online_created_idx on public.pedidos_online(created_at desc);
 create index if not exists pedidos_online_estado_idx on public.pedidos_online(estado);
@@ -139,6 +141,8 @@ declare
   v_uds int;
   v_usado jsonb := '{}'::jsonb;
   v_env_id uuid; v_env_nom text; v_env_precio numeric; v_env text;
+  v_f_ruc text := nullif(upper(regexp_replace(coalesce(p->'factura'->>'ruc',''), '[^0-9A-Za-z-]', '', 'g')), '');
+  v_f_razon text := nullif(left(trim(coalesce(p->'factura'->>'razon','')), 120), '');
   v_tot_a numeric := 0;
   v_tot_b numeric := 0;
   v_deliv numeric := 0;
@@ -158,6 +162,11 @@ begin
   if coalesce(v_ent,'') not in ('retiro','delivery') then return jsonb_build_object('ok', false, 'error', 'Elegí retiro o delivery.'); end if;
   if v_ent = 'delivery' and v_dir is null then return jsonb_build_object('ok', false, 'error', 'Ingresá la dirección.'); end if;
   if coalesce(v_pago,'') not in ('efectivo','transferencia','qr','tarjeta') or not (coalesce(cfg.metodos_pago,'[]'::jsonb) ? v_pago) then return jsonb_build_object('ok', false, 'error', 'Elegí método de pago.'); end if;
+  -- factura: RUC (con o sin dígito verificador) o CI, y razón social
+  if v_f_ruc is not null or v_f_razon is not null then
+    if v_f_ruc is null or v_f_ruc !~ '^[0-9A-Z]{3,12}(-[0-9])?$' then return jsonb_build_object('ok', false, 'error', 'Revisá el RUC para la factura (ej: 1234567-8).'); end if;
+    if v_f_razon is null or length(v_f_razon) < 2 then return jsonb_build_object('ok', false, 'error', 'Ingresá el nombre o razón social para la factura.'); end if;
+  end if;
   if jsonb_typeof(p->'items') is distinct from 'array' or jsonb_array_length(p->'items') = 0 or jsonb_array_length(p->'items') > 50 then
     return jsonb_build_object('ok', false, 'error', 'El carrito está vacío.');
   end if;
@@ -249,10 +258,10 @@ begin
   if v_ent = 'delivery' then v_deliv := coalesce(cfg.costo_delivery, 0); end if;
 
   insert into pedidos_online (cliente_nombre, cliente_telefono, entrega, direccion, ubicacion, metodo_pago,
-      paga_con, notas, items, total_asadito, total_bodega, costo_delivery, total)
+      paga_con, notas, items, total_asadito, total_bodega, costo_delivery, total, factura_ruc, factura_razon)
   values (v_nom, v_tel, v_ent, v_dir, nullif(left(trim(coalesce(p->>'ubicacion','')), 300), ''), v_pago,
       case when v_pago = 'efectivo' then nullif(left(regexp_replace(coalesce(p->>'paga_con',''), '[^0-9]', '', 'g'), 12), '')::numeric end,
-      nullif(left(trim(coalesce(p->>'notas','')), 500), ''), v_items, v_tot_a, v_tot_b, v_deliv, v_tot_a + v_tot_b + v_deliv)
+      nullif(left(trim(coalesce(p->>'notas','')), 500), ''), v_items, v_tot_a, v_tot_b, v_deliv, v_tot_a + v_tot_b + v_deliv, v_f_ruc, v_f_razon)
   returning * into r;
 
   return jsonb_build_object('ok', true, 'numero', r.numero, 'token', r.token, 'items', r.items,
