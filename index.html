@@ -16115,7 +16115,13 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="form-group" style="grid-column:1/-1"><label>Mensaje en la página (horario, zona de delivery, alias de transferencia…)</label><textarea id="pc-msg" rows="3">'+h(c.mensaje||'')+'</textarea></div>'+
       '</div><button class="btn btn-primary" onclick="pedGuardarConfig()">Guardar</button>'+
       '<div class="alert" style="margin-top:14px">Link para tus clientes (Instagram, WhatsApp, QR):<br><b>'+h(URL_PUBLICA)+'</b><br><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="pedCopiarLink()">Copiar link</button> <a class="btn btn-secondary btn-sm" style="margin-top:8px" target="_blank" rel="noopener" href="'+h(URL_PUBLICA)+'">Abrir</a></div>'+
+      '</div></div>'+
+      '<div class="card" style="max-width:640px;margin-top:14px"><div class="card-header"><h3>🔔 Avisos en este dispositivo</h3></div><div style="padding:14px">'+
+      '<p class="ped-meta" style="margin-bottom:10px">Te llega una notificación por cada pedido nuevo aunque la app esté cerrada. Activalo en cada celular o compu que quieras que suene.<br>En iPhone: primero agregá la app a la pantalla de inicio (Compartir → Agregar a inicio) y abrila desde ahí.</p>'+
+      '<div id="ped-push-estado" class="ped-meta" style="margin-bottom:10px">Comprobando…</div>'+
+      '<div class="ped-acts"><button class="btn btn-primary btn-sm" onclick="pedPushActivar()">Activar avisos</button><button class="btn btn-secondary btn-sm" onclick="pedPushProbar()">Enviar prueba</button><button class="btn btn-secondary btn-sm" onclick="pedPushDesactivar()">Desactivar</button></div>'+
       '</div></div>';
+    pedPushEstado();
   }
   window.pedGuardarConfig=async function(){
     var num=function(id){return Number(String(g(id).value).replace(/\D/g,''))||0;};
@@ -16126,12 +16132,53 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   };
   window.pedCopiarLink=function(){try{navigator.clipboard.writeText(URL_PUBLICA);toast('Link copiado');}catch(e){toast(URL_PUBLICA);}};
 
+  // ─── NOTIFICACIONES PUSH (llegan con la app cerrada) ───
+  var VAPID_PUB='BEHw4lGnSRPHbMLOPz1lHnt_4PXDWVaRzAYrLqeFp0KQi-43_tukauIFLeQLOKfApEIOmVHmvW6LfBU2XFHIODE';
+  function b64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');s+='='.repeat((4-s.length%4)%4);var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}
+  function pushOk(){return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;}
+  async function pushSub(){if(!pushOk())return null;var reg=await navigator.serviceWorker.ready;return reg.pushManager.getSubscription();}
+  async function pedPushEstado(){
+    var el=g('ped-push-estado'); if(!el) return;
+    if(!pushOk()){el.innerHTML='⚠️ Este navegador no permite avisos. En iPhone, abrí la app desde el ícono de la pantalla de inicio.';return;}
+    if(Notification.permission==='denied'){el.innerHTML='🚫 Bloqueaste las notificaciones. Habilitalas en los ajustes del navegador para este sitio.';return;}
+    var sub=await pushSub().catch(function(){return null;});
+    var n=await sb.from('push_suscripciones').select('id',{count:'exact',head:true});
+    el.innerHTML=(sub?'✅ Activado en este dispositivo.':'⭕ No activado en este dispositivo.')+' Dispositivos con avisos: <b>'+(n.count||0)+'</b>';
+  }
+  window.pedPushActivar=async function(){
+    try{
+      if(!pushOk()){toast('Este navegador no permite avisos','err');return;}
+      var perm=await Notification.requestPermission();
+      if(perm!=='granted'){toast('Permiso de notificaciones denegado','err');pedPushEstado();return;}
+      var reg=await navigator.serviceWorker.ready;
+      var sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
+      var j=sub.toJSON(), u=null; try{u=JSON.parse(localStorage.getItem('bg_usuario_actual')||'null');}catch(e){}
+      var r=await sb.from('push_suscripciones').upsert({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,usuario:u&&u.nombre||null,dispositivo:(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||null},{onConflict:'endpoint'});
+      if(r.error) throw r.error;
+      toast('Avisos activados ✅'); pedPushEstado();
+    }catch(e){toast('No se pudo activar: '+(e.message||e),'err');}
+  };
+  window.pedPushProbar=async function(){
+    var r=await sb.functions.invoke('pedido-push',{body:{prueba:true}});
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast('Prueba enviada a '+((r.data&&r.data.enviados)||0)+' dispositivo(s)');
+  };
+  window.pedPushDesactivar=async function(){
+    try{var sub=await pushSub(); if(sub){await sb.from('push_suscripciones').delete().eq('endpoint',sub.endpoint);await sub.unsubscribe();}
+      toast('Avisos desactivados en este dispositivo');}catch(e){toast('Error: '+(e.message||e),'err');}
+    pedPushEstado();
+  };
+  // Abrir Pedidos al tocar la notificación
+  var abrirPend=location.hash==='#pedidos';
+  if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.type==='OPEN_PEDIDOS'){tab='pedidos';filtro='activos';goTo('pedidos');}});
+
   // ─── AVISO DE PEDIDOS NUEVOS ───
   function beep(){try{var a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),gn=a.createGain();o.connect(gn);gn.connect(a.destination);o.frequency.value=880;gn.gain.value=.15;o.start();setTimeout(function(){o.frequency.value=1175;},180);setTimeout(function(){o.stop();a.close();},420);}catch(e){}}
   async function pedPoll(){
     if(!sb) return;
     try{
       var s=await sb.auth.getSession(); if(!s||!s.data||!s.data.session) return;
+      if(abrirPend){abrirPend=false;try{history.replaceState(null,'',location.pathname);}catch(e){} setTimeout(function(){goTo('pedidos');},800);}
       var r=await sb.from('pedidos_online').select('id,numero,cliente_nombre,total').eq('estado','pendiente').order('created_at');
       if(r.error) return;
       var ps=r.data||[], bd=g('ped-badge');
@@ -16149,7 +16196,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   window.pedPoll=pedPoll;
   function start(){
     if(pollT) return;
-    pollT=setInterval(pedPoll,30000); setTimeout(pedPoll,4000);
+    pollT=setInterval(pedPoll,30000); setTimeout(pedPoll,4000); if(abrirPend) setTimeout(pedPoll,1500);
     document.addEventListener('click',function once(){document.removeEventListener('click',once);try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission();}catch(e){}});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
