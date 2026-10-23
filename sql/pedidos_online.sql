@@ -4,6 +4,8 @@
 
 alter table public.bodega_productos add column if not exists vender_online boolean not null default false;
 alter table public.productos add column if not exists vender_online boolean not null default false;
+-- retornables: producto de envase que se cobra si el cliente no tiene envase para cambiar (categoría ENVASES)
+alter table public.bodega_productos add column if not exists envase_id uuid references public.bodega_productos(id) on delete set null;
 
 create table if not exists public.pedidos_config (
   id int primary key default 1 check (id = 1),
@@ -105,6 +107,8 @@ as $$
     'bodega', coalesce((select jsonb_agg(jsonb_build_object('id',b.id,'nombre',b.nombre,
                  'categoria',coalesce(c.nombre,'Otros'),'precio',b.precio_venta,'imagen_url',b.imagen_url,
                  'disponible',coalesce(b.stock,0) > 0,
+                 'envase',(select jsonb_build_object('id',e.id,'nombre',e.nombre,'precio',e.precio_venta)
+                           from bodega_productos e where e.id = b.envase_id and e.activo and e.precio_venta > 0),
                  'packs',(select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'cantidad',e.cantidad,'precio',e.precio_venta,
                             'disponible',coalesce(b.stock,0) >= e.cantidad) order by e.cantidad), '[]'::jsonb)
                           from bodega_embalajes e where e.producto_id = b.id and e.activo and e.cantidad > 1 and e.precio_venta > 0))
@@ -134,6 +138,7 @@ declare
   v_pack uuid;
   v_uds int;
   v_usado jsonb := '{}'::jsonb;
+  v_env_id uuid; v_env_nom text; v_env_precio numeric; v_env text;
   v_tot_a numeric := 0;
   v_tot_b numeric := 0;
   v_deliv numeric := 0;
@@ -209,11 +214,32 @@ begin
       end if;
     end if;
 
-    v_items := v_items || jsonb_build_object('origen',v_origen,'id',it->>'id','nombre',v_nombre,
+    -- retornables: el cliente indica si tiene envase para cambiar o si se le cobra
+    v_env_id := null; v_env := null;
+    if v_origen = 'bodega' then
+      select e.id, e.nombre, e.precio_venta into v_env_id, v_env_nom, v_env_precio
+        from bodega_productos b join bodega_productos e on e.id = b.envase_id
+       where b.id = (it->>'id')::uuid and e.activo and e.precio_venta > 0;
+      if v_env_id is not null then
+        v_env := it->>'envase';
+        if coalesce(v_env,'') not in ('tengo','cobrar') then
+          return jsonb_build_object('ok', false, 'error', 'Indicá si tenés envases para '||v_nombre||'.');
+        end if;
+      end if;
+    end if;
+
+    -- paréntesis: sumar campos al objeto (no agregar elementos al array)
+    v_items := v_items || (jsonb_build_object('origen',v_origen,'id',it->>'id','nombre',v_nombre,
                  'precio',v_precio,'cantidad',v_cant,'subtotal',v_precio * v_cant)
-               || case when v_pack is not null then jsonb_build_object('pack',v_pack,'pack_uds',v_uds) else '{}'::jsonb end;
+               || case when v_pack is not null then jsonb_build_object('pack',v_pack,'pack_uds',v_uds) else '{}'::jsonb end
+               || case when v_env_id is not null then jsonb_build_object('envase',v_env,'envases',v_cant * v_uds) else '{}'::jsonb end);
     if v_origen = 'asadito' then v_tot_a := v_tot_a + v_precio * v_cant;
     else v_tot_b := v_tot_b + v_precio * v_cant; end if;
+    if v_env_id is not null and v_env = 'cobrar' then
+      v_items := v_items || jsonb_build_array(jsonb_build_object('origen','bodega','id',v_env_id,'nombre','♻️ '||v_env_nom,'precio',v_env_precio,
+                   'cantidad',v_cant * v_uds,'subtotal',v_env_precio * v_cant * v_uds,'es_envase',true));
+      v_tot_b := v_tot_b + v_env_precio * v_cant * v_uds;
+    end if;
     v_ok := null; v_precio := null;
   end loop;
 
