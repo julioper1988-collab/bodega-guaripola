@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pedidos Guaripola</title>
+<meta name="description" content="Pedí asaditos y productos de la bodega Guaripola. Delivery o retiro.">
+<meta name="theme-color" content="#1a1310">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#faf6f1;--bg2:#fff;--bg3:#f1e9df;--text:#2a1d14;--text2:#7a6857;--border:#e6dacb;--acc:#d9480f;--acc2:#b83a08;--ok:#2b8a3e;--err:#c92a2a;--r:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1310;--bg2:#251b16;--bg3:#30241d;--text:#f5ebe1;--text2:#b5a291;--border:#3d2f26;--acc:#ff6b2c;--acc2:#e8590c;--ok:#51cf66;--err:#ff6b6b}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:96px}
+button,input,textarea{font:inherit;color:inherit}
+header{padding:20px 16px 12px;max-width:720px;margin:0 auto}
+header h1{font-size:24px}
+header p{color:var(--text2);font-size:13px;margin-top:2px}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+.banner{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin:8px 0;font-size:14px}
+.banner.closed{border-color:var(--err);color:var(--err);font-weight:600}
+.tabs{display:flex;gap:8px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5}
+.tab{flex:1;padding:12px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2);font-weight:600;cursor:pointer}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.search{width:100%;padding:12px 14px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg2);margin-bottom:8px}
+.cat{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:16px 0 6px;font-weight:700}
+.item{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.item img{width:48px;height:48px;object-fit:cover;border-radius:10px;background:var(--bg3);flex:none}
+.item .info{flex:1;min-width:0}
+.item .nom{font-weight:600;overflow-wrap:anywhere}
+.item .pr{color:var(--text2);font-size:13px}
+.item.off{opacity:.5}
+.qty{display:flex;align-items:center;gap:6px;flex:none}
+.qty button{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);font-size:18px;font-weight:700;cursor:pointer}
+.qty button.add{background:var(--acc);border-color:var(--acc);color:#fff}
+.qty span{min-width:20px;text-align:center;font-weight:700}
+.empty{color:var(--text2);text-align:center;padding:32px 0}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--border);z-index:10}
+.bar button{width:100%;max-width:688px;margin:0 auto;display:flex;justify-content:space-between;padding:15px 18px;border:0;border-radius:var(--r);background:var(--acc);color:#fff;font-weight:700;font-size:16px;cursor:pointer}
+.bar button:disabled{opacity:.5;cursor:default}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.sheet.on{display:flex}
+.sheet .box{background:var(--bg);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.sheet h2{font-size:19px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.x{border:0;background:var(--bg3);width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer}
+.line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:14px}
+.line.tot{font-weight:800;font-size:17px;border-top:1px solid var(--border);margin-top:6px;padding-top:10px}
+.sub{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-top:10px;font-weight:700}
+label{display:block;font-size:13px;color:var(--text2);margin:12px 0 4px}
+.in{width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg2)}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;padding:11px;border-radius:12px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-weight:600}
+.seg button.on{border-color:var(--acc);background:var(--acc);color:#fff}
+.btn{width:100%;padding:15px;border:0;border-radius:var(--r);background:var(--acc);color:#fff;font-weight:700;font-size:16px;margin-top:16px;cursor:pointer}
+.btn.sec{background:var(--bg3);color:var(--text)}
+.btn.wa{background:#25d366}
+.btn:disabled{opacity:.6}
+.err{color:var(--err);font-size:14px;margin-top:10px}
+.small{font-size:12px;color:var(--text2)}
+.done{text-align:center;padding:24px 0}
+.done .num{font-size:44px;font-weight:800;color:var(--acc)}
+.estado{display:inline-block;margin-top:8px;padding:6px 14px;border-radius:999px;background:var(--bg3);font-weight:700}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔥 Guaripola</h1>
+  <p>Asaditos + bodega en un solo pedido</p>
+</header>
+<div class="wrap">
+  <div id="msg"></div>
+  <div class="tabs">
+    <button class="tab on" data-t="asadito">🔥 Asadito</button>
+    <button class="tab" data-t="bodega">🛒 Bodega</button>
+  </div>
+  <input id="q" class="search hide" placeholder="Buscar en la bodega…" autocomplete="off">
+  <div id="list"><div class="empty">Cargando menú…</div></div>
+</div>
+
+<div class="bar"><button id="cartBtn" disabled><span id="cartCount">Carrito vacío</span><span id="cartTot"></span></button></div>
+
+<div class="sheet" id="sheet"><div class="box" id="box"></div></div>
+
+<script>
+const SB_URL='https://sdpysvowvwucjfnyosuf.supabase.co';
+const SB_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
+const LS_CART='gp_ped_cart', LS_CLI='gp_ped_cli', LS_LAST='gp_ped_last';
+let cat={config:{},asadito:[],bodega:[]}, tab='asadito', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
+
+function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function gs(n){return 'Gs. '+Math.round(Number(n)||0).toLocaleString('es-PY');}
+function $(id){return document.getElementById(id);}
+async function rpc(fn,body){
+  const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  if(!r.ok) throw new Error('Error de conexión ('+r.status+')');
+  return r.json();
+}
+const key=(o,id)=>o+':'+id;
+function prod(k){const [o,id]=k.split(/:(.+)/);return (cat[o]||[]).find(p=>String(p.id)===id);}
+
+async function load(){
+  try{
+    cat=await rpc('pedidos_catalogo');
+    // limpiar del carrito lo que ya no está disponible
+    for(const k of Object.keys(cart)){const p=prod(k);if(!p||p.disponible===false)delete cart[k];}
+    lsSet(LS_CART,cart);
+    const c=cat.config||{};
+    $('msg').innerHTML=(!c.abierto?'<div class="banner closed">⏸ En este momento no estamos recibiendo pedidos.</div>':'')+
+      (c.mensaje?'<div class="banner">'+esc(c.mensaje)+'</div>':'');
+    render();
+  }catch(e){$('list').innerHTML='<div class="empty">No se pudo cargar el menú. <br><button class="btn sec" onclick="load()">Reintentar</button></div>';}
+}
+
+function render(){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  $('q').classList.toggle('hide',tab!=='bodega');
+  let items=cat[tab]||[];
+  if(tab==='bodega'&&q){const t=q.toLowerCase();items=items.filter(p=>p.nombre.toLowerCase().includes(t)||String(p.categoria).toLowerCase().includes(t));}
+  if(!items.length){$('list').innerHTML='<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div>';renderBar();return;}
+  let h='',last=null;
+  for(const p of items){
+    if(p.categoria!==last){last=p.categoria;h+='<div class="cat">'+esc(last)+'</div>';}
+    const k=key(tab,p.id),n=cart[k]||0,off=p.disponible===false;
+    h+='<div class="item'+(off?' off':'')+'">'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="">':'')+
+      '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado':gs(p.precio))+'</div></div>'+
+      (off?'':'<div class="qty">'+(n?'<button data-k="'+esc(k)+'" data-d="-1">−</button><span>'+n+'</span>':'')+'<button class="add" data-k="'+esc(k)+'" data-d="1">+</button></div>')+'</div>';
+  }
+  $('list').innerHTML=h;renderBar();
+}
+function totals(){
+  let a=0,b=0,n=0;
+  for(const [k,c] of Object.entries(cart)){const p=prod(k);if(!p)continue;n+=c;if(k.startsWith('asadito:'))a+=p.precio*c;else b+=p.precio*c;}
+  return {a,b,n,sub:a+b};
+}
+function renderBar(){
+  const t=totals();
+  $('cartBtn').disabled=!t.n;
+  $('cartCount').textContent=t.n?('Ver pedido ('+t.n+')'):'Carrito vacío';
+  $('cartTot').textContent=t.n?gs(t.sub):'';
+}
+function setQty(k,d){
+  const n=(cart[k]||0)+d;
+  if(n<=0)delete cart[k];else cart[k]=Math.min(n,99);
+  lsSet(LS_CART,cart);render();
+  if($('sheet').classList.contains('on'))checkout();
+}
+
+function linesHtml(){
+  let h='';
+  for(const o of ['asadito','bodega']){
+    const ks=Object.keys(cart).filter(k=>k.startsWith(o+':')&&prod(k));
+    if(!ks.length)continue;
+    h+='<div class="sub">'+(o==='asadito'?'🔥 Asadito':'🛒 Bodega')+'</div>';
+    for(const k of ks){const p=prod(k);h+='<div class="item"><div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+gs(p.precio*cart[k])+'</div></div><div class="qty"><button data-k="'+esc(k)+'" data-d="-1">−</button><span>'+cart[k]+'</span><button class="add" data-k="'+esc(k)+'" data-d="1">+</button></div></div>';}
+  }
+  return h;
+}
+function checkout(){
+  const c=cat.config||{},t=totals(),cli=lsGet(LS_CLI,{});
+  if(!t.n){closeSheet();return;}
+  const dl=ent==='delivery'?Number(c.costo_delivery)||0:0;
+  const vals={};['f-nom','f-tel','f-dir','f-ubi','f-paga','f-notas'].forEach(id=>{if($(id))vals[id]=$(id).value;});
+  $('box').innerHTML='<h2>Tu pedido <button class="x" onclick="closeSheet()">✕</button></h2>'+linesHtml()+
+    '<div class="line"><span>Subtotal</span><span>'+gs(t.sub)+'</span></div>'+
+    (ent==='delivery'?'<div class="line"><span>Delivery</span><span>'+(dl?gs(dl):'A confirmar')+'</span></div>':'')+
+    '<div class="line tot"><span>Total</span><span>'+gs(t.sub+dl)+'</span></div>'+
+    (c.pedido_minimo>0&&t.sub<c.pedido_minimo?'<div class="err">Pedido mínimo: '+gs(c.pedido_minimo)+'</div>':'')+
+    '<label>Nombre</label><input id="f-nom" class="in" autocomplete="name" value="'+esc(vals['f-nom']??cli.nombre??'')+'">'+
+    '<label>Teléfono / WhatsApp</label><input id="f-tel" class="in" type="tel" autocomplete="tel" value="'+esc(vals['f-tel']??cli.telefono??'')+'">'+
+    '<label>Entrega</label><div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
+    (ent==='delivery'?'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(vals['f-dir']??cli.direccion??'')+'">'+
+      '<input id="f-ubi" type="hidden" value="'+esc(vals['f-ubi']??'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((vals['f-ubi'])?'📍 Ubicación agregada':'📍 Compartir mi ubicación')+'</button>':'')+
+    '<label>Pago</label><div class="seg"><button data-pago="efectivo" class="'+(pago==='efectivo'?'on':'')+'">Efectivo</button><button data-pago="transferencia" class="'+(pago==='transferencia'?'on':'')+'">Transferencia</button></div>'+
+    (pago==='efectivo'?'<label>¿Con cuánto pagás? (opcional, para el vuelto)</label><input id="f-paga" class="in" inputmode="numeric" value="'+esc(vals['f-paga']??'')+'">':'<p class="small" style="margin-top:8px">Te enviamos los datos para transferir al confirmar.</p>')+
+    '<label>Notas (opcional)</label><textarea id="f-notas" class="in" rows="2" placeholder="Ej: sin sal, timbre no funciona…">'+esc(vals['f-notas']??'')+'</textarea>'+
+    '<div id="f-err" class="err"></div>'+
+    '<button class="btn" id="sendBtn"'+(c.abierto?'':' disabled')+'>'+(c.abierto?'Confirmar pedido':'Cerrado por ahora')+'</button>';
+  if($('ubiBtn'))$('ubiBtn').onclick=getUbi;
+  $('sendBtn').onclick=enviar;
+  $('sheet').classList.add('on');
+}
+function closeSheet(){$('sheet').classList.remove('on');}
+function getUbi(){
+  if(!navigator.geolocation){$('f-err').textContent='Tu navegador no permite compartir ubicación.';return;}
+  $('ubiBtn').textContent='Obteniendo ubicación…';
+  navigator.geolocation.getCurrentPosition(p=>{
+    $('f-ubi').value='https://maps.google.com/?q='+p.coords.latitude.toFixed(6)+','+p.coords.longitude.toFixed(6);
+    $('ubiBtn').textContent='📍 Ubicación agregada';
+  },()=>{$('ubiBtn').textContent='📍 Compartir mi ubicación';$('f-err').textContent='No se pudo obtener la ubicación.';},{enableHighAccuracy:true,timeout:15000});
+}
+async function enviar(){
+  const v=id=>($(id)?.value||'').trim();
+  const body={nombre:v('f-nom'),telefono:v('f-tel'),entrega:ent,direccion:v('f-dir'),ubicacion:v('f-ubi'),metodo_pago:pago,paga_con:v('f-paga'),notas:v('f-notas'),
+    items:Object.entries(cart).map(([k,c])=>{const [o,id]=k.split(/:(.+)/);return {origen:o,id,cantidad:c};})};
+  if(body.nombre.length<2){$('f-err').textContent='Ingresá tu nombre.';return;}
+  if(body.telefono.replace(/\D/g,'').length<6){$('f-err').textContent='Ingresá tu teléfono.';return;}
+  if(ent==='delivery'&&!body.direccion){$('f-err').textContent='Ingresá la dirección.';return;}
+  const b=$('sendBtn');b.disabled=true;b.textContent='Enviando…';$('f-err').textContent='';
+  try{
+    const r=await rpc('pedidos_crear',{p:body});
+    if(!r||!r.ok){$('f-err').textContent=(r&&r.error)||'No se pudo enviar.';b.disabled=false;b.textContent='Confirmar pedido';if(r&&/disponible|stock/i.test(r.error||''))load();return;}
+    lsSet(LS_CLI,{nombre:body.nombre,telefono:body.telefono,direccion:body.direccion||lsGet(LS_CLI,{}).direccion});
+    lsSet(LS_LAST,r.token);
+    cart={};lsSet(LS_CART,cart);render();
+    showDone(r,body);
+  }catch(e){$('f-err').textContent='Sin conexión. Probá de nuevo.';b.disabled=false;b.textContent='Confirmar pedido';}
+}
+const ESTADOS={pendiente:'⏳ Esperando confirmación',aceptado:'✅ Confirmado',preparando:'🔥 En preparación',en_camino:'🛵 En camino',entregado:'🎉 Entregado',cancelado:'❌ Cancelado'};
+let pollT=null;
+function showDone(r,body){
+  const c=cat.config||{},wa=String(c.whatsapp||'').replace(/\D/g,'');
+  let txt='';
+  if(body&&wa){
+    txt='*Pedido #'+r.numero+'* — '+body.nombre+'\n';
+    for(const it of r.items||[])txt+='• '+it.cantidad+'x '+it.nombre+(it.origen==='bodega'?' (bodega)':'')+'\n';
+    txt+='Total: '+gs(r.total)+'\n'+(body.entrega==='delivery'?'Delivery: '+body.direccion+(body.ubicacion?'\n'+body.ubicacion:''):'Retiro en local')+'\nPago: '+body.metodo_pago;
+  }
+  $('box').innerHTML='<h2><span></span><button class="x" onclick="closeSheet()">✕</button></h2><div class="done"><div class="small">Pedido</div><div class="num">#'+esc(r.numero)+'</div>'+
+    '<div class="estado" id="est">'+(ESTADOS[r.estado||'pendiente'])+'</div>'+(r.total?'<p style="margin-top:12px">Total: <b>'+gs(r.total)+'</b></p>':'')+
+    '<p class="small" style="margin-top:10px">Esta pantalla se actualiza sola.</p></div>'+
+    (txt?'<a class="btn wa" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/'+wa+'?text='+encodeURIComponent(txt)+'">Avisar por WhatsApp</a>':'')+
+    '<button class="btn sec" onclick="closeSheet()">Seguir pidiendo</button>';
+  $('sheet').classList.add('on');
+  clearInterval(pollT);
+  const tk=r.token;
+  pollT=setInterval(async()=>{
+    if(!$('est')){clearInterval(pollT);return;}
+    try{const s=await rpc('pedidos_estado',{p_token:tk});if(s&&s.estado){$('est').textContent=ESTADOS[s.estado]||s.estado;if(s.estado==='entregado'||s.estado==='cancelado'){clearInterval(pollT);lsSet(LS_LAST,null);}}}catch(e){}
+  },20000);
+}
+async function resumeLast(){
+  const tk=lsGet(LS_LAST,null);if(!tk)return;
+  try{const s=await rpc('pedidos_estado',{p_token:tk});
+    if(s&&s.estado&&!['entregado','cancelado'].includes(s.estado)&&Date.now()-new Date(s.created_at)<12*3600e3)showDone({...s,token:tk},null);
+    else lsSet(LS_LAST,null);
+  }catch(e){}
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.t){tab=t.dataset.t;render();window.scrollTo({top:0});}
+  else if(t.dataset.k){setQty(t.dataset.k,+t.dataset.d);}
+  else if(t.dataset.ent){ent=t.dataset.ent;checkout();}
+  else if(t.dataset.pago){pago=t.dataset.pago;checkout();}
+});
+$('cartBtn').onclick=checkout;
+$('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet();});
+let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value.trim();render();},200);});
+load().then(resumeLast);
+setInterval(()=>{if(!$('sheet').classList.contains('on'))load();},5*60e3);
+</script>
+</body>
+</html>

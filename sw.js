@@ -1,5 +1,5 @@
 /* ── Service Worker — Bodega Guaripola v2 ── */
-const CACHE_NAME = 'guaripola-v5';
+const CACHE_NAME = 'guaripola-v6';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
@@ -89,6 +89,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = event.request.url;
   const method = event.request.method;
+
+  // Página pública de pedidos: siempre red, sin cachear como index.html
+  if(new URL(url).pathname.endsWith('/pedidos.html')) return;
 
   // Supabase POST/PATCH/DELETE: directo a la red, sin encolar.
   // (La cola anterior respondía 202 falso: la app mostraba error y luego la

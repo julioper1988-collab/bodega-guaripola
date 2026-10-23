@@ -5971,7 +5971,7 @@ initMobileShell();
 
   // ─── USUARIOS Y PERMISOS DE MÓDULOS ───
   const MODS=[
-    ['dashboard','Dashboard'],['productos','Productos'],['ventas','Nueva venta'],['historial-ventas','Historial ventas'],['caja','Caja / Arqueo'],['compras','Nueva compra'],['historial-compras','Historial compras'],['proveedores','Proveedores'],['ajustes','Ajuste de stock'],['reportes','Reportes'],['categorias','Categorías'],['usuarios','Usuarios']
+    ['dashboard','Dashboard'],['productos','Productos'],['ventas','Nueva venta'],['historial-ventas','Historial ventas'],['caja','Caja / Arqueo'],['compras','Nueva compra'],['historial-compras','Historial compras'],['proveedores','Proveedores'],['ajustes','Ajuste de stock'],['reportes','Reportes'],['categorias','Categorías'],['pedidos','Pedidos online'],['usuarios','Usuarios']
   ];
   let usuarioActual=null, usuariosDisponibles=false;
   const oldGoTo = window.goTo;
@@ -10902,7 +10902,7 @@ async function revertirStockCompraReal(compraId, detalles){
   var routes={
     'mac-nav-dashboard':'dashboard','mac-nav-ventas':'ventas','mac-nav-historial-ventas':'historial-ventas','mac-nav-caja':'caja','mac-nav-clientes':'clientes',
     'mac-nav-productos':'productos','mac-nav-ajustes':'ajustes','mac-nav-inventario':'inventario','mac-nav-proveedores':'proveedores','mac-nav-categorias':'categorias',
-    'mac-nav-compras':'compras','mac-nav-historial-compras':'historial-compras','mac-nav-reportes':'reportes','mac-nav-usuarios':'usuarios'
+    'mac-nav-compras':'compras','mac-nav-historial-compras':'historial-compras','mac-nav-reportes':'reportes','mac-nav-pedidos':'pedidos','mac-nav-usuarios':'usuarios'
   };
   function byId(id){return document.getElementById(id)}
   function closeSubs(){document.querySelectorAll('#macos-main-menu .mac-menu-group.open').forEach(function(g){g.classList.remove('open')})}
@@ -10928,6 +10928,7 @@ async function revertirStockCompraReal(compraId, detalles){
         if(typeof renderHistorialCompras==='function') pages['historial-compras']=renderHistorialCompras;
         if(typeof renderReportes==='function') pages.reportes=renderReportes;
         if(typeof renderUsuarios==='function'){ pages.usuarios=renderUsuarios; titles.usuarios='Usuarios'; }
+        if(typeof renderPedidosOnline==='function'){ pages.pedidos=renderPedidosOnline; titles.pedidos='Pedidos online'; }
       }
     }catch(e){console.warn('No se pudo registrar páginas del menú',e)}
   }
@@ -10935,6 +10936,7 @@ async function revertirStockCompraReal(compraId, detalles){
     return '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Inicio <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
       '<a href="#" id="nav-ventas" data-page="ventas">Nueva venta</a><a href="#" id="nav-historial-ventas" data-page="historial-ventas">Historial de ventas</a><a href="#" id="nav-caja" data-page="caja">Arqueo de caja</a><a href="#" id="nav-clientes" data-page="clientes">Clientes</a></div></div>'+
       '<div class="mac-menu-group"><a href="#" id="nav-dashboard" data-page="dashboard">Dashboard</a></div>'+
+      '<div class="mac-menu-group"><a href="#" id="nav-pedidos" data-page="pedidos">Pedidos online <span id="ped-badge" class="ped-badge" style="display:none"></span></a></div>'+
       '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Productos <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
       '<a href="#" id="nav-productos" data-page="productos">Lista de productos</a><a href="#" id="nav-ajustes" data-page="ajustes">Ajuste de stock</a><a href="#" id="nav-inventario" data-page="inventario">Inventario</a><a href="#" id="nav-proveedores" data-page="proveedores">Proveedores</a><a href="#" id="nav-categorias" data-page="categorias">Categorías</a></div></div>'+
       '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Compras <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
@@ -15931,5 +15933,220 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
 })();
 </script>
 <!-- ══ FIN PARCHE 8 ══ -->
+<!-- ══ PEDIDOS ONLINE (asadito + bodega) ══ -->
+<style id="bg-pedidos-css">
+.ped-badge{display:inline-block;min-width:18px;padding:1px 6px;margin-left:4px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;text-align:center}
+.ped-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ped-tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ped-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.ped-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.ped-card.pendiente{border-color:var(--red);box-shadow:0 0 0 2px var(--red-bg)}
+.ped-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ped-num{font-size:18px;font-weight:800}
+.ped-est{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--bg3);text-transform:uppercase}
+.ped-est.pendiente{background:var(--red-bg);color:var(--red)}
+.ped-est.entregado{background:var(--green-bg);color:var(--green)}
+.ped-sec{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-top:4px}
+.ped-it{display:flex;justify-content:space-between;font-size:13px}
+.ped-tot{display:flex;justify-content:space-between;font-weight:800;border-top:1px solid var(--border);padding-top:6px}
+.ped-acts{display:flex;gap:6px;flex-wrap:wrap}
+.ped-meta{font-size:13px;color:var(--text2);overflow-wrap:anywhere}
+.ped-meta a{color:var(--accent)}
+.ped-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer}
+.ped-row input{width:18px;height:18px}
+.ped-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+.ped-sum div{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.ped-sum b{display:block;font-size:18px}
+</style>
+<script id="bg-pedidos-js">
+(function(){
+  var URL_PUBLICA=location.origin+location.pathname.replace(/[^/]*$/,'')+'pedidos.html';
+  var EST={pendiente:'Pendiente',aceptado:'Aceptado',preparando:'Preparando',en_camino:'En camino',entregado:'Entregado',cancelado:'Cancelado'};
+  var tab='pedidos', filtro='activos', bodQ='', vistos=null, pollT=null;
+  function h(v){return typeof escapeHtml==='function'?escapeHtml(v):String(v??'');}
+  function g(id){return document.getElementById(id);}
+  function hoyISO(){var d=new Date();d.setHours(0,0,0,0);return d.toISOString();}
+  function hora(t){return new Date(t).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'});}
+  function waNum(t){t=String(t||'').replace(/\D/g,'');if(t.startsWith('0'))t='595'+t.slice(1);return t;}
+  function enPedidos(){return g('ped-root')!=null;}
+
+  window.renderPedidosOnline=async function(){
+    var c=g('content'); if(!c) return;
+    c.innerHTML='<div id="ped-root"><div class="ped-tabs">'+
+      ['pedidos:📦 Pedidos','catalogo:🧾 Catálogo online','config:⚙️ Configuración'].map(function(x){var k=x.split(':');return '<button class="btn btn-secondary btn-sm'+(tab===k[0]?' on':'')+'" onclick="pedTab(\''+k[0]+'\')">'+k[1]+'</button>';}).join('')+
+      '</div><div id="ped-body"><div class="spinner"></div></div></div>';
+    if(tab==='pedidos') await pedRenderLista();
+    else if(tab==='catalogo') await pedRenderCatalogo();
+    else await pedRenderConfig();
+  };
+  window.pedTab=function(t){tab=t;renderPedidosOnline();};
+
+  // ─── LISTA DE PEDIDOS ───
+  window.pedFiltro=function(f){filtro=f;pedRenderLista();};
+  async function pedRenderLista(){
+    var b=g('ped-body'); if(!b) return;
+    var q=sb.from('pedidos_online').select('*').order('created_at',{ascending:false}).limit(150);
+    if(filtro==='activos') q=q.in('estado',['pendiente','aceptado','preparando','en_camino']);
+    else if(filtro==='hoy') q=q.gte('created_at',hoyISO());
+    var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,costo_delivery,estado').gte('created_at',hoyISO());
+    if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
+    var ent=(rh.data||[]).filter(function(p){return p.estado==='entregado';});
+    var sum=function(k){return ent.reduce(function(a,p){return a+Number(p[k]||0);},0);};
+    var html='<div class="ped-sum"><div><span class="ped-meta">Entregados hoy</span><b>'+ent.length+'</b></div>'+
+      '<div><span class="ped-meta">🔥 Asadito (su caja)</span><b>'+fmtGs(sum('total_asadito'))+'</b></div>'+
+      '<div><span class="ped-meta">🛒 Bodega</span><b>'+fmtGs(sum('total_bodega'))+'</b></div>'+
+      '<div><span class="ped-meta">🛵 Delivery cobrado</span><b>'+fmtGs(sum('costo_delivery'))+'</b></div></div>'+
+      '<div class="ped-tabs">'+[['activos','Activos'],['hoy','Hoy'],['todos','Últimos 150']].map(function(f){return '<button class="btn btn-secondary btn-sm'+(filtro===f[0]?' on':'')+'" onclick="pedFiltro(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+
+      '<button class="btn btn-secondary btn-sm" onclick="pedRenderLista()">↻ Actualizar</button></div>';
+    var ps=r.data||[];
+    html+=ps.length?'<div class="ped-grid">'+ps.map(cardHtml).join('')+'</div>':'<div class="alert">No hay pedidos '+(filtro==='activos'?'activos':'')+'.</div>';
+    b.innerHTML=html;
+  }
+  window.pedRenderLista=pedRenderLista;
+
+  function cardHtml(p){
+    var its=p.items||[], asd=its.filter(function(i){return i.origen==='asadito';}), bod=its.filter(function(i){return i.origen==='bodega';});
+    var li=function(i){return '<div class="ped-it"><span>'+i.cantidad+'× '+h(i.nombre)+'</span><span>'+fmtGs(i.subtotal)+'</span></div>';};
+    var vuelto=p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?' · paga con '+fmtGs(p.paga_con)+' → vuelto '+fmtGs(p.paga_con-p.total):'';
+    var acts='';
+    var btn=function(lbl,fn,cls){return '<button class="btn '+(cls||'btn-secondary')+' btn-sm" onclick="'+fn+'">'+lbl+'</button>';};
+    if(p.estado==='pendiente') acts+=btn('✅ Aceptar',"pedEstado('"+p.id+"','aceptado')",'btn-primary');
+    if(p.estado==='aceptado') acts+=btn('🔥 Preparando',"pedEstado('"+p.id+"','preparando')",'btn-primary');
+    if((p.estado==='aceptado'||p.estado==='preparando')&&p.entrega==='delivery') acts+=btn('🛵 En camino',"pedEstado('"+p.id+"','en_camino')",'btn-primary');
+    if(['aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn('🎉 Entregado',"pedEstado('"+p.id+"','entregado')",'btn-primary');
+    if(bod.length&&p.estado!=='cancelado') acts+=btn(p.bodega_cargado?'🛒 Venta bodega ✓ (recargar)':'🛒 Cobrar bodega en caja',"pedCargarBodega('"+p.id+"')",p.bodega_cargado?'btn-secondary':'btn-primary');
+    acts+=btn('💬 WhatsApp',"pedWa('"+p.id+"')");
+    if(['pendiente','aceptado','preparando'].indexOf(p.estado)>=0) acts+=btn('Cancelar',"pedEstado('"+p.id+"','cancelado')");
+    return '<div class="ped-card '+p.estado+'" data-id="'+p.id+'">'+
+      '<div class="ped-head"><span class="ped-num">#'+p.numero+'</span><span class="ped-meta">'+hora(p.created_at)+(filtro!=='activos'?' · '+new Date(p.created_at).toLocaleDateString('es-PY'):'')+'</span><span class="ped-est '+p.estado+'">'+EST[p.estado]+'</span></div>'+
+      '<div><b>'+h(p.cliente_nombre)+'</b> · <a href="tel:'+h(p.cliente_telefono)+'">'+h(p.cliente_telefono)+'</a></div>'+
+      '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':''):'🏪 Retira en local')+'</div>'+
+      '<div class="ped-meta">💳 '+h(p.metodo_pago)+vuelto+'</div>'+
+      (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
+      (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
+      (bod.length?'<div class="ped-sec">🛒 Bodega · '+fmtGs(p.total_bodega)+'</div>'+bod.map(li).join(''):'')+
+      (Number(p.costo_delivery)?'<div class="ped-it"><span>Delivery</span><span>'+fmtGs(p.costo_delivery)+'</span></div>':'')+
+      '<div class="ped-tot"><span>Total</span><span>'+fmtGs(p.total)+'</span></div>'+
+      '<div class="ped-acts">'+acts+'</div></div>';
+  }
+
+  async function getPed(id){var r=await sb.from('pedidos_online').select('*').eq('id',id).single();if(r.error){toast('Error: '+r.error.message,'err');return null;}return r.data;}
+  window.pedEstado=async function(id,est){
+    if(est==='cancelado'&&!(await bgConfirm('¿Cancelar este pedido?',{title:'Cancelar pedido',confirmText:'Cancelar pedido',variant:'warning'})))return;
+    var r=await sb.from('pedidos_online').update({estado:est,updated_at:new Date().toISOString()}).eq('id',id);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast('Pedido: '+EST[est]);
+    if(est==='aceptado'||est==='en_camino'){var p=await getPed(id);if(p)pedWaMsg(p,est);}
+    pedRenderLista(); pedPoll();
+  };
+  function pedWaMsg(p,est){
+    var m={aceptado:'¡Hola '+p.cliente_nombre+'! Recibimos tu pedido #'+p.numero+' ✅ Total: '+fmtGs(p.total)+'. '+(p.entrega==='delivery'?'Te avisamos cuando salga.':'Te avisamos cuando esté listo para retirar.'),
+      en_camino:'Hola '+p.cliente_nombre+', tu pedido #'+p.numero+' ya está en camino 🛵'}[est];
+    if(!m) m='Hola '+p.cliente_nombre+', sobre tu pedido #'+p.numero+': ';
+    window.open('https://wa.me/'+waNum(p.cliente_telefono)+'?text='+encodeURIComponent(m),'_blank');
+  }
+  window.pedWa=async function(id){var p=await getPed(id);if(p)pedWaMsg(p,p.estado);};
+
+  // Carga los productos de bodega del pedido en "Nueva venta" (descuenta stock y entra a la caja de la bodega al finalizar)
+  window.pedCargarBodega=async function(id){
+    var p=await getPed(id); if(!p) return;
+    var bod=(p.items||[]).filter(function(i){return i.origen==='bodega';});
+    if(!bod.length) return;
+    if(p.bodega_cargado&&!(await bgConfirm('La parte de bodega de este pedido ya se cargó a una venta. ¿Cargarla de nuevo?',{title:'Pedido #'+p.numero,confirmText:'Cargar de nuevo',variant:'warning'})))return;
+    if(cart&&cart.length&&!(await bgConfirm('Hay productos en la venta actual. ¿Reemplazarlos por el pedido #'+p.numero+'?',{title:'Venta en curso',confirmText:'Reemplazar',variant:'warning'})))return;
+    if(typeof loadCaches==='function') await loadCaches();
+    await goTo('ventas');
+    setTimeout(async function(){
+      try{ cart=[]; }catch(e){}
+      var falta=[];
+      bod.forEach(function(i){ if(prodCache.find(function(x){return x.id===i.id;})) addToVenta(i.id,null,Number(i.cantidad)||1); else falta.push(i.nombre); });
+      var el=g('v-cliente'); if(el) el.value='Pedido #'+p.numero+' · '+p.cliente_nombre;
+      if(typeof selectPay==='function') selectPay(p.metodo_pago==='transferencia'?'transferencia':'efectivo');
+      if(typeof renderVentaTable==='function') renderVentaTable();
+      if(typeof updateVTotals==='function') updateVTotals();
+      await sb.from('pedidos_online').update({bodega_cargado:true,updated_at:new Date().toISOString()}).eq('id',p.id);
+      toast(falta.length?'Faltan productos: '+falta.join(', '):'Pedido #'+p.numero+' cargado. Revisá y finalizá la venta.',falta.length?'err':'ok');
+    },450);
+  };
+
+  // ─── CATÁLOGO ONLINE ───
+  async function pedRenderCatalogo(){
+    var b=g('ped-body'); if(!b) return;
+    var ra=await sb.from('productos').select('id,nombre,categoria,precio_venta,activo,vender_online').eq('activo',true).order('categoria').order('nombre');
+    var t=bodQ, qb=sb.from('bodega_productos').select('id,nombre,precio_venta,stock,vender_online').eq('activo',true).order('nombre').limit(200);
+    qb=t?qb.ilike('nombre','%'+t.replace(/[%_,()]/g,' ')+'%'):qb.eq('vender_online',true);
+    var rb=await qb, lista=rb.data||[];
+    var row=function(origen,p,precio,sub){return '<label class="ped-row"><input type="checkbox" '+(p.vender_online?'checked':'')+' onchange="pedToggle(\''+origen+'\',\''+p.id+'\',this.checked)"><span style="flex:1">'+h(p.nombre)+(sub?' <span class="ped-meta">· '+h(sub)+'</span>':'')+'</span><span class="ped-meta">'+fmtGs(precio)+'</span></label>';};
+    b.innerHTML='<div class="alert" style="margin-bottom:12px">Marcá lo que tus clientes pueden pedir en <a href="'+h(URL_PUBLICA)+'" target="_blank" rel="noopener">'+h(URL_PUBLICA)+'</a>. Los precios son los mismos del sistema.</div>'+
+      '<div class="ped-grid">'+
+      '<div class="card"><div class="card-header"><h3>🔥 Asadito</h3></div>'+(ra.error?'<div class="alert alert-error">'+h(ra.error.message)+'</div>':(ra.data||[]).map(function(p){return row('asadito',p,p.precio_venta,p.categoria);}).join(''))+'</div>'+
+      '<div class="card"><div class="card-header"><h3>🛒 Bodega</h3></div><div style="padding:10px"><input id="ped-bodq" placeholder="Buscar producto para agregar…" value="'+h(bodQ)+'" oninput="pedBodQ(this.value)" style="width:100%"></div>'+
+      (lista.length?lista.map(function(p){return row('bodega',p,p.precio_venta,(Number(p.stock)||0)+' en stock');}).join(''):'<div class="ped-meta" style="padding:12px">'+(t?'Sin resultados':'Todavía no hay productos de bodega online. Buscá arriba para agregar.')+'</div>')+'</div>'+
+      '</div>';
+    var inp=g('ped-bodq'); if(inp&&bodQ){inp.focus();inp.setSelectionRange(bodQ.length,bodQ.length);}
+  }
+  var bqT; window.pedBodQ=function(v){clearTimeout(bqT);bqT=setTimeout(function(){bodQ=v.trim();pedRenderCatalogo();},300);};
+  window.pedToggle=async function(origen,id,on){
+    var r=await sb.from(origen==='asadito'?'productos':'bodega_productos').update({vender_online:on}).eq('id',origen==='asadito'?Number(id):id);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast(on?'Visible online':'Oculto online');
+  };
+
+  // ─── CONFIGURACIÓN ───
+  async function pedRenderConfig(){
+    var b=g('ped-body'); if(!b) return;
+    var r=await sb.from('pedidos_config').select('*').eq('id',1).maybeSingle();
+    if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
+    var c=r.data||{};
+    b.innerHTML='<div class="card" style="max-width:640px"><div class="card-header"><h3>Pedidos online</h3></div><div style="padding:14px">'+
+      '<label style="display:flex;gap:10px;align-items:center;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-abierto" style="width:22px;height:22px" '+(c.abierto?'checked':'')+'> Recibiendo pedidos (abierto)</label>'+
+      '<div class="form-grid">'+
+      '<div class="form-group"><label>Costo delivery (Gs.)</label><input id="pc-deliv" inputmode="numeric" value="'+(Number(c.costo_delivery)||0)+'"></div>'+
+      '<div class="form-group"><label>Pedido mínimo (Gs.)</label><input id="pc-min" inputmode="numeric" value="'+(Number(c.pedido_minimo)||0)+'"></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>WhatsApp del local (para que el cliente avise)</label><input id="pc-wa" placeholder="595981123456" value="'+h(c.whatsapp||'')+'"></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>Mensaje en la página (horario, zona de delivery, alias de transferencia…)</label><textarea id="pc-msg" rows="3">'+h(c.mensaje||'')+'</textarea></div>'+
+      '</div><button class="btn btn-primary" onclick="pedGuardarConfig()">Guardar</button>'+
+      '<div class="alert" style="margin-top:14px">Link para tus clientes (Instagram, WhatsApp, QR):<br><b>'+h(URL_PUBLICA)+'</b><br><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="pedCopiarLink()">Copiar link</button> <a class="btn btn-secondary btn-sm" style="margin-top:8px" target="_blank" rel="noopener" href="'+h(URL_PUBLICA)+'">Abrir</a></div>'+
+      '</div></div>';
+  }
+  window.pedGuardarConfig=async function(){
+    var num=function(id){return Number(String(g(id).value).replace(/\D/g,''))||0;};
+    var obj={abierto:g('pc-abierto').checked,costo_delivery:num('pc-deliv'),pedido_minimo:num('pc-min'),whatsapp:waNum(g('pc-wa').value)||null,mensaje:g('pc-msg').value.trim()||null,updated_at:new Date().toISOString()};
+    var r=await sb.from('pedidos_config').update(obj).eq('id',1);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast('Configuración guardada'); pedRenderConfig();
+  };
+  window.pedCopiarLink=function(){try{navigator.clipboard.writeText(URL_PUBLICA);toast('Link copiado');}catch(e){toast(URL_PUBLICA);}};
+
+  // ─── AVISO DE PEDIDOS NUEVOS ───
+  function beep(){try{var a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),gn=a.createGain();o.connect(gn);gn.connect(a.destination);o.frequency.value=880;gn.gain.value=.15;o.start();setTimeout(function(){o.frequency.value=1175;},180);setTimeout(function(){o.stop();a.close();},420);}catch(e){}}
+  async function pedPoll(){
+    if(!sb) return;
+    try{
+      var s=await sb.auth.getSession(); if(!s||!s.data||!s.data.session) return;
+      var r=await sb.from('pedidos_online').select('id,numero,cliente_nombre,total').eq('estado','pendiente').order('created_at');
+      if(r.error) return;
+      var ps=r.data||[], bd=g('ped-badge');
+      if(bd){bd.textContent=ps.length;bd.style.display=ps.length?'':'none';}
+      var nuevos=vistos?ps.filter(function(p){return !vistos[p.id];}):[];
+      vistos={}; ps.forEach(function(p){vistos[p.id]=1;});
+      if(nuevos.length){
+        beep();
+        nuevos.forEach(function(p){toast('🔔 Pedido nuevo #'+p.numero+' · '+p.cliente_nombre+' · '+fmtGs(p.total));});
+        try{if(window.Notification&&Notification.permission==='granted')new Notification('Pedido nuevo #'+nuevos[0].numero,{body:nuevos[0].cliente_nombre+' · '+fmtGs(nuevos[0].total),icon:'icon-192.png'});}catch(e){}
+        if(enPedidos()&&tab==='pedidos') pedRenderLista();
+      }
+    }catch(e){}
+  }
+  window.pedPoll=pedPoll;
+  function start(){
+    if(pollT) return;
+    pollT=setInterval(pedPoll,30000); setTimeout(pedPoll,4000);
+    document.addEventListener('click',function once(){document.removeEventListener('click',once);try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission();}catch(e){}});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
+</script>
+<!-- ══ FIN PEDIDOS ONLINE ══ -->
 </body>
 </html>
