@@ -106,7 +106,9 @@ const LS_CART='gp_ped_cart', LS_CLI='gp_ped_cli', LS_LAST='gp_ped_last';
 let cat={config:{},asadito:[],bodega:[]}, tab='asadito', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
 
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
-function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  // en navegadores internos, el link lleva el carrito para que "Abrir en el navegador" no lo pierda
+  try{if(k===LS_CART&&IN_APP){const u=new URL(location.href);u.searchParams.delete('c');if(v&&Object.keys(v).length)u.searchParams.set('c',btoa(JSON.stringify(v)));history.replaceState(null,'',u.pathname+u.search);}}catch(e){}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function gs(n){return 'Gs. '+Math.round(Number(n)||0).toLocaleString('es-PY');}
 function $(id){return document.getElementById(id);}
@@ -251,13 +253,31 @@ function checkout(){
 }
 function openSheet(){const s=$('sheet');s.classList.add('on');requestAnimationFrame(()=>s.classList.add('show'));}
 function closeSheet(){const s=$('sheet');s.classList.remove('show');setTimeout(()=>{if(!s.classList.contains('show'))s.classList.remove('on');},260);}
+// Navegadores internos de apps (Instagram, Facebook, TikTok…) suelen bloquear la ubicación
+const UA=navigator.userAgent||'';
+const IN_APP=/Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|musical_ly|Bytedance|TikTok|Line\//i.test(UA);
+const IS_ANDROID=/Android/i.test(UA);
+// Link para abrir esta página en el navegador del celular, llevando el carrito
+function linkNavegador(){
+  const u=new URL(location.href);u.hash='';u.searchParams.delete('c');if(Object.keys(cart).length)u.searchParams.set('c',btoa(JSON.stringify(cart)));
+  return IS_ANDROID?'intent://'+u.host+u.pathname+u.search+u.hash+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(u.href)+';end':u.href;
+}
+function ayudaNavegador(){
+  return IS_ANDROID?'<a class="btn sec" style="display:block;text-align:center;text-decoration:none;margin-top:8px" href="'+esc(linkNavegador())+'">🌐 Abrir en Chrome (tu pedido se mantiene)</a>'
+    :'<p class="small" style="margin-top:8px">Tocá <b>⋯</b> arriba a la derecha → <b>Abrir en el navegador</b> (Safari). Tu pedido se mantiene.</p>';
+}
 function getUbi(){
-  if(!navigator.geolocation){$('f-err').textContent='Tu navegador no permite compartir ubicación.';return;}
+  const fallo=m=>{$('ubiBtn').textContent='📍 Compartir mi ubicación';$('f-err').innerHTML=m+(IN_APP?'<br>Desde '+(/Instagram/i.test(UA)?'Instagram':'esta app')+' no se puede compartir la ubicación.'+ayudaNavegador():'')+'<p class="small" style="margin-top:6px">También podés confirmar igual y mandarnos tu ubicación por WhatsApp.</p>';};
+  if(!navigator.geolocation){fallo('Tu navegador no permite compartir ubicación.');return;}
   $('ubiBtn').textContent='Obteniendo ubicación…';
+  let hecho=false;
+  // algunos navegadores internos nunca responden: cortar a los 10 s
+  const guard=setTimeout(()=>{if(!hecho){hecho=true;fallo('No se pudo obtener la ubicación.');}},10000);
   navigator.geolocation.getCurrentPosition(p=>{
+    if(hecho)return;hecho=true;clearTimeout(guard);
     $('f-ubi').value='https://maps.google.com/?q='+p.coords.latitude.toFixed(6)+','+p.coords.longitude.toFixed(6);
-    $('ubiBtn').textContent='📍 Ubicación agregada ✓';
-  },()=>{$('ubiBtn').textContent='📍 Compartir mi ubicación';$('f-err').textContent='No se pudo obtener la ubicación.';},{enableHighAccuracy:true,timeout:15000});
+    $('ubiBtn').textContent='📍 Ubicación agregada ✓';$('f-err').textContent='';
+  },e=>{if(hecho)return;hecho=true;clearTimeout(guard);fallo(e&&e.code===1?'No diste permiso de ubicación.':'No se pudo obtener la ubicación.');},{enableHighAccuracy:true,timeout:9000});
 }
 async function enviar(){
   const v=id=>($(id)?.value||'').trim();
@@ -285,7 +305,7 @@ function showDone(r,body){
   if(body&&wa){
     txt='*Pedido #'+r.numero+'* — '+body.nombre+'\n';
     for(const it of r.items||[])txt+='• '+it.cantidad+'x '+it.nombre+(it.origen==='bodega'?' (bodega)':'')+'\n';
-    txt+='Total: '+gs(r.total)+'\n'+(body.entrega==='delivery'?'Delivery: '+body.direccion+(body.ubicacion?'\n'+body.ubicacion:''):'Retiro en local')+'\nPago: '+(PAGOS[body.metodo_pago]?PAGOS[body.metodo_pago][0]:body.metodo_pago);
+    txt+='Total: '+gs(r.total)+'\n'+(body.entrega==='delivery'?'Delivery: '+body.direccion+(body.ubicacion?'\n'+body.ubicacion:'\n📍 Te envío mi ubicación por acá'):'Retiro en local')+'\nPago: '+(PAGOS[body.metodo_pago]?PAGOS[body.metodo_pago][0]:body.metodo_pago);
   }
   $('box').innerHTML='<h2><span></span><button class="x" onclick="closeSheet()">✕</button></h2><div class="done"><div class="small">Pedido</div><div class="num">#'+esc(r.numero)+'</div>'+
     '<div class="estado" id="est">'+(ESTADOS[r.estado||'pendiente'])+'</div>'+(r.total?'<p style="margin-top:12px">Total: <b>'+gs(r.total)+'</b></p>':'')+
@@ -323,6 +343,10 @@ document.addEventListener('focusin',e=>{const i=e.target.closest&&e.target.close
 $('cartBtn').onclick=checkout;
 $('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet();});
 let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value.trim();render();},200);});
+// Carrito traído desde el navegador interno (?c=...)
+try{const u=new URL(location.href),c0=u.searchParams.get('c');if(c0){const c=JSON.parse(atob(c0));if(c&&typeof c==='object'){cart=c;lsSet(LS_CART,cart);}u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search);}}catch(e){}
+if(IN_APP){const d=document.createElement('div');d.className='banner';d.innerHTML='📍 Para compartir tu ubicación, abrí esta página en tu navegador.'+ayudaNavegador();$('msg').after(d);
+  d.addEventListener('click',e=>{const a=e.target.closest('a');if(a)a.href=linkNavegador();});}
 load().then(resumeLast);
 setInterval(()=>{if(!$('sheet').classList.contains('on'))load();},5*60e3);
 </script>
