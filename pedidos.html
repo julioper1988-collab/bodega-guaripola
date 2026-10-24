@@ -39,6 +39,8 @@ header p{color:var(--text2);font-size:13px;margin-top:2px}
 .env{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
 .env .seg{margin-top:6px}.env .seg button{padding:8px;font-size:13px}
 .env.falta .small{color:var(--err);font-weight:600}
+.banner.promo{background:#2b8a3e;border-color:#2b8a3e;color:#fff;font-size:15px}
+.line.promo{color:var(--ok);font-weight:700}.line.promo s{color:var(--text2);font-weight:400;margin-right:6px}
 .chk{display:flex;align-items:center;gap:10px;margin-top:16px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer}
 .chk input{width:20px;height:20px;accent-color:var(--acc)}
 .item img{width:48px;height:48px;object-fit:cover;border-radius:10px;background:var(--bg3);flex:none}
@@ -161,6 +163,7 @@ async function load(){
     // si el asadito está cerrado y la bodega abierta, arrancar en bodega
     if(primeraVez){primeraVez=false;if(!abierto('asadito')&&abierto('bodega'))tab='bodega';}
     $('msg').innerHTML=(!c.abierto?'<div class="banner closed">⏸ En este momento no estamos recibiendo pedidos.</div>':'')+
+      (c.promo_delivery_primera&&c.abierto?'<div class="banner promo">🎉 <b>Delivery gratis</b> en tu primera compra online</div>':'')+
       (c.mensaje?'<div class="banner">'+esc(c.mensaje)+'</div>':'');
     render();
   }catch(e){$('list').innerHTML='<div class="empty">No se pudo cargar el menú. <br><button class="btn sec" onclick="load()">Reintentar</button></div>';}
@@ -267,11 +270,21 @@ function linesHtml(){
 }
 const PAGOS={efectivo:['Efectivo',''],transferencia:['Transferencia','Te enviamos los datos para transferir al confirmar.'],qr:['QR','Pagás escaneando el QR al recibir o retirar.'],tarjeta:['Tarjeta','Débito o crédito con POS al recibir o retirar.']};
 function metodos(){const m=(cat.config&&cat.config.metodos_pago)||['efectivo','transferencia'];return m.filter(x=>PAGOS[x]);}
+// Promo delivery gratis en la primera compra (se confirma con el teléfono; la base lo vuelve a validar)
+let esNuevo=false,telChk='';
+async function chkNuevo(){
+  const c=cat.config||{},t=($('f-tel')?$('f-tel').value:'').replace(/\D/g,'');
+  if(!c.promo_delivery_primera||t.length<9){esNuevo=false;telChk='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();return;}
+  if(t===telChk)return;telChk=t;
+  try{const r=await rpc('pedidos_es_nuevo',{p_tel:t});if(t!==telChk)return;esNuevo=r===true;}catch(e){esNuevo=false;}
+  if($('sh-tot')){$('sh-tot').innerHTML=totHtml();if(esNuevo&&ent==='delivery')bump($('sh-tot'));}
+}
 function totHtml(){
-  const c=cat.config||{},t=totals(),dl=ent==='delivery'?Number(c.costo_delivery)||0:0;
+  const c=cat.config||{},t=totals(),dl0=ent==='delivery'?Number(c.costo_delivery)||0:0,gratis=dl0>0&&esNuevo,dl=gratis?0:dl0;
   const envT=Object.keys(cart).reduce((a,k)=>a+envCosto(k),0);
   return (envT?'<div class="line"><span>♻️ Envases</span><span>'+gs(envT)+'</span></div>':'')+'<div class="line"><span>Subtotal</span><span>'+gs(t.sub)+'</span></div>'+
-    (ent==='delivery'?'<div class="line"><span>Delivery</span><span>'+(dl?gs(dl):'A confirmar')+'</span></div>':'')+
+    (ent==='delivery'?(gratis?'<div class="line promo"><span>🎉 Delivery · primera compra</span><span><s>'+gs(dl0)+'</s> Gratis</span></div>':'<div class="line"><span>Delivery</span><span>'+(dl?gs(dl):'A confirmar')+'</span></div>'):'')+
+    (c.promo_delivery_primera&&!esNuevo&&!telChk&&ent==='delivery'&&dl0>0?'<p class="small">¿Es tu primera compra online? Poné tu número y el delivery es gratis.</p>':'')+
     '<div class="line tot"><span>Total</span><span>'+gs(t.sub+dl)+'</span></div>'+
     (c.pedido_minimo>0&&t.sub<c.pedido_minimo?'<div class="err">Pedido mínimo: '+gs(c.pedido_minimo)+'</div>':'');
 }
@@ -311,7 +324,7 @@ function checkout(){
     '<div id="f-err" class="err"></div>'+
     '<button class="btn" id="sendBtn"'+(c.abierto?'':' disabled')+'>'+(c.abierto?'Confirmar pedido':'Cerrado por ahora')+'</button>';
   $('sendBtn').onclick=enviar;
-  openSheet();
+  openSheet();telChk='';chkNuevo();
 }
 function openSheet(){const s=$('sheet');s.classList.add('on');requestAnimationFrame(()=>s.classList.add('show'));}
 function closeSheet(){const s=$('sheet');s.classList.remove('show');setTimeout(()=>{if(!s.classList.contains('show'))s.classList.remove('on');},260);}
@@ -363,7 +376,7 @@ async function enviar(){
     if(!r||!r.ok){err((r&&r.error)||'No se pudo enviar.');b.disabled=false;b.textContent='Confirmar pedido';if(r&&/disponible|stock/i.test(r.error||''))load();return;}
     lsSet(LS_CLI,{nombre:body.nombre,telefono:body.telefono,direccion:body.direccion||lsGet(LS_CLI,{}).direccion,ruc:body.factura?body.factura.ruc:'',razon:body.factura?body.factura.razon:''});
     lsSet(LS_LAST,r.token);
-    cart={};lsSet(LS_CART,cart);envs={};lsSet(LS_ENV,envs);render();
+    cart={};lsSet(LS_CART,cart);envs={};lsSet(LS_ENV,envs);esNuevo=false;telChk='';render();
     showDone(r,body);
   }catch(e){err('Sin conexión. Probá de nuevo.');b.disabled=false;b.textContent='Confirmar pedido';}
 }
@@ -407,6 +420,7 @@ document.addEventListener('click',e=>{
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
 });
+let telT=null;document.addEventListener('input',e=>{if(e.target.id==='f-tel'){clearTimeout(telT);telT=setTimeout(chkNuevo,500);}});
 // RUC: buscar en el padrón de la DNIT y completar razón social y dígito verificador
 let rucT=null,rucAuto='';
 document.addEventListener('input',e=>{

@@ -16029,6 +16029,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
       (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
       (bod.length?'<div class="ped-sec">🛒 Bodega · '+fmtGs(p.total_bodega)+'</div>'+bod.map(li).join(''):'')+
+      (p.promo==='delivery_gratis_primera'?'<div class="ped-it" style="color:var(--green);font-weight:700"><span>🎉 Delivery gratis (1ª compra)</span><span>Gs. 0</span></div>':'')+
       (Number(p.costo_delivery)?'<div class="ped-it"><span>Delivery</span><span>'+fmtGs(p.costo_delivery)+'</span></div>':'')+
       '<div class="ped-tot"><span>Total</span><span>'+fmtGs(p.total)+'</span></div>'+
       '<div class="ped-acts">'+acts+'</div></div>';
@@ -16133,6 +16134,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var c=r.data||{};
     b.innerHTML='<div class="card" style="max-width:640px"><div class="card-header"><h3>Pedidos online</h3></div><div style="padding:14px">'+
       '<label style="display:flex;gap:10px;align-items:center;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-abierto" style="width:22px;height:22px" '+(c.abierto?'checked':'')+'> Recibiendo pedidos (abierto)</label>'+
+      '<label style="display:flex;gap:10px;align-items:center;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-promo1" style="width:20px;height:20px" '+(c.promo_delivery_primera?'checked':'')+'> 🎉 Delivery gratis en la primera compra online <span class="ped-meta">(se reconoce por el número de WhatsApp)</span></label>'+
       '<div class="form-grid">'+
       '<div class="form-group"><label>Costo delivery (Gs.)</label><input id="pc-deliv" inputmode="numeric" value="'+(Number(c.costo_delivery)||0)+'"></div>'+
       '<div class="form-group"><label>Pedido mínimo (Gs.)</label><input id="pc-min" inputmode="numeric" value="'+(Number(c.pedido_minimo)||0)+'"></div>'+
@@ -16194,7 +16196,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   }
   window.pedGuardarConfig=async function(){
     var num=function(id){return Number(String(g(id).value).replace(/\D/g,''))||0;};
-    var obj={abierto:g('pc-abierto').checked,costo_delivery:num('pc-deliv'),pedido_minimo:num('pc-min'),whatsapp:waNum(g('pc-wa').value)||null,mensaje:g('pc-msg').value.trim()||null,metodos_pago:[].slice.call(document.querySelectorAll('.pc-pago:checked')).map(function(x){return x.value;}),updated_at:new Date().toISOString()};
+    var obj={abierto:g('pc-abierto').checked,promo_delivery_primera:g('pc-promo1').checked,costo_delivery:num('pc-deliv'),pedido_minimo:num('pc-min'),whatsapp:waNum(g('pc-wa').value)||null,mensaje:g('pc-msg').value.trim()||null,metodos_pago:[].slice.call(document.querySelectorAll('.pc-pago:checked')).map(function(x){return x.value;}),updated_at:new Date().toISOString()};
     if(!obj.metodos_pago.length){toast('Elegí al menos una forma de pago','err');return;}
     obj.horarios=leerHorarios();
     var r=await sb.from('pedidos_config').update(obj).eq('id',1);
