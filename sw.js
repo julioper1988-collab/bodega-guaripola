@@ -91,7 +91,7 @@ self.addEventListener('fetch', event => {
   const method = event.request.method;
 
   // Página pública de pedidos: siempre red, sin cachear como index.html
-  if(new URL(url).pathname.endsWith('/pedidos.html')) return;
+  if(/\/pedidos(-nuevo)?\.html$/.test(new URL(url).pathname)) return;
 
   // Supabase POST/PATCH/DELETE: directo a la red, sin encolar.
   // (La cola anterior respondía 202 falso: la app mostraba error y luego la
