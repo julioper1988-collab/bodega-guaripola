@@ -103,9 +103,11 @@ as $$
                  'abierto_asadito',pedidos_local_abierto('asadito'),'abierto_bodega',pedidos_local_abierto('bodega'),
                  'ahora',to_char(now() at time zone 'America/Asuncion','YYYY-MM-DD"T"HH24:MI:SS'))
                from pedidos_config where id = 1),
+    -- asadito: productos del sistema de control de asaditos (ver sql/pedidos_asadito_v2.sql)
     'asadito', coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nombre',p.nombre,
-                 'categoria',p.categoria,'precio',p.precio_venta) order by p.categoria, p.nombre)
-               from productos p where p.activo and p.vender_online and p.precio_venta > 0), '[]'::jsonb),
+                 'categoria',o.categoria,'precio',p.precio) order by o.categoria, p.nombre)
+               from asadito_productos() p join pedidos_asadito_online o on o.prod_id = p.id
+              where p.activo and o.vender_online and p.precio > 0), '[]'::jsonb),
     'bodega', coalesce((select jsonb_agg(jsonb_build_object('id',b.id,'nombre',b.nombre,
                  'categoria',coalesce(c.nombre,'Otros'),'precio',b.precio_venta,'imagen_url',b.imagen_url,
                  'disponible',coalesce(b.stock,0) > 0,
@@ -194,8 +196,9 @@ begin
     v_pack := null; v_uds := 1;
     begin
       if v_origen = 'asadito' then
-        select nombre, precio_venta, (activo and vender_online) into v_nombre, v_precio, v_ok
-          from productos where id = (it->>'id')::bigint;
+        select p.nombre, p.precio, (p.activo and coalesce(o.vender_online, false)) into v_nombre, v_precio, v_ok
+          from asadito_productos() p left join pedidos_asadito_online o on o.prod_id = p.id
+         where p.id = it->>'id';
         v_stock := null;
       elsif v_origen = 'bodega' then
         select nombre, precio_venta, (activo and vender_online), coalesce(stock,0) into v_nombre, v_precio, v_ok, v_stock
