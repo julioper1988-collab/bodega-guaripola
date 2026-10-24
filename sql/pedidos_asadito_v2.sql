@@ -33,3 +33,34 @@ as $$
 $$;
 revoke all on function public.pedidos_asadito_admin() from public, anon;
 grant execute on function public.pedidos_asadito_admin() to authenticated;
+
+-- Nombres fijos para productos del sistema de asaditos: se aplican en cada guardado del sistema,
+-- así un dispositivo con datos viejos no puede volver a poner el nombre anterior.
+-- Para dejar de forzar un nombre, borrar su fila de asadito_nombres.
+create table if not exists public.asadito_nombres (
+  prod_id text primary key,
+  nombre text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.asadito_nombres enable row level security;
+create policy auth_all on public.asadito_nombres for all to authenticated using (true) with check (true);
+
+create or replace function public.asadito_aplicar_nombres()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if jsonb_typeof(new.data->'products') = 'array' and exists (select 1 from asadito_nombres) then
+    new.data := jsonb_set(new.data, '{products}', (
+      select coalesce(jsonb_agg(case when n.nombre is not null then jsonb_set(p, '{name}', to_jsonb(n.nombre)) else p end order by o), '[]'::jsonb)
+        from jsonb_array_elements(new.data->'products') with ordinality t(p, o)
+        left join asadito_nombres n on n.prod_id = p->>'id'));
+  end if;
+  return new;
+end $$;
+create trigger asadito_aplicar_nombres before insert or update on public.asaditos_v2_app_state
+  for each row execute function public.asadito_aplicar_nombres();
+
+insert into asadito_nombres (prod_id, nombre) values
+  ('35bb576c-5866-455e-8ae3-6dc0e4c274c4','PARRILLERO S/ PICANTE (OCHSI)'),
+  ('532b2679-c093-4837-a240-263f7675396a','PARRILLERO C/ PICANTE (OCHSI)')
+on conflict (prod_id) do update set nombre = excluded.nombre, updated_at = now();
