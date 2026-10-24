@@ -42,6 +42,15 @@ header p{color:var(--text2);font-size:13px;margin-top:2px}
 .item.combo{border-color:var(--acc);border-width:2px}.item.combo s{color:var(--text2)}
 .banner.promo{background:#2b8a3e;border-color:#2b8a3e;color:#fff;font-size:15px}
 .line.promo{color:var(--ok);font-weight:700}.line.promo s{color:var(--text2);font-weight:400;margin-right:6px}
+.mis{border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:8px 12px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 2px}
+.chip{display:inline-flex;border:1px solid var(--border);border-radius:999px;background:var(--bg2);overflow:hidden}
+.chip button{border:0;background:none;padding:8px 10px;font-size:14px;cursor:pointer}.chip button+button{padding:8px 10px 8px 2px;color:var(--text2)}
+.chip.on{border-color:var(--acc);background:var(--acc)}.chip.on button{color:#fff}
+.repetir{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg2);border:1px dashed var(--acc);border-radius:var(--r);padding:12px 14px;margin:10px 0}
+.hist{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer}
+#aviso{position:fixed;left:50%;bottom:96px;transform:translate(-50%,20px);background:#2a1d14;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:.25s;z-index:30;pointer-events:none}
+#aviso.on{opacity:1;transform:translate(-50%,0)}
 .chk{display:flex;align-items:center;gap:10px;margin-top:16px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer}
 .chk input{width:20px;height:20px;accent-color:var(--acc)}
 .item img{width:48px;height:48px;object-fit:cover;border-radius:10px;background:var(--bg3);flex:none}
@@ -97,8 +106,10 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 4px}
 </head>
 <body>
 <header>
-  <h1>🔥 Guaripola</h1>
-  <p>Asaditos + bodega en un solo pedido</p>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+    <div><h1>🔥 Guaripola</h1><p>Asaditos + bodega en un solo pedido</p></div>
+    <button id="misBtn" class="mis hide">📋 Mis pedidos</button>
+  </div>
 </header>
 <div class="wrap">
   <div id="msg"></div>
@@ -118,6 +129,9 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 4px}
 const SB_URL='https://sdpysvowvwucjfnyosuf.supabase.co';
 const SB_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const LS_ENV='gp_ped_env',LS_CART='gp_ped_cart', LS_CLI='gp_ped_cli', LS_LAST='gp_ped_last';
+// Perfil sin registro: todo queda guardado en este celular
+const LS_DIRS='gp_ped_dirs', LS_PREV='gp_ped_prev', LS_HIST='gp_ped_hist';
+function aviso(t){let e=$('aviso');if(!e){e=document.createElement('div');e.id='aviso';document.body.appendChild(e);}e.textContent=t;e.classList.remove('on');void e.offsetWidth;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600);}
 let cat={config:{},asadito:[],bodega:[]}, tab='asadito', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
 
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
@@ -251,7 +265,7 @@ function render(){
         return '<div class="pack"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr">'+gs(pc.precio)+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'</div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
       '</div>';
   }
-  L.innerHTML=cab+h;L.classList.remove('fade');void L.offsetWidth;L.classList.add('fade');
+  L.innerHTML=cab+repetirHtml()+h;L.classList.remove('fade');void L.offsetWidth;L.classList.add('fade');
   renderBar();
 }
 function totals(){
@@ -283,6 +297,7 @@ function setQty(k,v,abs){
     bump(q.querySelector('.qn'));
   });
   renderBar(n>prev);
+  {const rp=document.querySelector('.repetir');if(rp&&Object.keys(cart).length)rp.remove();}
   if($('sheet').classList.contains('on')&&$('sh-lines'))updateSheet(!n);
 }
 
@@ -347,11 +362,18 @@ function totHtml(){
     '<div class="line tot"><span>Total</span><span>'+gs(neto+(di.dl||0))+'</span></div>'+
     (c.pedido_minimo>0&&neto<c.pedido_minimo?'<div class="err">Pedido mínimo: '+gs(c.pedido_minimo)+'</div>':'');
 }
+const ICON_DIR={Casa:'🏠',Trabajo:'💼'};
+function dirsHtml(){
+  const ds=lsGet(LS_DIRS,[]),cur=($('f-dir')&&$('f-dir').value)||'';
+  return ds.length?'<div class="chips">'+ds.map((d,i)=>'<span class="chip'+(d.dir===cur?' on':'')+'"><button data-dir="'+i+'">'+(ICON_DIR[d.label]||'📍')+' '+esc(d.label)+'</button><button data-deldir="'+i+'" aria-label="Borrar">✕</button></span>').join('')+'</div>':'';
+}
 function entHtml(){
-  const cli=lsGet(LS_CLI,{});
+  const cli=lsGet(LS_CLI,{}),ds=lsGet(LS_DIRS,[]),dir0=($('f-dir')&&$('f-dir').value)||(ds[0]&&ds[0].dir)||cli.direccion||'';
+  const gl=$('f-dirlabel')?$('f-dirlabel').value:(ds.some(d=>d.dir===dir0)?'':ds.length?'Otra':'Casa');
   return '<div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
-    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(($('f-dir')&&$('f-dir').value)||cli.direccion||'')+'">'+
-    '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||'')+'"><button class="btn sec" id="ubiBtn" type="button">📍 Compartir mi ubicación</button></div></div>';
+    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div><label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
+    '<label>Guardar esta dirección como</label><select id="f-dirlabel" class="in">'+[['','No guardar'],['Casa','🏠 Casa'],['Trabajo','💼 Trabajo'],['Otra','📍 Otra']].map(o=>'<option value="'+o[0]+'"'+(gl===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
+    '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación')+'</button></div></div>';
 }
 function pagoHtml(){
   return '<div class="seg pagos">'+metodos().map(m=>'<button data-pago="'+m+'" class="'+(pago===m?'on':'')+'">'+PAGOS[m][0]+'</button>').join('')+'</div>'+
@@ -435,6 +457,10 @@ async function enviar(){
     if(!r||!r.ok){err((r&&r.error)||'No se pudo enviar.');b.disabled=false;b.textContent='Confirmar pedido';if(r&&/disponible|stock/i.test(r.error||''))load();return;}
     lsSet(LS_CLI,{nombre:body.nombre,telefono:body.telefono,direccion:body.direccion||lsGet(LS_CLI,{}).direccion,ruc:body.factura?body.factura.ruc:'',razon:body.factura?body.factura.razon:''});
     lsSet(LS_LAST,r.token);
+    {const lb=$('f-dirlabel')?$('f-dirlabel').value:'';
+     if(body.entrega==='delivery'&&body.direccion&&lb){let ds=lsGet(LS_DIRS,[]).filter(d=>d.dir!==body.direccion&&!(lb!=='Otra'&&d.label===lb));ds.unshift({label:lb,dir:body.direccion,ubi:body.ubicacion||''});lsSet(LS_DIRS,ds.slice(0,6));}
+     lsSet(LS_PREV,{cart:{...cart},envs:{...envs},ts:Date.now(),n:Object.values(cart).reduce((a,b)=>a+b,0)});
+     const hs=lsGet(LS_HIST,[]).filter(x=>x.token!==r.token);hs.unshift({token:r.token,numero:r.numero,total:r.total,ts:Date.now()});lsSet(LS_HIST,hs.slice(0,15));misBtn();}
     cart={};lsSet(LS_CART,cart);envs={};lsSet(LS_ENV,envs);esNuevo=false;telChk='';render();
     showDone(r,body);
   }catch(e){err('Sin conexión. Probá de nuevo.');b.disabled=false;b.textContent='Confirmar pedido';}
@@ -463,6 +489,29 @@ function showDone(r,body){
     try{const s=await rpc('pedidos_estado',{p_token:tk});if(s&&s.estado){$('est').textContent=ESTADOS[s.estado]||s.estado;if(s.estado==='entregado'||s.estado==='cancelado'){clearInterval(pollT);lsSet(LS_LAST,null);}}}catch(e){}
   },20000);
 }
+// Repetir el último pedido (solo lo que sigue disponible)
+function repetirHtml(){
+  const pv=lsGet(LS_PREV,null);if(!pv||!pv.cart||Object.keys(cart).length)return '';
+  const ok=Object.keys(pv.cart).filter(k=>{const l=line(k);return l&&l.disponible;});if(!ok.length)return '';
+  const nom=ok.slice(0,3).map(k=>line(k).nombre.toLowerCase()).join(', ')+(ok.length>3?'…':'');
+  return '<div class="repetir"><div><b>🔁 Repetir mi último pedido</b><div class="small">'+esc(nom)+'</div></div><button class="btn" id="repBtn" style="margin:0;width:auto;padding:10px 16px">Repetir</button></div>';
+}
+function repetir(){
+  const pv=lsGet(LS_PREV,null);if(!pv)return;let fal=0;
+  for(const [k,c] of Object.entries(pv.cart)){const l=line(k);if(l&&l.disponible){cart[k]=c;if(pv.envs&&pv.envs[k])envs[k]=pv.envs[k];}else fal++;}
+  lsSet(LS_CART,cart);lsSet(LS_ENV,envs);render();renderBar(true);
+  aviso(fal?'Listo. '+fal+' producto(s) ya no están disponibles.':'Listo, cargamos tu último pedido.');
+  checkout();
+}
+// Mis pedidos: los hechos desde este celular
+function misBtn(){$('misBtn').classList.toggle('hide',!lsGet(LS_HIST,[]).length);}
+async function misPedidos(){
+  const hs=lsGet(LS_HIST,[]);if(!hs.length)return;
+  $('box').innerHTML='<h2>Mis pedidos <button class="x" onclick="closeSheet()" aria-label="Cerrar">✕</button></h2>'+hs.map(x=>'<button class="hist" data-tk="'+esc(x.token)+'"><span><b>#'+esc(x.numero)+'</b> · '+new Date(x.ts).toLocaleDateString('es-PY',{day:'2-digit',month:'short'})+' '+new Date(x.ts).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})+'<br><span class="small" data-est="'+esc(x.token)+'">…</span></span><span>'+gs(x.total)+'</span></button>').join('')+
+    '<p class="small" style="margin-top:10px">Guardado solo en este celular.</p>';
+  openSheet();
+  for(const x of hs.slice(0,8)){rpc('pedidos_estado',{p_token:x.token}).then(s=>{const e=document.querySelector('[data-est="'+CSS.escape(x.token)+'"]');if(e)e.textContent=s&&s.estado?ESTADOS[s.estado]:'—';}).catch(()=>{});}
+}
 async function resumeLast(){
   const tk=lsGet(LS_LAST,null);if(!tk)return;
   try{const s=await rpc('pedidos_estado',{p_token:tk});
@@ -479,8 +528,14 @@ document.addEventListener('click',e=>{
   else if(t.dataset.env){envs[t.dataset.env]=t.dataset.v;lsSet(LS_ENV,envs);const ev=document.querySelector('[data-envq="'+CSS.escape(t.dataset.env)+'"]');if(ev)ev.outerHTML=envHtml(t.dataset.env);$('sh-tot').innerHTML=totHtml();renderBar();}
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
+  else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación';$('sh-dirs').innerHTML=dirsHtml();}}
+  else if(t.dataset.deldir!=null){const ds=lsGet(LS_DIRS,[]);ds.splice(+t.dataset.deldir,1);lsSet(LS_DIRS,ds);$('sh-dirs').innerHTML=dirsHtml();}
+  else if(t.id==='repBtn'){repetir();}
+  else if(t.id==='misBtn'){misPedidos();}
+  else if(t.dataset.tk){rpc('pedidos_estado',{p_token:t.dataset.tk}).then(s=>{if(s&&s.estado)showDone({...s,token:t.dataset.tk},null);}).catch(()=>{});}
 });
-let telT=null;document.addEventListener('input',e=>{if(e.target.id==='f-tel'){clearTimeout(telT);telT=setTimeout(chkNuevo,500);}});
+let telT=null;document.addEventListener('input',e=>{if(e.target.id==='f-tel'){clearTimeout(telT);telT=setTimeout(chkNuevo,500);}
+  if(e.target.id==='f-dir'&&$('sh-dirs')){$('sh-dirs').innerHTML=dirsHtml();if($('f-dirlabel')&&!$('f-dirlabel').value&&!lsGet(LS_DIRS,[]).some(d=>d.dir===e.target.value))$('f-dirlabel').value=lsGet(LS_DIRS,[]).length?'Otra':'Casa';}});
 // RUC: buscar en el padrón de la DNIT y completar razón social y dígito verificador
 let rucT=null,rucAuto='';
 document.addEventListener('input',e=>{
@@ -514,7 +569,7 @@ let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{q
 try{const u=new URL(location.href),c0=u.searchParams.get('c');if(c0){const c=JSON.parse(atob(c0));if(c&&typeof c==='object'){cart=c;lsSet(LS_CART,cart);}u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search);}}catch(e){}
 if(IN_APP){const d=document.createElement('div');d.className='banner';d.innerHTML='📍 Para compartir tu ubicación, abrí esta página en tu navegador.'+ayudaNavegador();$('msg').after(d);
   d.addEventListener('click',e=>{const a=e.target.closest('a');if(a)a.href=linkNavegador();});}
-load().then(resumeLast);
+misBtn();load().then(resumeLast);
 setInterval(()=>{if(!$('sheet').classList.contains('on'))load();},5*60e3);
 // abrir/cerrar a la hora justa sin recargar
 let ultimo='';setInterval(()=>{if(!cat.config)return;const k=abierto('asadito')+'|'+abierto('bodega');if(ultimo&&k!==ultimo&&!$('sheet').classList.contains('on'))render();ultimo=k;estadoTabs();},30e3);
