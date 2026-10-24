@@ -85,6 +85,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .save{color:var(--ok);font-weight:700;font-size:12px}
 .ret{color:var(--acc2);font-weight:700;font-size:12px}
 .item.off{opacity:.5}
+.item.promoc{border:2px solid #ffd2b8;background:var(--accbg)}.item.promoc .nom{color:var(--acc2)}
 .item.combo{border:2px solid #ffd2b8;background:linear-gradient(#fff,#fffaf6)}.item.combo s{color:var(--text2)}
 .qty{display:flex;align-items:center;gap:6px;flex:none}
 .qty button{width:34px;height:34px;border-radius:11px;border:0;background:var(--bg3);font-size:19px;font-weight:700;cursor:pointer;transition:transform .12s ease,background .15s;display:grid;place-items:center}
@@ -167,7 +168,7 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 5px;font-wei
 <body>
 <div class="shell">
 <header class="top">
-  <div><div class="kicker">Pedidos Guaripola</div><h1 id="hola">Hola, ¿qué pedimos hoy?</h1><p class="muted">Asaditos + bodega en un solo pedido</p></div>
+  <div><div class="kicker">Pedidos Guaripola</div><h1 id="hola">Hola, ¿qué pedimos hoy?</h1><p class="muted">Asaditos + bodega en un solo lugar</p></div>
   <div class="acts">
     <button id="misBtn" class="iconbtn hide" aria-label="Mis pedidos" title="Mis pedidos">📋</button>
     <button id="cartIcon" class="iconbtn" aria-label="Ver pedido">🛍️<span id="cartBadge" class="badge hide">0</span></button>
@@ -353,11 +354,14 @@ function render(){
   const combos=PROMOS().filter(x=>x.tipo==='combo'&&(!t||x.nombre.toLowerCase().includes(t)||comboInfo(x).txt.toLowerCase().includes(t)));
   let h='';
   if(tab==='promos'){
+    // promos activas (las mismas que el servidor manda vigentes ahora)
+    const c=cat.config||{},act=(c.promo_delivery_primera?[{nombre:'🎉 Delivery gratis en tu primera compra online',det:'Se aplica solo al poner tu número en el pedido.'}]:[])
+      .concat(PROMOS().filter(x=>x.tipo!=='combo').map(x=>({nombre:x.mensaje||promoTxt(x),det:x.mensaje?promoTxt(x):''})));
+    if(!t&&act.length)h+='<div class="sectionhead"><h3>🔥 Promos de hoy</h3><span>'+act.length+'</span></div><div class="products">'+act.map(x=>'<div class="item promoc"><div class="nom">'+esc(x.nombre)+'</div>'+(x.det?'<div class="pr">'+esc(x.det)+'</div>':'')+'</div>').join('')+'</div>';
     h+=combosHtml(combos);
-    const con=[],packs=[];
-    for(const o of ['asadito','bodega'])for(const p of filt(o)){if(p.disponible===false&&!(p.packs||[]).some(x=>x.disponible!==false))continue;if(descPct(o,p))con.push([o,p]);else if((p.packs||[]).some(x=>x.disponible!==false))packs.push([o,p]);}
+    const con=[];
+    for(const o of ['asadito','bodega'])for(const p of filt(o)){if(p.disponible===false&&!(p.packs||[]).some(x=>x.disponible!==false))continue;if(descPct(o,p))con.push([o,p]);}
     if(con.length)h+='<div class="sectionhead"><h3>🏷️ Con descuento</h3><span>'+con.length+'</span></div><div class="products">'+con.map(([o,p])=>cardHtml(o,p)).join('')+'</div>';
-    if(packs.length)h+='<div class="sectionhead"><h3>📦 Packs</h3><span>'+packs.length+'</span></div><div class="products">'+packs.map(([o,p])=>cardHtml(o,p)).join('')+'</div>';
     if(!h)h='<div class="empty">'+(t?'Sin resultados':'Hoy no hay promos activas. ¡Volvé pronto!')+'</div>';
   }else{
     if(tab==='todos'&&!t)h+=destacadosHtml();
