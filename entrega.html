@@ -32,6 +32,7 @@ h1{font-size:28px;margin-top:4px;display:flex;justify-content:space-between;alig
 .go.done{background:var(--ok);box-shadow:0 6px 16px #2b8a3e40}
 .go:disabled{opacity:.6}
 .empty{text-align:center;padding:60px 10px;color:var(--text2)}
+.live{background:#e9f7ec;border-color:#cdebd5}.live .b.wa{margin-top:10px}
 .fact{background:var(--accbg);border-radius:12px;padding:10px 12px;margin-top:10px;font-weight:700}
 </style>
 </head>
@@ -50,6 +51,9 @@ const wa=t=>{t=String(t||'').replace(/\D/g,'');return t.startsWith('0')?'595'+t.
 async function rpc(fn,body){const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Error de conexión ('+r.status+')');return r.json();}
 let P=null;
 function coords(u){const m=String(u||'').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);return m?[m[1],m[2]]:null;}
+// Mensaje para avisar al cliente; la ubicación en tiempo real la comparte el repartidor desde WhatsApp
+function avisoTxt(p){const n=String(p.cliente_nombre||'').trim().split(/\s+/)[0];
+  return 'Hola '+n+', soy '+(p.repartidor||'el delivery')+' de Guaripola 🛵 Ya salí con tu pedido #'+p.numero+'. Te comparto mi ubicación en tiempo real 👇';}
 function render(){
   const p=P,c=coords(p.ubicacion),dest=c?c.join(','):encodeURIComponent(p.direccion||'');
   const cobrar=p.metodo_pago==='efectivo'||p.metodo_pago==='qr'||p.metodo_pago==='tarjeta';
@@ -71,6 +75,8 @@ function render(){
       (p.metodo_pago==='transferencia'?'<div class="big">Transferencia</div><div class="small">Confirmá con el local si ya está pagado antes de entregar.</div>':
         '<div class="cobrar">Cobrar '+gs(p.total)+'</div>'+(p.metodo_pago==='qr'?'<div class="small">Con QR al entregar.</div>':p.metodo_pago==='tarjeta'?'<div class="small">Con POS al entregar.</div>':'')+
         (vuelto?'<div class="small" style="margin-top:4px">Paga con '+gs(p.paga_con)+' → llevar vuelto <b>'+gs(vuelto)+'</b></div>':''))+'</div>'+
+    (p.estado==='en_camino'?'<div class="card live"><div class="lbl">📍 Ubicación para el cliente</div><div class="small">1. Tocá el botón: se abre el chat con el mensaje listo.<br>2. En WhatsApp tocá 📎 → <b>Ubicación</b> → <b>Compartir ubicación en tiempo real</b> (1 hora).</div>'+
+      '<a class="b wa" target="_blank" rel="noopener" href="https://wa.me/'+wa(p.cliente_telefono)+'?text='+encodeURIComponent(avisoTxt(p))+'">📍 Avisar al cliente y compartir ubicación</a></div>':'')+
     (p.estado==='cancelado'?'<div class="card" style="color:var(--err);font-weight:800">Este pedido fue cancelado. No lo entregues.</div>':
       p.estado==='entregado'?'<div class="card ok" style="text-align:center">✅ Entregado. ¡Gracias!</div>':
       (p.estado!=='en_camino'?'<button class="go" id="bSali" onclick="marcar(\'en_camino\')">🛵 Salí con el pedido</button>':'')+
