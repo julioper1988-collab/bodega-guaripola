@@ -313,11 +313,18 @@ function icono(o,p){const c=String(p.categoria||'').toUpperCase();for(const k in
 function descPct(o,p){let b=0;for(const pr of PROMOS()){if(pr.tipo!=='descuento')continue;if(pr.local&&pr.local!==o)continue;
   if(pr.categorias&&pr.categorias.length&&!pr.categorias.includes(p.categoria))continue;
   if(pr.productos&&pr.productos.length&&!pr.productos.includes(String(p.id)))continue;b=Math.max(b,Number(pr.porcentaje)||0);}return b;}
+// Mayoría de edad: categorías +18 (alcohol, cigarrillos) definidas en la configuración
+function es18(o,p){return o==='bodega'&&!!p&&((cat.config&&cat.config.categorias_18)||[]).includes(p.categoria);}
+function has18(){return Object.keys(cart).some(k=>{const l=line(k);if(!l)return false;
+  if(l.o==='combo')return (l.p.componentes||[]).some(c=>c.origen==='bodega'&&es18('bodega',(cat.bodega||[]).find(x=>String(x.id)===String(c.id))));
+  return es18(l.o,l.p);});}
+function mayorHtml(){const on=$('f-18')&&$('f-18').checked;
+  return has18()?'<label class="chk"><input type="checkbox" id="f-18"'+(on?' checked':'')+'> 🔞 Confirmo que soy mayor de 18 años</label><p class="small" style="margin-top:4px">Tu pedido tiene bebidas alcohólicas o cigarrillos. Al entregar te podemos pedir la cédula.</p>':'';}
 function cardHtml(o,p){
   const k=key(o,p.id),off=p.disponible===false,packs=(p.packs||[]).filter(x=>x.disponible!==false),pc=descPct(o,p);
   return '<div class="item'+(off&&!packs.length?' off':'')+'"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
     '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado por unidad':'<span class="price">'+gs(p.precio)+'</span>'+(packs.length?' c/u':''))+'</div>'+
-    '<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(packs.length?'<span class="tag ok">📦 Pack</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+'</div></div>'+
+    '<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(packs.length?'<span class="tag ok">📦 Pack</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div></div>'+
     (off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div>'+
     packs.map(pc=>{const pk=key(o,p.id,pc.id),ahorro=p.precio*pc.cantidad-pc.precio;
       return '<div class="pack"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr"><span class="price">'+gs(pc.precio)+'</span>'+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'</div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
@@ -513,6 +520,7 @@ function updateSheet(estructura){
     const ev=document.querySelector('[data-envq="'+CSS.escape(k)+'"]');if(ev)ev.outerHTML=envHtml(k);}
   if(!estructura&&Object.keys(cart).some(k=>!document.querySelector('[data-st="'+CSS.escape(k)+'"]')))$('sh-lines').innerHTML=linesHtml();
   $('sh-tot').innerHTML=totHtml();
+  if($('sh-18')&&!!$('f-18')!==has18())$('sh-18').innerHTML=mayorHtml();
 }
 function checkout(){
   const c=cat.config||{},t=totals(),cli=lsGet(LS_CLI,{});
@@ -527,6 +535,7 @@ function checkout(){
     '<div class="slide'+(cli.ruc?' open':'')+'" id="sh-fact"><div><label>RUC o CI</label><input id="f-ruc" class="in" inputmode="text" placeholder="Ej: 1234567-8" value="'+esc(cli.ruc||'')+'"><div id="ruc-hint" class="small" style="margin-top:4px"></div>'+
     '<label>Nombre o razón social</label><input id="f-razon" class="in" autocomplete="organization" value="'+esc(cli.razon||'')+'"></div></div>'+
     '<label>Notas (opcional)</label><textarea id="f-notas" class="in" rows="2" placeholder="Ej: sin sal, timbre no funciona…"></textarea>'+
+    '<div id="sh-18">'+mayorHtml()+'</div>'+
     '<div id="f-err" class="err"></div>'+
     '<button class="btn" id="sendBtn"'+(c.abierto?'':' disabled')+'>'+(c.abierto?'Confirmar pedido':'Cerrado por ahora')+'</button>'+
     '<button class="btn sec" onclick="closeSheet()">← Seguir comprando</button>';
@@ -564,7 +573,7 @@ function getUbi(){
 async function enviar(){
   const v=id=>($(id)?.value||'').trim();
   const body={nombre:v('f-nom'),telefono:v('f-tel'),entrega:ent,direccion:ent==='delivery'?v('f-dir'):'',ubicacion:ent==='delivery'?v('f-ubi'):'',metodo_pago:pago,paga_con:pago==='efectivo'?v('f-paga'):'',notas:v('f-notas'),
-    factura:$('f-fact')&&$('f-fact').checked?{ruc:v('f-ruc'),razon:v('f-razon')}:null,
+    factura:$('f-fact')&&$('f-fact').checked?{ruc:v('f-ruc'),razon:v('f-razon')}:null,mayor_edad:!!($('f-18')&&$('f-18').checked),
     items:Object.entries(cart).map(([k,c])=>{const l=line(k);if(!l)return null;if(l.o==='combo')return {origen:'combo',id:l.id,cantidad:c};return {origen:l.o,id:l.id,pack:l.pk||null,cantidad:c,envase:l.env?envs[k]||null:null};}).filter(Boolean)};
   const sinEnv=Object.keys(cart).find(k=>{const l=line(k);return l&&l.env&&!envs[k];});
   if(sinEnv){const e=document.querySelector('[data-envq="'+CSS.escape(sinEnv)+'"]');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}
@@ -573,6 +582,7 @@ async function enviar(){
   const cer=['asadito','bodega'].filter(l=>!abierto(l)&&body.items.some(i=>i.origen===l));
   if(cer.length){err((cer[0]==='asadito'?'El asadito':'La bodega')+' está cerrado ahora. Quitá esos productos'+(proxima(cer[0])?' o pedí '+proxima(cer[0]):'')+'.');return;}
   if(body.nombre.length<2){err('Ingresá tu nombre.');return;}
+  if(has18()&&!body.mayor_edad){const e=$('sh-18');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}err('Para pedir bebidas alcohólicas o cigarrillos tenés que confirmar que sos mayor de 18 años.');return;}
   if(body.factura&&!/^[0-9A-Za-z.]{3,15}(-[0-9])?$/.test(body.factura.ruc.replace(/\s/g,''))){err('Revisá el RUC para la factura (ej: 1234567-8).');return;}
   if(body.factura&&body.factura.razon.length<2){err('Ingresá el nombre o razón social para la factura.');return;}
   if(body.telefono.replace(/\D/g,'').length<6){err('Ingresá tu teléfono.');return;}

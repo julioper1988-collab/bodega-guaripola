@@ -16030,6 +16030,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':'')+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
       (p.repartidor?'<div class="ped-meta">🛵 <b>'+h(p.repartidor)+'</b>'+(p.salio_at?' · salió '+hora(p.salio_at):' · todavía no salió')+(p.entregado_at?' · entregado '+hora(p.entregado_at):'')+'</div>':'')+
+      (p.mayor_18?'<div class="ped-meta" style="color:var(--red);font-weight:700">🔞 +18: verificar cédula al entregar</div>':'')+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
       (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
@@ -16283,6 +16284,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var r=await sb.from('pedidos_config').select('*').eq('id',1).maybeSingle();
     if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
     var c=r.data||{};
+    var rc=await sb.from('bodega_categorias').select('nombre').order('nombre'), c18=c.categorias_18||[];
     b.innerHTML='<div class="card" style="max-width:640px"><div class="card-header"><h3>Pedidos online</h3></div><div style="padding:14px">'+
       '<label style="display:flex;gap:10px;align-items:center;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-abierto" style="width:22px;height:22px" '+(c.abierto?'checked':'')+'> Recibiendo pedidos (abierto)</label>'+
       '<label style="display:flex;gap:10px;align-items:center;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-promo1" style="width:20px;height:20px" '+(c.promo_delivery_primera?'checked':'')+'> 🎉 Delivery gratis en la primera compra online <span class="ped-meta">(se reconoce por el número de WhatsApp)</span></label>'+
@@ -16298,6 +16300,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div id="pc-zonas" style="margin-top:8px">'+(c.zonas_delivery||[]).map(zonaRow).join('')+'</div>'+
       '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="pedZonaAgregar()">+ Agregar zona</button>'+
       '<div class="ped-meta">Tocá «Usar mi ubicación actual» estando en el local. Más lejos que la última zona = fuera de cobertura (solo retiro). Sin ubicación del local se cobra el costo fijo de arriba; si el cliente no comparte su ubicación, también.</div></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>🔞 Categorías solo para mayores de 18</label><div class="ped-acts">'+(rc.data||[]).map(function(x){return '<label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-right:12px"><input type="checkbox" class="pc-18" value="'+h(x.nombre)+'" style="width:auto" '+(c18.indexOf(x.nombre)>=0?'checked':'')+'> '+h(x.nombre)+'</label>';}).join('')+'</div>'+
+      '<div class="ped-meta">Si el pedido tiene productos de estas categorías, el cliente tiene que confirmar que es mayor de 18 y el repartidor ve el aviso para pedir la cédula.</div></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>🛵 Repartidores</label><div id="pc-reps">'+(c.repartidores||[]).map(repRow).join('')+'</div>'+
       '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="pedRepAgregar()">+ Agregar repartidor</button>'+
       '<div class="ped-meta">En cada pedido con delivery tocá «🛵 Enviar al delivery» y le llega por WhatsApp un link con los datos del cliente.</div></div>'+
@@ -16385,6 +16389,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       if(!(Math.abs(lat)<=90&&Math.abs(lng)<=180)){toast('Revisá la latitud y longitud del local','err');return;}
       obj.local_lat=lat;obj.local_lng=lng;
     }else{obj.local_lat=null;obj.local_lng=null;}
+    obj.categorias_18=[].slice.call(document.querySelectorAll('.pc-18:checked')).map(function(x){return x.value;});
     obj.repartidores=[].slice.call(document.querySelectorAll('.pc-rep')).map(function(r){return {nombre:r.querySelector('.pr-nom').value.trim(),tel:r.querySelector('.pr-tel').value.trim(),token:r.dataset.tk||uuid()};}).filter(function(x){return x.nombre&&x.tel.replace(/\D/g,'').length>=6;});
     obj.zonas_delivery=[].slice.call(document.querySelectorAll('.pc-zona')).map(function(r){return {km:parseFloat(String(r.querySelector('.pz-km').value).replace(',','.')),precio:Number(String(r.querySelector('.pz-pr').value).replace(/\D/g,''))};})
       .filter(function(z){return z.km>0&&z.precio>=0;}).sort(function(a,b){return a.km-b.km;});
