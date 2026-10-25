@@ -463,7 +463,28 @@ function kmUbi(){
   return Math.round(2*6371*Math.asin(Math.sqrt(a))*100)/100;
 }
 const kmTxt=k=>String(Math.max(0.1,Math.round(k*10)/10)).replace('.',',');
-function zonasTxt(){const zs=zonas();return zs?'🛵 '+zs.map(z=>'hasta '+kmTxt(z.km)+' km '+gs(z.precio)).join(' · '):'';}
+// Mapa de cobertura (Leaflet + OpenStreetMap, se carga solo al abrirlo)
+let LF=null,covMap=null;
+function cargarLeaflet(){return LF||(LF=new Promise((ok,ko)=>{
+  const c=document.createElement('link');c.rel='stylesheet';c.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';document.head.appendChild(c);
+  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';s.onload=()=>ok(window.L);s.onerror=()=>{LF=null;ko();};document.head.appendChild(s);}));}
+async function verCobertura(){
+  const el=$('cov-map'),b=$('covBtn'),zs=zonas();if(!el||!zs)return;
+  if(covMap){covMap.remove();covMap=null;}
+  if(!el.classList.contains('hide')){el.classList.add('hide');b.textContent='🗺️ Ver zona de cobertura';return;}
+  const c=cat.config,km=Math.max(...zs.map(z=>Number(z.km)||0));
+  el.classList.remove('hide');b.textContent='Ocultar mapa · llegamos hasta '+kmTxt(km)+' km';el.innerHTML='<div class="small" style="padding:12px">Cargando mapa…</div>';
+  try{
+    const L=await cargarLeaflet();if(el.classList.contains('hide'))return;el.innerHTML='';
+    const m=covMap=L.map(el).setView([c.local_lat,c.local_lng],13);m.attributionControl.setPrefix(false);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);
+    const circ=L.circle([c.local_lat,c.local_lng],{radius:km*1000,color:'#ef6a24',weight:2,fillColor:'#ef6a24',fillOpacity:.12}).addTo(m);
+    const ic=t=>L.divIcon({html:'<div style="font-size:26px;line-height:1">'+t+'</div>',className:'',iconSize:[28,28],iconAnchor:[14,26]});
+    L.marker([c.local_lat,c.local_lng],{icon:ic('🏪')}).addTo(m).bindTooltip('Guaripola');
+    const u=String(($('f-ubi')&&$('f-ubi').value)||'').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+    if(u)L.marker([+u[1],+u[2]],{icon:ic('🏠')}).addTo(m).bindTooltip('Tu ubicación');
+    m.fitBounds(circ.getBounds(),{padding:[8,8]});
+  }catch(e){el.innerHTML='<div class="small" style="padding:12px">No se pudo cargar el mapa.</div>';}
+}
 function deliveryInfo(neto,na,nb){
   const zs=ent==='delivery'?zonas():null,km=zs?kmUbi():null,z=km!=null?zs.find(x=>Number(x.km)>=km):null;
   if(km!=null&&!z)return {dl0:0,dl:0,km,fuera:true};
@@ -503,7 +524,7 @@ function entHtml(){
   const cli=lsGet(LS_CLI,{}),ds=lsGet(LS_DIRS,[]),dir0=($('f-dir')&&$('f-dir').value)||(ds[0]&&ds[0].dir)||cli.direccion||'';
   const gl=$('f-dirlabel')?$('f-dirlabel').value:(ds.some(d=>d.dir===dir0)?'':ds.length?'Otra':'Casa');
   return '<div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
-    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div>'+(zonasTxt()?'<p class="small" style="margin-top:8px">'+esc(zonasTxt())+'</p>':'')+'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
+    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div>'+(zonas()?'<button type="button" class="btn sec" id="covBtn" style="margin-top:10px">🗺️ Ver zona de cobertura</button><div id="cov-map" class="hide" style="height:280px;border-radius:14px;margin-top:8px;overflow:hidden;background:#e9ebf0"></div>':'')+'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
     '<label>Guardar esta dirección como</label><select id="f-dirlabel" class="in">'+[['','No guardar'],['Casa','🏠 Casa'],['Trabajo','💼 Trabajo'],['Otra','📍 Otra']].map(o=>'<option value="'+o[0]+'"'+(gl===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación')+'</button><div id="ubi-info" class="small" style="margin-top:6px"></div></div></div>';
 }
@@ -582,6 +603,7 @@ function getUbi(){
     ubiFuente='gps';ubiAcc=p.coords.accuracy||0;
     $('f-ubi').value='https://maps.google.com/?q='+p.coords.latitude.toFixed(6)+','+p.coords.longitude.toFixed(6);
     $('ubiBtn').textContent='📍 Ubicación agregada ✓ · Actualizar';$('f-err').textContent='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();ubiInfo();
+    if($('cov-map')&&!$('cov-map').classList.contains('hide')){$('cov-map').classList.add('hide');verCobertura();}
   },e=>{if(hecho)return;hecho=true;clearTimeout(guard);fallo(e&&e.code===1?'No diste permiso de ubicación.':'No se pudo obtener la ubicación.');},{enableHighAccuracy:true,timeout:9000,maximumAge:0});
 }
 async function enviar(){
@@ -681,6 +703,7 @@ document.addEventListener('click',e=>{
   else if(t.dataset.env){envs[t.dataset.env]=t.dataset.v;lsSet(LS_ENV,envs);const ev=document.querySelector('[data-envq="'+CSS.escape(t.dataset.env)+'"]');if(ev)ev.outerHTML=envHtml(t.dataset.env);$('sh-tot').innerHTML=totHtml();renderBar();}
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
+  else if(t.id==='covBtn'){verCobertura();}
   else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación';ubiFuente=d.ubi?'guardada':'';$('sh-dirs').innerHTML=dirsHtml();$('sh-tot').innerHTML=totHtml();ubiInfo();}}
   else if(t.dataset.deldir!=null){const ds=lsGet(LS_DIRS,[]);ds.splice(+t.dataset.deldir,1);lsSet(LS_DIRS,ds);$('sh-dirs').innerHTML=dirsHtml();}
   else if(t.id==='repBtn'){repetir();}
