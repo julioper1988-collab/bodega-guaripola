@@ -323,9 +323,11 @@ function has18(){return Object.keys(cart).some(k=>{const l=line(k);if(!l)return 
   return es18(l.o,l.p);});}
 function mayorHtml(){const on=$('f-18')&&$('f-18').checked;
   return has18()?'<label class="chk"><input type="checkbox" id="f-18"'+(on?' checked':'')+'> 🔞 Confirmo que soy mayor de 18 años</label><p class="small" style="margin-top:4px">Tu pedido tiene bebidas alcohólicas o cigarrillos. Al entregar te podemos pedir la cédula.</p>':'';}
-const conPack=p=>(p.packs||[]).some(x=>x.disponible!==false);
+// Packs a la vista (los retornables no: son pesados, se venden por unidad)
+const packsVis=p=>p.envase?[]:(p.packs||[]).filter(x=>x.disponible!==false);
+const conPack=p=>packsVis(p).length>0;
 function cardHtml(o,p){
-  const k=key(o,p.id),off=p.disponible===false,packs=(p.packs||[]).filter(x=>x.disponible!==false),pc=descPct(o,p);
+  const k=key(o,p.id),off=p.disponible===false,packs=packsVis(p),pc=descPct(o,p);
   const tags='<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div>';
   // Con pack: primero el pack (lo que más queremos vender) y abajo la unidad
   if(packs.length)return '<div class="item"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
