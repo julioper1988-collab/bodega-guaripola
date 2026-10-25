@@ -82,6 +82,9 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .tag.ok{background:#e9f7ec;color:var(--ok)}
 .pack{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
 .pack .nom{font-size:14px}
+.pack.destac .nom{font-size:15px;font-weight:800}.pack.destac .price{font-size:16px}
+.pack.unidad .nom{font-size:13px;font-weight:600;color:var(--text2)}.pack.unidad .price{font-size:14px;color:var(--text)}
+.pack.unidad .qty>button.add:only-child{width:34px;height:34px;font-size:20px;background:var(--bg3);color:var(--text);box-shadow:none}
 .save{color:var(--ok);font-weight:700;font-size:12px}
 .ret{color:var(--acc2);font-weight:700;font-size:12px}
 .item.off{opacity:.5}
@@ -320,8 +323,16 @@ function has18(){return Object.keys(cart).some(k=>{const l=line(k);if(!l)return 
   return es18(l.o,l.p);});}
 function mayorHtml(){const on=$('f-18')&&$('f-18').checked;
   return has18()?'<label class="chk"><input type="checkbox" id="f-18"'+(on?' checked':'')+'> 🔞 Confirmo que soy mayor de 18 años</label><p class="small" style="margin-top:4px">Tu pedido tiene bebidas alcohólicas o cigarrillos. Al entregar te podemos pedir la cédula.</p>':'';}
+const conPack=p=>(p.packs||[]).some(x=>x.disponible!==false);
 function cardHtml(o,p){
   const k=key(o,p.id),off=p.disponible===false,packs=(p.packs||[]).filter(x=>x.disponible!==false),pc=descPct(o,p);
+  const tags='<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div>';
+  // Con pack: primero el pack (lo que más queremos vender) y abajo la unidad
+  if(packs.length)return '<div class="item"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
+    '<div class="info"><div class="nom">'+esc(p.nombre)+'</div>'+tags+'</div></div>'+
+    packs.map(pc=>{const pk=key(o,p.id,pc.id),ahorro=p.precio*pc.cantidad-pc.precio;
+      return '<div class="pack destac"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr"><span class="price">'+gs(pc.precio)+'</span>'+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'<br><span class="small">'+gs(pc.precio/pc.cantidad)+' c/u</span></div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
+    '<div class="pack unidad"><div class="info"><div class="nom">Por unidad</div><div class="pr">'+(off?'Agotado':'<span class="price">'+gs(p.precio)+'</span>')+'</div></div>'+(off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
   return '<div class="item'+(off&&!packs.length?' off':'')+'"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
     '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado por unidad':'<span class="price">'+gs(p.precio)+'</span>'+(packs.length?' c/u':''))+'</div>'+
     '<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(packs.length?'<span class="tag ok">📦 Pack</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div></div>'+
@@ -338,12 +349,15 @@ function combosHtml(combos){
       (ci.disp?'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>':'<div class="small">No disponible</div>')+'</div></div>';}).join('')+'</div>';
 }
 function seccionHtml(o,items,conNav){
-  const ab=abierto(o),ht=horarioTxt(o),cats=[...new Set(items.map(p=>p.categoria))];
+  const ab=abierto(o),ht=horarioTxt(o);
   let h='<section class="'+(ab?'':'cerrado')+'"><div class="sectionhead"><h3>'+(o==='asadito'?'🔥 Asaditos':'🛒 Bodega')+'</h3><span class="st'+(ab?'':' cl')+'">'+(ab?'Abierto':'Cerrado')+'</span></div>'+
     (!ab?'<div class="banner closed">🔒 '+(o==='asadito'?'El asadito':'La bodega')+' está cerrado ahora.'+(proxima(o)?' Abre '+proxima(o)+'.':'')+'</div>':'')+(ht?'<div class="hor">🕐 '+esc(ht)+'</div>':'');
   if(!items.length)return h+'<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div></section>';
-  if(conNav&&cats.length>2)h+='<div class="catnav">'+cats.map((c,i)=>'<button data-goto="c-'+o+'-'+i+'">'+esc(String(c).toLowerCase())+'</button>').join('')+'</div>';
-  cats.forEach((c,i)=>{const ps=items.filter(p=>p.categoria===c);h+='<div class="cat" id="c-'+o+'-'+i+'">'+esc(c)+' · '+ps.length+'</div><div class="products">'+ps.map(p=>cardHtml(o,p)).join('')+'</div>';});
+  // los productos con pack van primero, todos juntos
+  const pk=o==='bodega'?items.filter(conPack):[],resto=pk.length?items.filter(p=>!conPack(p)):items,cs=[...new Set(resto.map(p=>p.categoria))];
+  if(conNav&&cs.length+(pk.length?1:0)>2)h+='<div class="catnav">'+(pk.length?'<button data-goto="c-'+o+'-pk">📦 packs</button>':'')+cs.map((c,i)=>'<button data-goto="c-'+o+'-'+i+'">'+esc(String(c).toLowerCase())+'</button>').join('')+'</div>';
+  if(pk.length)h+='<div class="cat" id="c-'+o+'-pk" style="color:var(--acc2)">📦 Llevá en pack y ahorrá · '+pk.length+'</div><div class="products">'+pk.map(p=>cardHtml(o,p)).join('')+'</div>';
+  cs.forEach((c,i)=>{const ps=resto.filter(p=>p.categoria===c);h+='<div class="cat" id="c-'+o+'-'+i+'">'+esc(c)+' · '+ps.length+'</div><div class="products">'+ps.map(p=>cardHtml(o,p)).join('')+'</div>';});
   return h+'</section>';
 }
 // Destacados: los más vendidos de cada categoría (el catálogo ya viene ordenado por ventas), solo de locales abiertos
