@@ -16024,7 +16024,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     return '<div class="ped-card '+p.estado+'" data-id="'+p.id+'">'+
       '<div class="ped-head"><span class="ped-num">#'+p.numero+'</span><span class="ped-meta">'+hora(p.created_at)+(filtro!=='activos'?' · '+new Date(p.created_at).toLocaleDateString('es-PY'):'')+'</span><span class="ped-est '+p.estado+'">'+EST[p.estado]+'</span></div>'+
       '<div><b>'+h(p.cliente_nombre)+'</b> · <a href="tel:'+h(p.cliente_telefono)+'">'+h(p.cliente_telefono)+'</a></div>'+
-      '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':''):'🏪 Retira en local')+'</div>'+
+      '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':'')+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
@@ -16261,6 +16261,12 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="form-group" style="grid-column:1/-1"><label>WhatsApp del local (para que el cliente avise)</label><input id="pc-wa" placeholder="595981123456" value="'+h(c.whatsapp||'')+'"></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Formas de pago aceptadas</label><div class="ped-acts">'+Object.keys(PAGO_LBL).map(function(m){var on=(c.metodos_pago||['efectivo','transferencia']).indexOf(m)>=0;return '<label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-right:12px"><input type="checkbox" class="pc-pago" value="'+m+'" style="width:auto" '+(on?'checked':'')+'> '+PAGO_LBL[m]+'</label>';}).join('')+'</div></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Horarios de pedidos (hora de Paraguay)</label>'+horariosHtml(c.horarios||{})+'<div class="ped-meta">Fuera de horario la página muestra ese local como cerrado y no acepta sus productos. Cierre 00:00 = medianoche.</div></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>🛵 Zona de delivery (distancia en línea recta desde el local)</label>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input id="pc-lat" placeholder="Latitud -25.30" value="'+(c.local_lat!=null?c.local_lat:'')+'" style="width:140px"><input id="pc-lng" placeholder="Longitud -57.50" value="'+(c.local_lng!=null?c.local_lng:'')+'" style="width:140px">'+
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="pedUbiLocal()">📍 Usar mi ubicación actual</button>'+(c.local_lat!=null?'<a class="btn btn-secondary btn-sm" target="_blank" rel="noopener" href="https://maps.google.com/?q='+c.local_lat+','+c.local_lng+'">Ver en mapa</a>':'')+'</div>'+
+      '<div id="pc-zonas" style="margin-top:8px">'+(c.zonas_delivery||[]).map(zonaRow).join('')+'</div>'+
+      '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="pedZonaAgregar()">+ Agregar zona</button>'+
+      '<div class="ped-meta">Tocá «Usar mi ubicación actual» estando en el local. Más lejos que la última zona = fuera de cobertura (solo retiro). Sin ubicación del local se cobra el costo fijo de arriba; si el cliente no comparte su ubicación, también.</div></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Mensaje en la página (horario, zona de delivery, alias de transferencia…)</label><textarea id="pc-msg" rows="3">'+h(c.mensaje||'')+'</textarea></div>'+
       '</div><button class="btn btn-primary" onclick="pedGuardarConfig()">Guardar</button>'+
       '<div class="alert" style="margin-top:14px">Link para tus clientes (Instagram, WhatsApp, QR):<br><b>'+h(URL_PUBLICA)+'</b><br><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="pedCopiarLink()">Copiar link</button> <a class="btn btn-secondary btn-sm" style="margin-top:8px" target="_blank" rel="noopener" href="'+h(URL_PUBLICA)+'">Abrir</a></div>'+
@@ -16293,6 +16299,14 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     for(var n=0;n<10;n++){ var r=await sb.functions.invoke('ruc-importar',{body:{archivo:n}}); if(r.error){toast('Error: '+r.error.message,'err');break;} await new Promise(function(res){setTimeout(res,8000);}); }
     toast('Actualización iniciada');pedRucEstado();
   };
+  function zonaRow(z){return '<div class="pc-zona" style="display:flex;gap:6px;align-items:center;margin-top:6px">Hasta <input class="pz-km" inputmode="decimal" value="'+(z&&z.km!=null?z.km:'')+'" style="width:70px;padding:4px 6px"> km · Gs. <input class="pz-pr" inputmode="numeric" value="'+(z&&z.precio!=null?z.precio:'')+'" style="width:110px;padding:4px 6px"><button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
+  window.pedZonaAgregar=function(){g('pc-zonas').insertAdjacentHTML('beforeend',zonaRow(null));};
+  window.pedUbiLocal=function(){
+    if(!navigator.geolocation){toast('Este dispositivo no permite ubicación','err');return;}
+    toast('Obteniendo ubicación…');
+    navigator.geolocation.getCurrentPosition(function(p){g('pc-lat').value=p.coords.latitude.toFixed(6);g('pc-lng').value=p.coords.longitude.toFixed(6);toast('Ubicación cargada (precisión '+Math.round(p.coords.accuracy)+' m). Tocá Guardar.');},
+      function(){toast('No se pudo obtener la ubicación','err');},{enableHighAccuracy:true,timeout:15000});
+  };
   var DIAS_H=[[1,'Lunes'],[2,'Martes'],[3,'Miércoles'],[4,'Jueves'],[5,'Viernes'],[6,'Sábado'],[0,'Domingo']];
   function horariosHtml(hs){
     return '<div class="ped-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">'+[['asadito','🔥 Asadito'],['bodega','🛒 Bodega']].map(function(L){
@@ -16319,6 +16333,13 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var obj={abierto:g('pc-abierto').checked,promo_delivery_primera:g('pc-promo1').checked,costo_delivery:num('pc-deliv'),pedido_minimo:num('pc-min'),whatsapp:waNum(g('pc-wa').value)||null,mensaje:g('pc-msg').value.trim()||null,metodos_pago:[].slice.call(document.querySelectorAll('.pc-pago:checked')).map(function(x){return x.value;}),updated_at:new Date().toISOString()};
     if(!obj.metodos_pago.length){toast('Elegí al menos una forma de pago','err');return;}
     obj.horarios=leerHorarios();
+    var lat=parseFloat(String(g('pc-lat').value).replace(',','.')),lng=parseFloat(String(g('pc-lng').value).replace(',','.'));
+    if(String(g('pc-lat').value).trim()||String(g('pc-lng').value).trim()){
+      if(!(Math.abs(lat)<=90&&Math.abs(lng)<=180)){toast('Revisá la latitud y longitud del local','err');return;}
+      obj.local_lat=lat;obj.local_lng=lng;
+    }else{obj.local_lat=null;obj.local_lng=null;}
+    obj.zonas_delivery=[].slice.call(document.querySelectorAll('.pc-zona')).map(function(r){return {km:parseFloat(String(r.querySelector('.pz-km').value).replace(',','.')),precio:Number(String(r.querySelector('.pz-pr').value).replace(/\D/g,''))};})
+      .filter(function(z){return z.km>0&&z.precio>=0;}).sort(function(a,b){return a.km-b.km;});
     var r=await sb.from('pedidos_config').update(obj).eq('id',1);
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast('Configuración guardada'); pedRenderConfig();
