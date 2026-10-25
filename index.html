@@ -15963,7 +15963,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   var URL_PUBLICA=location.origin+location.pathname.replace(/[^/]*$/,'')+'pedidos.html';
   var EST={pendiente:'Pendiente',aceptado:'Aceptado',preparando:'Preparando',en_camino:'En camino',entregado:'Entregado',cancelado:'Cancelado'};
   var PAGO_LBL={efectivo:'Efectivo',transferencia:'Transferencia',qr:'QR',tarjeta:'Tarjeta (POS)'};
-  var tab='pedidos', filtro='activos', bodQ='', vistos=null, pollT=null;
+  var tab='pedidos', filtro='activos', bodQ='', vistos=null, pollT=null, repDesde=new Date().toISOString();
   function h(v){return typeof escapeHtml==='function'?escapeHtml(v):String(v??'');}
   function g(id){return document.getElementById(id);}
   function hoyISO(){var d=new Date();d.setHours(0,0,0,0);return d.toISOString();}
@@ -16018,6 +16018,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if((p.estado==='aceptado'||p.estado==='preparando')&&p.entrega==='delivery') acts+=btn('🛵 En camino',"pedEstado('"+p.id+"','en_camino')",'btn-primary');
     if(['aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn('🎉 Entregado',"pedEstado('"+p.id+"','entregado')",'btn-primary');
     if(bod.length&&p.estado!=='cancelado') acts+=btn(p.bodega_cargado?'🛒 Venta bodega ✓ (recargar)':'🛒 Cobrar bodega en caja',"pedCargarBodega('"+p.id+"')",p.bodega_cargado?'btn-secondary':'btn-primary');
+    if(p.entrega==='delivery'&&['pendiente','aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn(p.repartidor?'🛵 Reenviar a '+h(p.repartidor):'🛵 Enviar al delivery',"pedRepartidor('"+p.id+"')",p.repartidor?'btn-secondary':'btn-primary');
     acts+=btn('💬 WhatsApp',"pedWa('"+p.id+"')");
     if(['pendiente','aceptado','preparando'].indexOf(p.estado)>=0) acts+=btn('Cancelar',"pedEstado('"+p.id+"','cancelado')");
     if(p.estado==='cancelado') acts+=btn('🗑 Eliminar',"pedEliminar('"+p.id+"')");
@@ -16026,6 +16027,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div><b>'+h(p.cliente_nombre)+'</b> · <a href="tel:'+h(p.cliente_telefono)+'">'+h(p.cliente_telefono)+'</a></div>'+
       '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':'')+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
+      (p.repartidor?'<div class="ped-meta">🛵 <b>'+h(p.repartidor)+'</b>'+(p.salio_at?' · salió '+hora(p.salio_at):' · todavía no salió')+(p.entregado_at?' · entregado '+hora(p.entregado_at):'')+'</div>':'')+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
       (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
@@ -16060,6 +16062,31 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(!m) m='Hola '+p.cliente_nombre+', sobre tu pedido #'+p.numero+': ';
     window.open('https://wa.me/'+waNum(p.cliente_telefono)+'?text='+encodeURIComponent(m),'_blank');
   }
+  // Repartidor: link solo para este pedido (entrega.html?t=...) + datos por WhatsApp
+  var URL_ENTREGA=URL_PUBLICA.replace(/pedidos\.html$/,'entrega.html');
+  window.pedRepartidor=async function(id){
+    var r=await sb.from('pedidos_config').select('repartidores').eq('id',1).maybeSingle();
+    var rs=(r.data&&r.data.repartidores)||[];
+    openModal('🛵 Enviar al delivery','<p class="ped-meta" style="margin-bottom:10px">Le llega por WhatsApp un link con los datos del cliente, el mapa y los botones «Salí» y «Entregado».</p>'+
+      '<div class="ped-acts" style="flex-direction:column;align-items:stretch">'+rs.map(function(x,i){return '<button class="btn btn-primary" onclick="pedRepEnviar(\''+id+'\','+i+')">🛵 '+h(x.nombre)+' · '+h(x.tel)+'</button>';}).join('')+
+      '<button class="btn btn-secondary" onclick="pedRepEnviar(\''+id+'\',-1)">📱 Elegir otro contacto en WhatsApp</button></div>'+
+      (rs.length?'':'<p class="ped-meta" style="margin-top:10px">Tip: cargá tus repartidores en Configuración para enviarles con un toque.</p>'),null,'');
+  };
+  window.pedRepEnviar=async function(id,i){
+    var p=await getPed(id);if(!p)return;
+    var c=await sb.from('pedidos_config').select('repartidores').eq('id',1).maybeSingle();
+    var rep=i>=0?((c.data&&c.data.repartidores)||[])[i]:null;
+    var tk=p.driver_token||(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(ch){var v=Math.random()*16|0;return (ch==='x'?v:(v&3|8)).toString(16);}));
+    var u=await sb.from('pedidos_online').update({driver_token:tk,repartidor:rep?rep.nombre:(p.repartidor||'Delivery'),updated_at:new Date().toISOString()}).eq('id',id);
+    if(u.error){toast('Error: '+u.error.message,'err');return;}
+    var its=(p.items||[]).filter(function(x){return !x.es_envase;}).map(function(x){return x.cantidad+'× '+x.nombre;}).join(' · ');
+    var cob=p.metodo_pago==='transferencia'?'Transferencia (confirmar con el local)':'Cobrar '+fmtGs(p.total)+' ('+(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+')'+(p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?' · paga con '+fmtGs(p.paga_con)+' → vuelto '+fmtGs(p.paga_con-p.total):'');
+    var m='🛵 *Pedido #'+p.numero+'* — '+p.cliente_nombre+'\n📞 '+p.cliente_telefono+'\n📍 '+(p.direccion||'')+(p.ubicacion?'\n🗺️ '+p.ubicacion:'')+'\n📦 '+its+'\n💵 '+cob+(p.notas?'\n📝 '+p.notas:'')+(p.factura_ruc?'\n🧾 Lleva factura':'')+
+      '\n\n👉 Abrí acá para ver todo y marcar Salí / Entregado:\n'+URL_ENTREGA+'?t='+tk;
+    closeModal();
+    window.open('https://wa.me/'+(rep?waNum(rep.tel):'')+'?text='+encodeURIComponent(m),'_blank');
+    toast('Enviado a '+(rep?rep.nombre:'WhatsApp'));pedRenderLista();
+  };
   window.pedWa=async function(id){var p=await getPed(id);if(p)pedWaMsg(p,p.estado);};
 
   // Carga los productos de bodega del pedido en "Nueva venta" (descuenta stock y entra a la caja de la bodega al finalizar)
@@ -16267,6 +16294,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div id="pc-zonas" style="margin-top:8px">'+(c.zonas_delivery||[]).map(zonaRow).join('')+'</div>'+
       '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="pedZonaAgregar()">+ Agregar zona</button>'+
       '<div class="ped-meta">Tocá «Usar mi ubicación actual» estando en el local. Más lejos que la última zona = fuera de cobertura (solo retiro). Sin ubicación del local se cobra el costo fijo de arriba; si el cliente no comparte su ubicación, también.</div></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>🛵 Repartidores</label><div id="pc-reps">'+(c.repartidores||[]).map(repRow).join('')+'</div>'+
+      '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="pedRepAgregar()">+ Agregar repartidor</button>'+
+      '<div class="ped-meta">En cada pedido con delivery tocá «🛵 Enviar al delivery» y le llega por WhatsApp un link con los datos del cliente.</div></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Mensaje en la página (horario, zona de delivery, alias de transferencia…)</label><textarea id="pc-msg" rows="3">'+h(c.mensaje||'')+'</textarea></div>'+
       '</div><button class="btn btn-primary" onclick="pedGuardarConfig()">Guardar</button>'+
       '<div class="alert" style="margin-top:14px">Link para tus clientes (Instagram, WhatsApp, QR):<br><b>'+h(URL_PUBLICA)+'</b><br><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="pedCopiarLink()">Copiar link</button> <a class="btn btn-secondary btn-sm" style="margin-top:8px" target="_blank" rel="noopener" href="'+h(URL_PUBLICA)+'">Abrir</a></div>'+
@@ -16299,6 +16329,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     for(var n=0;n<10;n++){ var r=await sb.functions.invoke('ruc-importar',{body:{archivo:n}}); if(r.error){toast('Error: '+r.error.message,'err');break;} await new Promise(function(res){setTimeout(res,8000);}); }
     toast('Actualización iniciada');pedRucEstado();
   };
+  function repRow(x){return '<div class="pc-rep" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input class="pr-nom" placeholder="Nombre" value="'+h(x&&x.nombre||'')+'" style="flex:1;padding:4px 6px"><input class="pr-tel" placeholder="WhatsApp 0981…" inputmode="tel" value="'+h(x&&x.tel||'')+'" style="width:150px;padding:4px 6px"><button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
+  window.pedRepAgregar=function(){g('pc-reps').insertAdjacentHTML('beforeend',repRow(null));};
   function zonaRow(z){return '<div class="pc-zona" style="display:flex;gap:6px;align-items:center;margin-top:6px">Hasta <input class="pz-km" inputmode="decimal" value="'+(z&&z.km!=null?z.km:'')+'" style="width:70px;padding:4px 6px"> km · Gs. <input class="pz-pr" inputmode="numeric" value="'+(z&&z.precio!=null?z.precio:'')+'" style="width:110px;padding:4px 6px"><button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
   window.pedZonaAgregar=function(){g('pc-zonas').insertAdjacentHTML('beforeend',zonaRow(null));};
   // Acepta lo que copia Google Maps: 25°18'18.7"S 57°30'23.0"W o -25.305194, -57.506389
@@ -16346,6 +16378,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       if(!(Math.abs(lat)<=90&&Math.abs(lng)<=180)){toast('Revisá la latitud y longitud del local','err');return;}
       obj.local_lat=lat;obj.local_lng=lng;
     }else{obj.local_lat=null;obj.local_lng=null;}
+    obj.repartidores=[].slice.call(document.querySelectorAll('.pc-rep')).map(function(r){return {nombre:r.querySelector('.pr-nom').value.trim(),tel:r.querySelector('.pr-tel').value.trim()};}).filter(function(x){return x.nombre&&x.tel.replace(/\D/g,'').length>=6;});
     obj.zonas_delivery=[].slice.call(document.querySelectorAll('.pc-zona')).map(function(r){return {km:parseFloat(String(r.querySelector('.pz-km').value).replace(',','.')),precio:Number(String(r.querySelector('.pz-pr').value).replace(/\D/g,''))};})
       .filter(function(z){return z.km>0&&z.precio>=0;}).sort(function(a,b){return a.km-b.km;});
     var r=await sb.from('pedidos_config').update(obj).eq('id',1);
@@ -16430,6 +16463,14 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       if(abrirPend){abrirPend=false;try{history.replaceState(null,'',location.pathname);}catch(e){} setTimeout(function(){goTo('pedidos');},800);}
       var r=await sb.from('pedidos_online').select('id,numero,cliente_nombre,total').eq('estado','pendiente').order('created_at');
       if(r.error) return;
+      var desde=repDesde;repDesde=new Date().toISOString();
+      var rr=await sb.from('pedidos_online').select('numero,repartidor,salio_at,entregado_at').not('driver_token','is',null).gte('updated_at',desde);
+      var cambio=false;
+      (rr.data||[]).forEach(function(x){
+        if(x.entregado_at&&x.entregado_at>=desde){cambio=true;toast('✅ Pedido #'+x.numero+' entregado'+(x.repartidor?' por '+x.repartidor:''));}
+        else if(x.salio_at&&x.salio_at>=desde){cambio=true;toast('🛵 '+(x.repartidor||'El delivery')+' salió con el pedido #'+x.numero);}
+      });
+      if(cambio&&enPedidos()&&tab==='pedidos') pedRenderLista();
       var ps=r.data||[], bd=g('ped-badge');
       if(bd){bd.textContent=ps.length;bd.style.display=ps.length?'':'none';}
       repetir(ps.length>0);

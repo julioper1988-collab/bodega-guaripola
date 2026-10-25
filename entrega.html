@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Entrega · Guaripola</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f4f5f8">
+<link rel="icon" href="icon-192.png">
+<style>
+/* Página del repartidor: ve el pedido asignado y marca Salí / Entregado */
+:root{--bg:#f4f5f8;--text:#202733;--text2:#7b828d;--border:#e8eaf0;--line:#d9dde3;--acc:#ef6a24;--acc2:#d65413;--accbg:#fff3ea;--ok:#2b8a3e;--err:#d63c3c;--sh:0 4px 16px #19263b10;color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
+a{color:inherit}
+.wrap{max-width:520px;margin:0 auto}
+.kicker{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#eb651d;font-weight:800}
+h1{font-size:28px;margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.est{font-size:13px;font-weight:800;border-radius:999px;padding:6px 12px;background:#fff;box-shadow:var(--sh)}
+.est.en_camino{background:var(--accbg);color:var(--acc2)}.est.entregado{background:#e9f7ec;color:var(--ok)}.est.cancelado{background:#fdecec;color:var(--err)}
+.card{background:#fff;border-radius:19px;padding:16px;margin-top:12px;box-shadow:0 2px 10px #19263b08;border:1px solid #edf0f2}
+.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:800;margin-bottom:6px}
+.big{font-size:19px;font-weight:800}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.b{flex:1 1 40%;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:13px 10px;font-weight:800;font-size:15px;cursor:pointer;color:var(--text)}
+.b.wa{background:#25d366;border-color:#25d366;color:#fff}
+.it{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border)}.it:last-child{border:0}
+.cobrar{font-size:26px;font-weight:900;color:var(--acc2)}
+.ok{color:var(--ok);font-weight:800}
+.small{font-size:13px;color:var(--text2)}
+.go{width:100%;border:0;border-radius:16px;padding:18px;font-size:18px;font-weight:900;color:#fff;background:#ed6923;margin-top:14px;cursor:pointer;box-shadow:0 6px 16px #ed692340}
+.go.done{background:var(--ok);box-shadow:0 6px 16px #2b8a3e40}
+.go:disabled{opacity:.6}
+.empty{text-align:center;padding:60px 10px;color:var(--text2)}
+.fact{background:var(--accbg);border-radius:12px;padding:10px 12px;margin-top:10px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="empty">Cargando pedido…</div></div>
+<script>
+const SB_URL='https://sdpysvowvwucjfnyosuf.supabase.co';
+const SB_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
+const TK=new URLSearchParams(location.search).get('t')||'';
+const EST={pendiente:'Pendiente',aceptado:'Aceptado',preparando:'Preparando',en_camino:'🛵 En camino',entregado:'✅ Entregado',cancelado:'❌ Cancelado'};
+const PAGO={efectivo:'Efectivo',transferencia:'Transferencia',qr:'QR',tarjeta:'Tarjeta (POS)'};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const gs=n=>'Gs. '+Math.round(Number(n)||0).toLocaleString('es-PY');
+const wa=t=>{t=String(t||'').replace(/\D/g,'');return t.startsWith('0')?'595'+t.slice(1):t;};
+async function rpc(fn,body){const r=await fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Error de conexión ('+r.status+')');return r.json();}
+let P=null;
+function coords(u){const m=String(u||'').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);return m?[m[1],m[2]]:null;}
+function render(){
+  const p=P,c=coords(p.ubicacion),dest=c?c.join(','):encodeURIComponent(p.direccion||'');
+  const cobrar=p.metodo_pago==='efectivo'||p.metodo_pago==='qr'||p.metodo_pago==='tarjeta';
+  const vuelto=p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?Number(p.paga_con)-Number(p.total):0;
+  const env=(p.items||[]).filter(i=>i.envase==='tengo').reduce((a,i)=>a+(Number(i.envases)||0),0);
+  $('app').innerHTML='<div class="kicker">Guaripola · Entrega'+(p.repartidor?' · '+esc(p.repartidor):'')+'</div>'+
+    '<h1>Pedido #'+esc(p.numero)+'<span class="est '+esc(p.estado)+'">'+(EST[p.estado]||esc(p.estado))+'</span></h1>'+
+    '<div class="card"><div class="lbl">Cliente</div><div class="big">'+esc(p.cliente_nombre)+'</div><div class="small">'+esc(p.cliente_telefono)+'</div>'+
+      '<div class="row"><a class="b" href="tel:'+esc(p.cliente_telefono)+'">📞 Llamar</a><a class="b wa" target="_blank" rel="noopener" href="https://wa.me/'+wa(p.cliente_telefono)+'">💬 WhatsApp</a></div></div>'+
+    '<div class="card"><div class="lbl">Dirección'+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':'')+'</div><div class="big" style="font-size:17px">'+esc(p.direccion||'—')+'</div>'+
+      (c?'':'<div class="small" style="margin-top:4px">⚠️ El cliente no compartió su ubicación. Llamalo si no encontrás la dirección.</div>')+
+      '<div class="row"><a class="b" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+dest+'">🗺️ Google Maps</a>'+
+      (c?'<a class="b" target="_blank" rel="noopener" href="https://waze.com/ul?ll='+dest+'&navigate=yes">🚙 Waze</a>':'')+'</div></div>'+
+    '<div class="card"><div class="lbl">Pedido</div>'+(p.items||[]).map(i=>'<div class="it"><span>'+esc(i.cantidad)+'× '+esc(i.nombre)+'</span></div>').join('')+
+      (env?'<div class="small ok" style="margin-top:8px">♻️ Retirar '+env+' envase'+(env>1?'s':'')+' vacío'+(env>1?'s':'')+' del cliente</div>':'')+
+      (p.notas?'<div class="small" style="margin-top:8px">📝 '+esc(p.notas)+'</div>':'')+
+      (p.factura_ruc?'<div class="fact">🧾 Lleva factura: RUC '+esc(p.factura_ruc)+' · '+esc(p.factura_razon||'')+'</div>':'')+'</div>'+
+    '<div class="card"><div class="lbl">Cobro · '+esc(PAGO[p.metodo_pago]||p.metodo_pago)+'</div>'+
+      (p.metodo_pago==='transferencia'?'<div class="big">Transferencia</div><div class="small">Confirmá con el local si ya está pagado antes de entregar.</div>':
+        '<div class="cobrar">Cobrar '+gs(p.total)+'</div>'+(p.metodo_pago==='qr'?'<div class="small">Con QR al entregar.</div>':p.metodo_pago==='tarjeta'?'<div class="small">Con POS al entregar.</div>':'')+
+        (vuelto?'<div class="small" style="margin-top:4px">Paga con '+gs(p.paga_con)+' → llevar vuelto <b>'+gs(vuelto)+'</b></div>':''))+'</div>'+
+    (p.estado==='cancelado'?'<div class="card" style="color:var(--err);font-weight:800">Este pedido fue cancelado. No lo entregues.</div>':
+      p.estado==='entregado'?'<div class="card ok" style="text-align:center">✅ Entregado. ¡Gracias!</div>':
+      (p.estado!=='en_camino'?'<button class="go" id="bSali" onclick="marcar(\'en_camino\')">🛵 Salí con el pedido</button>':'')+
+      '<button class="go done" id="bEnt" onclick="marcar(\'entregado\')">✅ Entregado</button>')+
+    '<p class="small" style="text-align:center;margin-top:16px">Este link sirve solo para este pedido.</p>';
+}
+async function cargar(){
+  if(!TK){$('app').innerHTML='<div class="empty">Link inválido.</div>';return;}
+  try{const p=await rpc('pedidos_repartidor',{p_token:TK});if(!p){$('app').innerHTML='<div class="empty">Este link venció o no es válido.<br>Pedile uno nuevo al local.</div>';return;}P=p;render();}
+  catch(e){if(!P)$('app').innerHTML='<div class="empty">Sin conexión. <br><br><button class="b" onclick="cargar()">Reintentar</button></div>';}
+}
+async function marcar(est){
+  if(est==='entregado'&&!confirm('¿Confirmás que entregaste el pedido #'+P.numero+(P.metodo_pago!=='transferencia'?' y cobraste '+gs(P.total):'')+'?'))return;
+  document.querySelectorAll('.go').forEach(b=>b.disabled=true);
+  try{const r=await rpc('pedidos_repartidor_estado',{p_token:TK,p_estado:est});if(!r||!r.ok)alert((r&&r.error)||'No se pudo actualizar.');}catch(e){alert('Sin conexión. Probá de nuevo.');}
+  cargar();
+}
+cargar();setInterval(()=>{if(P&&!['entregado','cancelado'].includes(P.estado))cargar();},30000);
+</script>
+</body>
+</html>
