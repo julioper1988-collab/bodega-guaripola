@@ -15991,7 +15991,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(filtro==='activos') q=q.in('estado',['pendiente','aceptado','preparando','en_camino']);
     else if(filtro==='hoy') q=q.gte('created_at',hoyISO());
     else if(filtro==='cancelados') q=q.eq('estado','cancelado');
-    var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,costo_delivery,estado').gte('created_at',hoyISO());
+    var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,costo_delivery,estado,repartidor,metodo_pago,total').gte('created_at',hoyISO());
     if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
     var ent=(rh.data||[]).filter(function(p){return p.estado==='entregado';});
     var sum=function(k){return ent.reduce(function(a,p){return a+Number(p[k]||0);},0);};
@@ -15999,6 +15999,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div><span class="ped-meta">🔥 Asadito (su caja)</span><b>'+fmtGs(sum('total_asadito'))+'</b></div>'+
       '<div><span class="ped-meta">🛒 Bodega</span><b>'+fmtGs(sum('total_bodega'))+'</b></div>'+
       '<div><span class="ped-meta">🛵 Delivery cobrado</span><b>'+fmtGs(sum('costo_delivery'))+'</b></div></div>'+
+      (function(){var R={};ent.forEach(function(p){if(!p.repartidor)return;var x=R[p.repartidor]=R[p.repartidor]||{n:0,ef:0};x.n++;if(p.metodo_pago==='efectivo')x.ef+=Number(p.total)||0;});
+        var ks=Object.keys(R);return ks.length?'<div class="ped-acts" style="margin:6px 0 10px">'+ks.map(function(k){return '<span class="ped-meta" style="background:var(--accent-bg);border-radius:8px;padding:6px 10px">🛵 <b>'+h(k)+'</b>: '+R[k].n+' entrega'+(R[k].n>1?'s':'')+' · efectivo '+fmtGs(R[k].ef)+'</span>';}).join('')+'</div>':'';})()+
       '<div class="ped-tabs">'+[['activos','Activos'],['hoy','Hoy'],['cancelados','Cancelados'],['todos','Últimos 150']].map(function(f){return '<button class="btn btn-secondary btn-sm'+(filtro===f[0]?' on':'')+'" onclick="pedFiltro(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+
       '<button class="btn btn-secondary btn-sm" onclick="pedRenderLista()">↻ Actualizar</button></div>';
     var ps=r.data||[];
@@ -16064,6 +16066,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   }
   // Repartidor: link solo para este pedido (entrega.html?t=...) + datos por WhatsApp
   var URL_ENTREGA=URL_PUBLICA.replace(/pedidos\.html$/,'entrega.html');
+  function uuid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(ch){var v=Math.random()*16|0;return (ch==='x'?v:(v&3|8)).toString(16);});}
   window.pedRepartidor=async function(id){
     var r=await sb.from('pedidos_config').select('repartidores').eq('id',1).maybeSingle();
     var rs=(r.data&&r.data.repartidores)||[];
@@ -16075,9 +16078,10 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
   window.pedRepEnviar=async function(id,i){
     var p=await getPed(id);if(!p)return;
     var c=await sb.from('pedidos_config').select('repartidores').eq('id',1).maybeSingle();
-    var rep=i>=0?((c.data&&c.data.repartidores)||[])[i]:null;
-    var tk=p.driver_token||(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(ch){var v=Math.random()*16|0;return (ch==='x'?v:(v&3|8)).toString(16);}));
-    var u=await sb.from('pedidos_online').update({driver_token:tk,repartidor:rep?rep.nombre:(p.repartidor||'Delivery'),updated_at:new Date().toISOString()}).eq('id',id);
+    var reps=(c.data&&c.data.repartidores)||[],rep=i>=0?reps[i]:null;
+    if(rep&&!rep.token){rep.token=uuid();await sb.from('pedidos_config').update({repartidores:reps}).eq('id',1);}
+    var tk=p.driver_token||uuid();
+    var u=await sb.from('pedidos_online').update({driver_token:tk,repartidor:rep?rep.nombre:(p.repartidor||'Delivery'),repartidor_tk:rep?rep.token:null,updated_at:new Date().toISOString()}).eq('id',id);
     if(u.error){toast('Error: '+u.error.message,'err');return;}
     var its=(p.items||[]).filter(function(x){return !x.es_envase;}).map(function(x){return x.cantidad+'× '+x.nombre;}).join(' · ');
     var cob=p.metodo_pago==='transferencia'?'Transferencia (confirmar con el local)':'Cobrar '+fmtGs(p.total)+' ('+(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+')'+(p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?' · paga con '+fmtGs(p.paga_con)+' → vuelto '+fmtGs(p.paga_con-p.total):'');
@@ -16329,7 +16333,10 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     for(var n=0;n<10;n++){ var r=await sb.functions.invoke('ruc-importar',{body:{archivo:n}}); if(r.error){toast('Error: '+r.error.message,'err');break;} await new Promise(function(res){setTimeout(res,8000);}); }
     toast('Actualización iniciada');pedRucEstado();
   };
-  function repRow(x){return '<div class="pc-rep" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input class="pr-nom" placeholder="Nombre" value="'+h(x&&x.nombre||'')+'" style="flex:1;padding:4px 6px"><input class="pr-tel" placeholder="WhatsApp 0981…" inputmode="tel" value="'+h(x&&x.tel||'')+'" style="width:150px;padding:4px 6px"><button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
+  function repRow(x){return '<div class="pc-rep" data-tk="'+h(x&&x.token||'')+'" style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap"><input class="pr-nom" placeholder="Nombre" value="'+h(x&&x.nombre||'')+'" style="flex:1;padding:4px 6px"><input class="pr-tel" placeholder="WhatsApp 0981…" inputmode="tel" value="'+h(x&&x.tel||'')+'" style="width:150px;padding:4px 6px">'+(x&&x.token?'<button type="button" class="btn btn-secondary btn-sm" onclick="pedRepLink(this)">🔗 Mandar su link</button>':'')+'<button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
+  window.pedRepLink=function(b){var r=b.parentNode,n=r.querySelector('.pr-nom').value.trim(),t=r.querySelector('.pr-tel').value;
+    var m='Hola '+n+' 👋 Este es tu link de entregas de Guaripola. Guardalo: ahí ves tus pedidos de la noche y cuántas entregas hiciste.\n'+URL_ENTREGA+'?r='+r.dataset.tk;
+    window.open('https://wa.me/'+waNum(t)+'?text='+encodeURIComponent(m),'_blank');};
   window.pedRepAgregar=function(){g('pc-reps').insertAdjacentHTML('beforeend',repRow(null));};
   function zonaRow(z){return '<div class="pc-zona" style="display:flex;gap:6px;align-items:center;margin-top:6px">Hasta <input class="pz-km" inputmode="decimal" value="'+(z&&z.km!=null?z.km:'')+'" style="width:70px;padding:4px 6px"> km · Gs. <input class="pz-pr" inputmode="numeric" value="'+(z&&z.precio!=null?z.precio:'')+'" style="width:110px;padding:4px 6px"><button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">✕</button></div>';}
   window.pedZonaAgregar=function(){g('pc-zonas').insertAdjacentHTML('beforeend',zonaRow(null));};
@@ -16378,7 +16385,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       if(!(Math.abs(lat)<=90&&Math.abs(lng)<=180)){toast('Revisá la latitud y longitud del local','err');return;}
       obj.local_lat=lat;obj.local_lng=lng;
     }else{obj.local_lat=null;obj.local_lng=null;}
-    obj.repartidores=[].slice.call(document.querySelectorAll('.pc-rep')).map(function(r){return {nombre:r.querySelector('.pr-nom').value.trim(),tel:r.querySelector('.pr-tel').value.trim()};}).filter(function(x){return x.nombre&&x.tel.replace(/\D/g,'').length>=6;});
+    obj.repartidores=[].slice.call(document.querySelectorAll('.pc-rep')).map(function(r){return {nombre:r.querySelector('.pr-nom').value.trim(),tel:r.querySelector('.pr-tel').value.trim(),token:r.dataset.tk||uuid()};}).filter(function(x){return x.nombre&&x.tel.replace(/\D/g,'').length>=6;});
     obj.zonas_delivery=[].slice.call(document.querySelectorAll('.pc-zona')).map(function(r){return {km:parseFloat(String(r.querySelector('.pz-km').value).replace(',','.')),precio:Number(String(r.querySelector('.pz-pr').value).replace(/\D/g,''))};})
       .filter(function(z){return z.km>0&&z.precio>=0;}).sort(function(a,b){return a.km-b.km;});
     var r=await sb.from('pedidos_config').update(obj).eq('id',1);
