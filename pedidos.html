@@ -447,8 +447,23 @@ function descPreview(){
     const x=Math.round(l.precio*c*best/100);d+=x;if(l.o==='asadito')da+=x;}
   return {d,da};
 }
+// Cobertura: zonas por distancia en línea recta desde el local (la base vuelve a calcularlo)
+function zonas(){const c=cat.config||{};return c.local_lat!=null&&c.local_lng!=null&&Array.isArray(c.zonas_delivery)&&c.zonas_delivery.length?c.zonas_delivery.slice().sort((a,b)=>a.km-b.km):null;}
+function kmUbi(){
+  const c=cat.config||{},m=String(($('f-ubi')&&$('f-ubi').value)||'').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if(!m||!zonas())return null;
+  const r=x=>x*Math.PI/180,la=+m[1],lo=+m[2],a=Math.sin(r(la-c.local_lat)/2)**2+Math.cos(r(c.local_lat))*Math.cos(r(la))*Math.sin(r(lo-c.local_lng)/2)**2;
+  return Math.round(2*6371*Math.asin(Math.sqrt(a))*100)/100;
+}
+const kmTxt=k=>String(Math.round(k*10)/10).replace('.',',');
+function zonasTxt(){const zs=zonas();return zs?'🛵 '+zs.map(z=>'hasta '+kmTxt(z.km)+' km '+gs(z.precio)).join(' · '):'';}
 function deliveryInfo(neto,na,nb){
-  const c=cat.config||{},dl0=ent==='delivery'?Number(c.costo_delivery)||0:0;
+  const zs=ent==='delivery'?zonas():null,km=zs?kmUbi():null,z=km!=null?zs.find(x=>Number(x.km)>=km):null;
+  if(km!=null&&!z)return {dl0:0,dl:0,km,fuera:true};
+  return Object.assign(deliveryBase(neto,na,nb,z?Number(z.precio)||0:null),{km,sinUbi:!!zs&&km==null});
+}
+function deliveryBase(neto,na,nb,zp){
+  const c=cat.config||{},dl0=ent==='delivery'?(zp!=null?zp:Number(c.costo_delivery)||0):0;
   if(!dl0)return {dl0,dl:0};
   if(esNuevo)return {dl0,dl:0,motivo:'Delivery · primera compra'};
   for(const pr of PROMOS()){
@@ -464,7 +479,9 @@ function totHtml(){
   const envT=Object.keys(cart).reduce((a,k)=>a+envCosto(k),0);
   return (envT?'<div class="line"><span>♻️ Envases</span><span>'+gs(envT)+'</span></div>':'')+'<div class="line"><span>Subtotal</span><span>'+gs(t.sub)+'</span></div>'+
     (dp.d?'<div class="line promo"><span>🏷️ Descuentos</span><span>−'+gs(dp.d)+'</span></div>':'')+
-    (ent==='delivery'?(di.motivo?'<div class="line promo"><span>🎉 '+esc(di.motivo)+'</span><span><s>'+gs(di.dl0)+'</s> Gratis</span></div>':'<div class="line"><span>Delivery</span><span>'+(di.dl?gs(di.dl):'A confirmar')+'</span></div>'):'')+
+    (ent==='delivery'?(di.fuera?'<div class="line"><span>Delivery · '+kmTxt(di.km)+' km</span><span>No llegamos</span></div><div class="err">📍 Estás a '+kmTxt(di.km)+' km, fuera de nuestra zona de delivery. Podés elegir retiro en el local.</div>':
+      di.motivo?'<div class="line promo"><span>🎉 '+esc(di.motivo)+(di.km!=null?' · '+kmTxt(di.km)+' km':'')+'</span><span><s>'+gs(di.dl0)+'</s> Gratis</span></div>':'<div class="line"><span>Delivery'+(di.km!=null?' · '+kmTxt(di.km)+' km':'')+'</span><span>'+(di.dl?gs(di.dl):'A confirmar')+'</span></div>')+
+      (di.sinUbi?'<p class="small">📍 Compartí tu ubicación para calcular el delivery según la distancia.</p>':''):'')+
     (di.falta?'<p class="small" style="color:var(--ok);font-weight:600">Te faltan '+gs(di.falta)+' para el delivery gratis 🛵</p>':'')+
     (c.promo_delivery_primera&&!esNuevo&&!telChk&&ent==='delivery'&&di.dl>0?'<p class="small">¿Es tu primera compra online? Poné tu número y el delivery es gratis.</p>':'')+
     '<div class="line tot"><span>Total</span><span>'+gs(neto+(di.dl||0))+'</span></div>'+
@@ -479,7 +496,7 @@ function entHtml(){
   const cli=lsGet(LS_CLI,{}),ds=lsGet(LS_DIRS,[]),dir0=($('f-dir')&&$('f-dir').value)||(ds[0]&&ds[0].dir)||cli.direccion||'';
   const gl=$('f-dirlabel')?$('f-dirlabel').value:(ds.some(d=>d.dir===dir0)?'':ds.length?'Otra':'Casa');
   return '<div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
-    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div><label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
+    '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div>'+(zonasTxt()?'<p class="small" style="margin-top:8px">'+esc(zonasTxt())+'</p>':'')+'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
     '<label>Guardar esta dirección como</label><select id="f-dirlabel" class="in">'+[['','No guardar'],['Casa','🏠 Casa'],['Trabajo','💼 Trabajo'],['Otra','📍 Otra']].map(o=>'<option value="'+o[0]+'"'+(gl===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación')+'</button></div></div>';
 }
@@ -541,7 +558,7 @@ function getUbi(){
   navigator.geolocation.getCurrentPosition(p=>{
     if(hecho)return;hecho=true;clearTimeout(guard);
     $('f-ubi').value='https://maps.google.com/?q='+p.coords.latitude.toFixed(6)+','+p.coords.longitude.toFixed(6);
-    $('ubiBtn').textContent='📍 Ubicación agregada ✓';$('f-err').textContent='';
+    $('ubiBtn').textContent='📍 Ubicación agregada ✓';$('f-err').textContent='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();
   },e=>{if(hecho)return;hecho=true;clearTimeout(guard);fallo(e&&e.code===1?'No diste permiso de ubicación.':'No se pudo obtener la ubicación.');},{enableHighAccuracy:true,timeout:9000});
 }
 async function enviar(){
@@ -560,6 +577,7 @@ async function enviar(){
   if(body.factura&&body.factura.razon.length<2){err('Ingresá el nombre o razón social para la factura.');return;}
   if(body.telefono.replace(/\D/g,'').length<6){err('Ingresá tu teléfono.');return;}
   if(ent==='delivery'&&!body.direccion){err('Ingresá la dirección.');return;}
+  if(ent==='delivery'){const k=kmUbi(),zs=zonas();if(k!=null&&!zs.some(z=>Number(z.km)>=k)){err('Estás a '+kmTxt(k)+' km, fuera de nuestra zona de delivery. Elegí retiro en el local.');return;}}
   const b=$('sendBtn');b.disabled=true;b.textContent='Enviando…';$('f-err').textContent='';
   try{
     const r=await rpc('pedidos_crear',{p:body});
@@ -639,7 +657,7 @@ document.addEventListener('click',e=>{
   else if(t.dataset.env){envs[t.dataset.env]=t.dataset.v;lsSet(LS_ENV,envs);const ev=document.querySelector('[data-envq="'+CSS.escape(t.dataset.env)+'"]');if(ev)ev.outerHTML=envHtml(t.dataset.env);$('sh-tot').innerHTML=totHtml();renderBar();}
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
-  else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación';$('sh-dirs').innerHTML=dirsHtml();}}
+  else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación';$('sh-dirs').innerHTML=dirsHtml();$('sh-tot').innerHTML=totHtml();}}
   else if(t.dataset.deldir!=null){const ds=lsGet(LS_DIRS,[]);ds.splice(+t.dataset.deldir,1);lsSet(LS_DIRS,ds);$('sh-dirs').innerHTML=dirsHtml();}
   else if(t.id==='repBtn'){repetir();}
   else if(t.id==='misBtn'){misPedidos();}
