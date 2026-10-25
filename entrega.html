@@ -75,6 +75,7 @@ function render(){
     '<div class="card"><div class="lbl">Pedido</div>'+(p.items||[]).map(i=>'<div class="it"><span>'+esc(i.cantidad)+'× '+esc(i.nombre)+'</span></div>').join('')+
       (env?'<div class="small ok" style="margin-top:8px">♻️ Retirar '+env+' envase'+(env>1?'s':'')+' vacío'+(env>1?'s':'')+' del cliente</div>':'')+
       (p.notas?'<div class="small" style="margin-top:8px">📝 '+esc(p.notas)+'</div>':'')+
+      (p.mayor_18?'<div class="fact" style="background:#fdecec;color:var(--err)">🔞 Tiene alcohol o cigarrillos: pedí la cédula. Si es menor de 18, no lo entregues.</div>':'')+
       (p.factura_ruc?'<div class="fact">🧾 Lleva factura: RUC '+esc(p.factura_ruc)+' · '+esc(p.factura_razon||'')+'</div>':'')+'</div>'+
     '<div class="card"><div class="lbl">Cobro · '+esc(PAGO[p.metodo_pago]||p.metodo_pago)+'</div>'+
       (p.metodo_pago==='transferencia'?'<div class="big">Transferencia</div><div class="small">Confirmá con el local si ya está pagado antes de entregar.</div>':
