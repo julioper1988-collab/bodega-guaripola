@@ -7,5 +7,5 @@ alter table public.pedidos_online add column if not exists mayor_18 boolean not 
 
 -- Parches (bloque DO en la migración):
 -- pedidos_catalogo: config expone categorias_18.
--- pedidos_crear: rechaza si hay productos +18 sin confirmación; guarda mayor_18.
+-- pedidos_crear: rechaza si hay productos +18 sin confirmación (obligatorio desde que se publicó la página); guarda mayor_18.
 -- pedidos_repartidor: devuelve mayor_18.

@@ -462,7 +462,7 @@ function kmUbi(){
   const r=x=>x*Math.PI/180,la=+m[1],lo=+m[2],a=Math.sin(r(la-c.local_lat)/2)**2+Math.cos(r(c.local_lat))*Math.cos(r(la))*Math.sin(r(lo-c.local_lng)/2)**2;
   return Math.round(2*6371*Math.asin(Math.sqrt(a))*100)/100;
 }
-const kmTxt=k=>String(Math.round(k*10)/10).replace('.',',');
+const kmTxt=k=>String(Math.max(0.1,Math.round(k*10)/10)).replace('.',',');
 function zonasTxt(){const zs=zonas();return zs?'🛵 '+zs.map(z=>'hasta '+kmTxt(z.km)+' km '+gs(z.precio)).join(' · '):'';}
 function deliveryInfo(neto,na,nb){
   const zs=ent==='delivery'?zonas():null,km=zs?kmUbi():null,z=km!=null?zs.find(x=>Number(x.km)>=km):null;
@@ -505,7 +505,7 @@ function entHtml(){
   return '<div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
     '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div>'+(zonasTxt()?'<p class="small" style="margin-top:8px">'+esc(zonasTxt())+'</p>':'')+'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
     '<label>Guardar esta dirección como</label><select id="f-dirlabel" class="in">'+[['','No guardar'],['Casa','🏠 Casa'],['Trabajo','💼 Trabajo'],['Otra','📍 Otra']].map(o=>'<option value="'+o[0]+'"'+(gl===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
-    '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación')+'</button></div></div>';
+    '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación')+'</button><div id="ubi-info" class="small" style="margin-top:6px"></div></div></div>';
 }
 function pagoHtml(){
   return '<div class="seg pagos">'+metodos().map(m=>'<button data-pago="'+m+'" class="'+(pago===m?'on':'')+'">'+PAGOS[m][0]+'</button>').join('')+'</div>'+
@@ -541,6 +541,7 @@ function checkout(){
     '<button class="btn sec" onclick="closeSheet()">← Seguir comprando</button>';
   $('sendBtn').onclick=enviar;
   openSheet();telChk='';chkNuevo();
+  if(!ubiFuente&&$('f-ubi')&&$('f-ubi').value)ubiFuente='guardada';ubiInfo();
 }
 function openSheet(){const s=$('sheet');s.classList.add('on');requestAnimationFrame(()=>s.classList.add('show'));}
 function closeSheet(){const s=$('sheet');s.classList.remove('show');setTimeout(()=>{if(!s.classList.contains('show'))s.classList.remove('on');},260);}
@@ -557,6 +558,16 @@ function ayudaNavegador(){
   return IS_ANDROID?'<a class="btn sec" style="display:block;text-align:center;text-decoration:none;margin-top:8px" href="'+esc(linkNavegador())+'">🌐 Abrir en Chrome (tu pedido se mantiene)</a>'
     :'<p class="small" style="margin-top:8px">Tocá <b>⋯</b> arriba a la derecha → <b>Abrir en el navegador</b> (Safari). Tu pedido se mantiene.</p>';
 }
+// De dónde salió la ubicación: 'guardada' (dirección de un pedido anterior) o 'gps' (recién tomada) + precisión en metros
+let ubiFuente='',ubiAcc=0;
+function ubiInfo(){
+  const el=$('ubi-info');if(!el)return;const u=($('f-ubi')&&$('f-ubi').value)||'';
+  if(!u||ent!=='delivery'){el.innerHTML='';return;}
+  const k=kmUbi();
+  el.innerHTML=(k!=null?'📍 A <b>'+kmTxt(k)+' km</b> del local · ':'')+'<a target="_blank" rel="noopener" href="'+esc(u)+'">Ver en el mapa</a>'+
+    (ubiFuente==='guardada'?'<br>Es la ubicación guardada de un pedido anterior. Si estás en otro lugar, tocá «Actualizar».':'')+
+    (ubiFuente==='gps'&&ubiAcc>150?'<br>⚠️ Ubicación aproximada (±'+(ubiAcc>=1000?kmTxt(ubiAcc/1000)+' km':Math.round(ubiAcc)+' m')+'). Revisá en el mapa que sea tu casa.':'');
+}
 function getUbi(){
   const fallo=m=>{$('ubiBtn').textContent='📍 Compartir mi ubicación';$('f-err').innerHTML=m+(IN_APP?'<br>Desde '+(/Instagram/i.test(UA)?'Instagram':'esta app')+' no se puede compartir la ubicación.'+ayudaNavegador():'')+'<p class="small" style="margin-top:6px">También podés confirmar igual y mandarnos tu ubicación por WhatsApp.</p>';};
   if(!navigator.geolocation){fallo('Tu navegador no permite compartir ubicación.');return;}
@@ -566,9 +577,12 @@ function getUbi(){
   const guard=setTimeout(()=>{if(!hecho){hecho=true;fallo('No se pudo obtener la ubicación.');}},10000);
   navigator.geolocation.getCurrentPosition(p=>{
     if(hecho)return;hecho=true;clearTimeout(guard);
+    // muy imprecisa (ubicación por wifi/antena): mejor no usarla para calcular el delivery
+    if(p.coords.accuracy>1500){fallo('Tu celular dio una ubicación muy aproximada (±'+kmTxt(p.coords.accuracy/1000)+' km). Activá la ubicación precisa (GPS) y probá de nuevo.');return;}
+    ubiFuente='gps';ubiAcc=p.coords.accuracy||0;
     $('f-ubi').value='https://maps.google.com/?q='+p.coords.latitude.toFixed(6)+','+p.coords.longitude.toFixed(6);
-    $('ubiBtn').textContent='📍 Ubicación agregada ✓';$('f-err').textContent='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();
-  },e=>{if(hecho)return;hecho=true;clearTimeout(guard);fallo(e&&e.code===1?'No diste permiso de ubicación.':'No se pudo obtener la ubicación.');},{enableHighAccuracy:true,timeout:9000});
+    $('ubiBtn').textContent='📍 Ubicación agregada ✓ · Actualizar';$('f-err').textContent='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();ubiInfo();
+  },e=>{if(hecho)return;hecho=true;clearTimeout(guard);fallo(e&&e.code===1?'No diste permiso de ubicación.':'No se pudo obtener la ubicación.');},{enableHighAccuracy:true,timeout:9000,maximumAge:0});
 }
 async function enviar(){
   const v=id=>($(id)?.value||'').trim();
@@ -663,17 +677,20 @@ document.addEventListener('click',e=>{
   else if(t.dataset.goto){const g=$(t.dataset.goto);if(g)g.scrollIntoView({behavior:'smooth',block:'start'});}
   else if(t.id==='cartIcon'){if(totals().n)checkout();else aviso('Tu pedido está vacío. Tocá + para agregar.');}
   else if(t.dataset.k){setQty(t.dataset.k,+t.dataset.d);}
-  else if(t.dataset.ent){ent=t.dataset.ent;$('sh-ent').innerHTML=entHtml();$('sh-tot').innerHTML=totHtml();}
+  else if(t.dataset.ent){ent=t.dataset.ent;$('sh-ent').innerHTML=entHtml();$('sh-tot').innerHTML=totHtml();ubiInfo();}
   else if(t.dataset.env){envs[t.dataset.env]=t.dataset.v;lsSet(LS_ENV,envs);const ev=document.querySelector('[data-envq="'+CSS.escape(t.dataset.env)+'"]');if(ev)ev.outerHTML=envHtml(t.dataset.env);$('sh-tot').innerHTML=totHtml();renderBar();}
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
-  else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓':'📍 Compartir mi ubicación';$('sh-dirs').innerHTML=dirsHtml();$('sh-tot').innerHTML=totHtml();}}
+  else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación';ubiFuente=d.ubi?'guardada':'';$('sh-dirs').innerHTML=dirsHtml();$('sh-tot').innerHTML=totHtml();ubiInfo();}}
   else if(t.dataset.deldir!=null){const ds=lsGet(LS_DIRS,[]);ds.splice(+t.dataset.deldir,1);lsSet(LS_DIRS,ds);$('sh-dirs').innerHTML=dirsHtml();}
   else if(t.id==='repBtn'){repetir();}
   else if(t.id==='misBtn'){misPedidos();}
   else if(t.dataset.tk){rpc('pedidos_estado',{p_token:t.dataset.tk}).then(s=>{if(s&&s.estado)showDone({...s,token:t.dataset.tk},null);}).catch(()=>{});}
 });
 let telT=null;document.addEventListener('input',e=>{if(e.target.id==='f-tel'){clearTimeout(telT);telT=setTimeout(chkNuevo,500);}
+  if(e.target.id==='f-dir'&&ubiFuente==='guardada'&&!lsGet(LS_DIRS,[]).some(d=>d.dir===e.target.value&&d.ubi===$('f-ubi').value)){
+    // escribió otra dirección: la ubicación guardada ya no corresponde
+    $('f-ubi').value='';ubiFuente='';$('ubiBtn').textContent='📍 Compartir mi ubicación';$('sh-tot').innerHTML=totHtml();ubiInfo();}
   if(e.target.id==='f-dir'&&$('sh-dirs')){$('sh-dirs').innerHTML=dirsHtml();if($('f-dirlabel')&&!$('f-dirlabel').value&&!lsGet(LS_DIRS,[]).some(d=>d.dir===e.target.value))$('f-dirlabel').value=lsGet(LS_DIRS,[]).length?'Otra':'Casa';}});
 // RUC: buscar en el padrón de la DNIT y completar razón social y dígito verificador
 let rucT=null,rucAuto='';
