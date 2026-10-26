@@ -159,7 +159,9 @@ Deno.serve(async (req) => {
       .select('id,fecha,items,total,metodo,anulada,created_at')
       .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false });
     if (error) return json({ error: 'No se pudieron cargar las ventas.' }, 500);
-    return json({ ok: true, ventas: data });
+    // Stock de la noche actual (caja + pedidos online); null = sin producción cargada.
+    const { data: stock } = await db.rpc('asadito_stock');
+    return json({ ok: true, ventas: data, stock: stock ?? [] });
   }
 
   if (action === 'anular') {

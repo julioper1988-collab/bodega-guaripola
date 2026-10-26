@@ -86,9 +86,10 @@ const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const TOKEN_KEY='caja_asaditos_token';
 const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis'};
 const $=id=>document.getElementById(id);
-let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],cobrando=false;
+let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],stock={},cobrando=false;
 
-function hoy(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+// Noche de trabajo: hasta las 6:00 cuenta como el día anterior (igual que Pedidos online)
+function hoy(){const d=new Date(Date.now()-6*3600e3);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
 function money(n){return '₲ '+Math.round(n||0).toLocaleString('es-PY')}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function api(action,payload={}){
@@ -106,16 +107,16 @@ async function cargarProductos(){
   Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
   render();
 }
-async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];renderVentas()}
+async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];stock={};(out.stock||[]).forEach(s=>{if(s.disponible!=null)stock[s.prod_id]=s.disponible});renderVentas();render()}
 async function iniciar(){
-  $('fechaTxt').textContent=new Date().toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
+  $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
   if(!token){$('auth').classList.add('on');return}
   try{await cargarProductos();await cargarVentas()}catch(e){$('err').textContent=e.message}
 }
 
 function totalCarrito(){return productos.reduce((a,p)=>a+(carrito[p.id]||0)*(+p.price||0),0)}
 function render(){
-  $('grid').innerHTML=productos.map(p=>`<button class="prod" data-id="${esc(p.id)}">${carrito[p.id]?`<i>${carrito[p.id]}</i>`:''}<b>${esc(p.name)}</b><span>${money(p.price)}</span></button>`).join('')||'<div class="muted">Sin productos activos en el sistema de asaditos.</div>';
+  $('grid').innerHTML=productos.map(p=>`<button class="prod" data-id="${esc(p.id)}">${carrito[p.id]?`<i>${carrito[p.id]}</i>`:''}<b>${esc(p.name)}</b><span>${money(p.price)}</span>${quedan(p.id)}</button>`).join('')||'<div class="muted">Sin productos activos en el sistema de asaditos.</div>';
   const lineas=productos.filter(p=>carrito[p.id]);
   $('ticket').innerHTML=lineas.map(p=>`<div class="line"><span class="n">${esc(p.name)}</span><button class="btn q" data-menos="${esc(p.id)}">−</button><b class="num" style="width:26px;text-align:center">${carrito[p.id]}</b><button class="btn q" data-mas="${esc(p.id)}">+</button><span class="num" style="width:84px">${money(carrito[p.id]*(+p.price||0))}</span></div>`).join('')||'<div class="muted">Tocá un producto para agregarlo.</div>';
   $('total').textContent=money(totalCarrito());
@@ -124,6 +125,7 @@ function render(){
   calcVuelto();
   $('cobrar').disabled=!lineas.length||cobrando;
 }
+function quedan(id){if(!(id in stock))return '';const q=stock[id]-(carrito[id]||0);return `<small style="color:${q<=0?'var(--bad)':q<=5?'#eab308':'var(--muted)'};font-weight:700">${q<=0?'Agotado'+(q<0?' ('+q+')':''):'Quedan '+q}</small>`}
 function calcVuelto(){const r=+$('recibido').value||0,t=totalCarrito();$('vuelto').textContent=r?money(r-t):'—';$('vuelto').style.color=r&&r<t?'var(--bad)':''}
 function renderVentas(){
   const ok=ventas.filter(v=>!v.anulada),porMet={},porProd={};
@@ -155,8 +157,8 @@ $('cobrar').onclick=async()=>{
   cobrando=true;$('err').textContent='';render();
   try{
     const out=await api('venta',{fecha:hoy(),metodo,items});
-    ventas.unshift(out.venta);renderVentas();
-    carrito={};$('recibido').value='';metodo='ef';toast('Cobrado '+money(out.venta.total));
+    carrito={};ventas.unshift(out.venta);renderVentas();cargarVentas().catch(()=>{});
+    $('recibido').value='';metodo='ef';toast('Cobrado '+money(out.venta.total));
   }catch(err){$('err').textContent=err.message}
   finally{cobrando=false;render()}
 };
@@ -171,6 +173,7 @@ $('entrar').onclick=async()=>{
 };
 $('pass').onkeydown=e=>{if(e.key==='Enter')$('entrar').click()};
 iniciar();
+setInterval(()=>{if(token&&!document.hidden)cargarVentas().catch(()=>{})},60000);
 </script>
 </body>
 </html>
