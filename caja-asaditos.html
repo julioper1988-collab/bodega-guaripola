@@ -27,7 +27,7 @@ html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
   .prod{min-height:72px;padding:10px 8px}.prod b{font-size:.85rem}
   input{font-size:16px!important}
   .barra{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;gap:10px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line)}
-  .barra.vacia{display:none}.barra .info{flex:1;line-height:1.15}.barra .info b{display:block;font-size:1.25rem}
+  .barra.vacia,.barra.oculta{display:none}.barra .info{flex:1;line-height:1.15}.barra .info b{display:block;font-size:1.25rem}
   body.con-barra{padding-bottom:84px}.toast{bottom:96px}
 }
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
@@ -169,6 +169,8 @@ document.addEventListener('click',async e=>{
     try{await api('anular',{id:b.dataset.anular});await cargarVentas();toast('Ticket anulado')}catch(err){alert(err.message)}
   }
 });
+// La barra de abajo se oculta mientras el ticket está a la vista (no tapa sus botones)
+if('IntersectionObserver' in window)new IntersectionObserver(es=>$('barra').classList.toggle('oculta',es[0].isIntersecting),{rootMargin:'0px 0px -40% 0px'}).observe($('ticketTit').parentNode);
 $('verTicket').onclick=()=>$('ticketTit').scrollIntoView({behavior:'smooth',block:'start'});
 $('recibido').oninput=e=>{e.target.value=e.target.value.replace(/\D/g,'');calcVuelto()};
 $('limpiar').onclick=()=>{carrito={};$('recibido').value='';$('err').textContent='';render()};
