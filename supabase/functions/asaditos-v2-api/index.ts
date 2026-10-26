@@ -125,6 +125,50 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // Caja de asaditos (caja-asaditos.html): un ticket por fila en asaditos_v2_ventas.
+  // El precio sale de los productos del sistema, no del cliente.
+  if (action === 'venta') {
+    const fecha = String(body.fecha || '');
+    const metodo = String(body.metodo || '');
+    const lineas = Array.isArray(body.items) ? body.items : [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
+    if (!['ef', 'pos', 'tr', 'py', 'mo'].includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
+    const { data: st, error: stError } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', session.accountId).maybeSingle();
+    if (stError) return json({ error: 'No se pudo cargar la base.' }, 500);
+    const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
+    const items: { id: string; nombre: string; precio: number; cant: number }[] = [];
+    for (const l of lineas) {
+      const p = productos.get(String(l?.id));
+      const cant = Number(l?.cant);
+      if (!p || !Number.isInteger(cant) || cant < 1 || cant > 999) return json({ error: 'Producto o cantidad inválida.' }, 400);
+      items.push({ id: String(p.id), nombre: String(p.name || ''), precio: Number(p.price) || 0, cant });
+    }
+    if (!items.length) return json({ error: 'El ticket está vacío.' }, 400);
+    const total = items.reduce((a, x) => a + x.precio * x.cant, 0);
+    const { data, error } = await db.from('asaditos_v2_ventas')
+      .insert({ account_id: session.accountId, fecha, metodo, items, total })
+      .select('id,fecha,items,total,metodo,anulada,created_at').single();
+    if (error) return json({ error: 'No se pudo guardar la venta.' }, 500);
+    return json({ ok: true, venta: data });
+  }
+
+  if (action === 'ventas') {
+    const fecha = String(body.fecha || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
+    const { data, error } = await db.from('asaditos_v2_ventas')
+      .select('id,fecha,items,total,metodo,anulada,created_at')
+      .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false });
+    if (error) return json({ error: 'No se pudieron cargar las ventas.' }, 500);
+    return json({ ok: true, ventas: data });
+  }
+
+  if (action === 'anular') {
+    const { error } = await db.from('asaditos_v2_ventas').update({ anulada: true })
+      .eq('account_id', session.accountId).eq('id', String(body.id || ''));
+    if (error) return json({ error: 'No se pudo anular.' }, 500);
+    return json({ ok: true });
+  }
+
   if (action === 'logout') {
     await db.from('asaditos_v2_sessions').delete().eq('id', session.sessionId);
     return json({ ok: true });
