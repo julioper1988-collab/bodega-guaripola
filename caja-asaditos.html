@@ -84,7 +84,7 @@ button,input{font:inherit;color:inherit}
 const API_URL='https://sdpysvowvwucjfnyosuf.supabase.co/functions/v1/asaditos-v2-api';
 const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const TOKEN_KEY='caja_asaditos_token';
-const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis'};
+const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna'}; // ch/mi: consumo sin pago en caja
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],stock={},cobrando=false;
 

@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     const metodo = String(body.metodo || '');
     const lineas = Array.isArray(body.items) ? body.items : [];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
-    if (!['ef', 'pos', 'tr', 'py', 'mo'].includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
+    if (!['ef', 'pos', 'tr', 'py', 'mo', 'ch', 'mi'].includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
     const { data: st, error: stError } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', session.accountId).maybeSingle();
     if (stError) return json({ error: 'No se pudo cargar la base.' }, 500);
     const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
