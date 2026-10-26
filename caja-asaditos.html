@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://sdpysvowvwucjfnyosuf.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="theme-color" content="#0f1117">
+<title>Caja Asaditos</title>
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#0f1117;--panel:#171a22;--line:#2a2f3b;--text:#e8eaf0;--muted:#8b93a7;--acc:#f97316;--ok:#22c55e;--bad:#ef4444;--input:#0f1218}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,input{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;letter-spacing:.04em}.spacer{flex:1}.muted{color:var(--muted)}
+.btn{background:var(--input);border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer}.btn:disabled{opacity:.5;cursor:default}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#111;font-weight:800}.btn.danger{color:var(--bad)}
+.wrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:14px;max-width:1300px;margin:0 auto}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.prod{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 10px;min-height:86px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;position:relative}
+.prod:active{transform:scale(.98);border-color:var(--acc)}.prod b{font-size:.95rem}.prod span{color:var(--acc);font-weight:700;font-variant-numeric:tabular-nums}
+.prod i{position:absolute;top:6px;right:8px;font-style:normal;background:var(--acc);color:#111;border-radius:99px;padding:0 7px;font-weight:800;font-size:.8rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+.card h2{margin:0 0 8px;font-size:1rem}
+.line{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}.line:last-child{border-bottom:0}
+.line .n{flex:1}.num{font-variant-numeric:tabular-nums;text-align:right}
+.q{width:30px;height:30px;padding:0;border-radius:8px}
+.total{display:flex;justify-content:space-between;font-size:1.4rem;font-weight:800;margin:10px 0}
+.metodos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}.metodos .btn.on{border-color:var(--acc);color:var(--acc);font-weight:700}
+.field{display:flex;gap:8px;align-items:center;margin:6px 0}.field input{flex:1;background:var(--input);border:1px solid var(--line);border-radius:8px;padding:8px;text-align:right}
+.big{width:100%;padding:14px;font-size:1.1rem}
+.err{color:var(--bad);min-height:20px;font-size:.85rem}
+.tk{font-size:.85rem}.tk.anulada{opacity:.45;text-decoration:line-through}
+.auth{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px}.auth.on{display:flex}
+.auth .box{width:min(380px,100%)}.auth input{width:100%;background:var(--input);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ok);color:#111;font-weight:800;padding:10px 18px;border-radius:99px;display:none;z-index:30}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">🔥 CAJA ASADITOS</div>
+  <span class="muted" id="fechaTxt"></span>
+  <div class="spacer"></div>
+  <button class="btn" id="recargar" title="Volver a leer productos y precios">↻</button>
+  <button class="btn" id="salir">Salir</button>
+</div>
+
+<div class="wrap">
+  <section><div class="grid" id="grid"></div></section>
+  <aside>
+    <div class="card">
+      <h2>Ticket</h2>
+      <div id="ticket"></div>
+      <div class="total"><span>Total</span><span id="total" class="num">₲ 0</span></div>
+      <div class="metodos" id="metodos"></div>
+      <div id="efBox">
+        <div class="field"><label>Recibido</label><input id="recibido" inputmode="numeric" placeholder="0"></div>
+        <div class="field"><label>Vuelto</label><b id="vuelto" class="num" style="flex:1">₲ 0</b></div>
+      </div>
+      <div class="err" id="err"></div>
+      <button class="btn primary big" id="cobrar">Cobrar</button>
+      <button class="btn" id="limpiar" style="width:100%;margin-top:6px">Limpiar</button>
+    </div>
+    <div class="card">
+      <h2>Ventas de hoy</h2>
+      <div id="resumen"></div>
+      <div id="tickets" style="margin-top:8px"></div>
+    </div>
+  </aside>
+</div>
+
+<div class="auth" id="auth"><div class="box card">
+  <h2>Caja Asaditos</h2>
+  <p class="muted">Mismo usuario y contraseña del sistema de asaditos.</p>
+  <input id="user" placeholder="Usuario" autocomplete="username">
+  <input id="pass" type="password" placeholder="Contraseña" autocomplete="current-password">
+  <div class="err" id="authErr"></div>
+  <button class="btn primary big" id="entrar">Ingresar</button>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API_URL='https://sdpysvowvwucjfnyosuf.supabase.co/functions/v1/asaditos-v2-api';
+const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
+const TOKEN_KEY='caja_asaditos_token';
+const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis'};
+const $=id=>document.getElementById(id);
+let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],stock={},cobrando=false;
+
+// Noche de trabajo: hasta las 6:00 cuenta como el día anterior (igual que Pedidos online)
+function hoy(){const d=new Date(Date.now()-6*3600e3);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+function money(n){return '₲ '+Math.round(n||0).toLocaleString('es-PY')}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function api(action,payload={}){
+  const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':API_KEY},body:JSON.stringify({action,token,...payload})});
+  let out={};try{out=await res.json()}catch(e){}
+  if(res.status===401&&action!=='login'){token='';localStorage.removeItem(TOKEN_KEY);$('auth').classList.add('on')}
+  if(!res.ok)throw new Error(out.error||'Error de conexión');
+  return out;
+}
+function toast(t){const el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.display='none',1600)}
+
+async function cargarProductos(){
+  const out=await api('load');
+  productos=((out.data&&out.data.products)||[]).filter(p=>p.active!==false);
+  Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
+  render();
+}
+async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];stock={};(out.stock||[]).forEach(s=>{if(s.disponible!=null)stock[s.prod_id]=s.disponible});renderVentas();render()}
+async function iniciar(){
+  $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
+  if(!token){$('auth').classList.add('on');return}
+  try{await cargarProductos();await cargarVentas()}catch(e){$('err').textContent=e.message}
+}
+
+function totalCarrito(){return productos.reduce((a,p)=>a+(carrito[p.id]||0)*(+p.price||0),0)}
+function render(){
+  $('grid').innerHTML=productos.map(p=>`<button class="prod" data-id="${esc(p.id)}">${carrito[p.id]?`<i>${carrito[p.id]}</i>`:''}<b>${esc(p.name)}</b><span>${money(p.price)}</span>${quedan(p.id)}</button>`).join('')||'<div class="muted">Sin productos activos en el sistema de asaditos.</div>';
+  const lineas=productos.filter(p=>carrito[p.id]);
+  $('ticket').innerHTML=lineas.map(p=>`<div class="line"><span class="n">${esc(p.name)}</span><button class="btn q" data-menos="${esc(p.id)}">−</button><b class="num" style="width:26px;text-align:center">${carrito[p.id]}</b><button class="btn q" data-mas="${esc(p.id)}">+</button><span class="num" style="width:84px">${money(carrito[p.id]*(+p.price||0))}</span></div>`).join('')||'<div class="muted">Tocá un producto para agregarlo.</div>';
+  $('total').textContent=money(totalCarrito());
+  $('metodos').innerHTML=Object.entries(METODOS).map(([k,v])=>`<button class="btn ${k===metodo?'on':''}" data-met="${k}">${v}</button>`).join('');
+  $('efBox').style.display=metodo==='ef'?'':'none';
+  calcVuelto();
+  $('cobrar').disabled=!lineas.length||cobrando;
+}
+function quedan(id){if(!(id in stock))return '';const q=stock[id]-(carrito[id]||0);return `<small style="color:${q<=0?'var(--bad)':q<=5?'#eab308':'var(--muted)'};font-weight:700">${q<=0?'Agotado'+(q<0?' ('+q+')':''):'Quedan '+q}</small>`}
+function calcVuelto(){const r=+$('recibido').value||0,t=totalCarrito();$('vuelto').textContent=r?money(r-t):'—';$('vuelto').style.color=r&&r<t?'var(--bad)':''}
+function renderVentas(){
+  const ok=ventas.filter(v=>!v.anulada),porMet={},porProd={};
+  ok.forEach(v=>{porMet[v.metodo]=(porMet[v.metodo]||0)+(+v.total||0);(v.items||[]).forEach(i=>{const r=porProd[i.id]||(porProd[i.id]={n:i.nombre,c:0,t:0});r.c+=i.cant;r.t+=i.cant*i.precio})});
+  const total=ok.reduce((a,v)=>a+(+v.total||0),0);
+  $('resumen').innerHTML=`<div class="total" style="font-size:1.1rem"><span>${ok.length} ticket(s)</span><span class="num">${money(total)}</span></div>`+
+    Object.entries(porMet).map(([k,v])=>`<div class="line"><span class="n">${METODOS[k]||k}</span><b class="num">${money(v)}</b></div>`).join('')+
+    (Object.keys(porProd).length?'<div class="muted" style="margin-top:8px">Unidades</div>'+Object.values(porProd).sort((a,b)=>b.c-a.c).map(r=>`<div class="line"><span class="n">${esc(r.n)}</span><span class="num">${r.c}</span><span class="num" style="width:90px">${money(r.t)}</span></div>`).join(''):'');
+  $('tickets').innerHTML=ventas.map(v=>`<div class="line tk ${v.anulada?'anulada':''}"><span class="muted">${new Date(v.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})}</span><span class="n">${(v.items||[]).map(i=>i.cant+'× '+esc(i.nombre)).join(', ')} · ${METODOS[v.metodo]||v.metodo}</span><b class="num">${money(v.total)}</b>${v.anulada?'':`<button class="btn danger q" data-anular="${esc(v.id)}" title="Anular">×</button>`}</div>`).join('');
+}
+
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.id){carrito[b.dataset.id]=(carrito[b.dataset.id]||0)+1;render()}
+  else if(b.dataset.mas){carrito[b.dataset.mas]++;render()}
+  else if(b.dataset.menos){if(--carrito[b.dataset.menos]<=0)delete carrito[b.dataset.menos];render()}
+  else if(b.dataset.met){metodo=b.dataset.met;render()}
+  else if(b.dataset.anular){
+    if(!confirm('¿Anular este ticket?'))return;
+    try{await api('anular',{id:b.dataset.anular});await cargarVentas();toast('Ticket anulado')}catch(err){alert(err.message)}
+  }
+});
+$('recibido').oninput=e=>{e.target.value=e.target.value.replace(/\D/g,'');calcVuelto()};
+$('limpiar').onclick=()=>{carrito={};$('recibido').value='';$('err').textContent='';render()};
+$('cobrar').onclick=async()=>{
+  const items=Object.entries(carrito).map(([id,cant])=>({id,cant}));
+  if(!items.length||cobrando)return;
+  if(metodo==='ef'&&$('recibido').value&&+$('recibido').value<totalCarrito()){$('err').textContent='El monto recibido no alcanza.';return}
+  cobrando=true;$('err').textContent='';render();
+  try{
+    const out=await api('venta',{fecha:hoy(),metodo,items});
+    carrito={};ventas.unshift(out.venta);renderVentas();cargarVentas().catch(()=>{});
+    $('recibido').value='';metodo='ef';toast('Cobrado '+money(out.venta.total));
+  }catch(err){$('err').textContent=err.message}
+  finally{cobrando=false;render()}
+};
+$('recargar').onclick=async()=>{try{await cargarProductos();await cargarVentas();toast('Actualizado')}catch(e){$('err').textContent=e.message}};
+$('salir').onclick=async()=>{if(!confirm('¿Cerrar sesión?'))return;try{await api('logout')}catch(e){}token='';localStorage.removeItem(TOKEN_KEY);$('auth').classList.add('on')};
+$('entrar').onclick=async()=>{
+  $('authErr').textContent='';
+  try{
+    const out=await api('login',{username:$('user').value,password:$('pass').value});
+    token=out.token;localStorage.setItem(TOKEN_KEY,token);$('pass').value='';$('auth').classList.remove('on');iniciar();
+  }catch(e){$('authErr').textContent=e.message}
+};
+$('pass').onkeydown=e=>{if(e.key==='Enter')$('entrar').click()};
+iniciar();
+setInterval(()=>{if(token&&!document.hidden)cargarVentas().catch(()=>{})},60000);
+</script>
+</body>
+</html>
