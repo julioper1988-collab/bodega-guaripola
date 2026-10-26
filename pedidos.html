@@ -82,6 +82,9 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .tag.ok{background:#e9f7ec;color:var(--ok)}
 .pack{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
 .pack .nom{font-size:14px}
+.offb{position:absolute;top:3px;left:3px;z-index:2;width:32px;height:32px;border-radius:50%;background:#d61f26;color:#fff;font-weight:900;font-size:11px;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 2px 6px #0003}
+.offb small{font-size:7px;font-weight:800;margin-top:1px}
+.old{color:var(--text2);font-size:12px;font-weight:600}
 .pack.destac .nom{font-size:15px;font-weight:800}.pack.off{opacity:.5}.pack.off .small{text-align:right}.pack.destac .price{font-size:16px}
 .pack.unidad .nom{font-size:13px;font-weight:600;color:var(--text2)}.pack.unidad .price{font-size:14px;color:var(--text)}
 .pack.unidad:not(.sola) .qty>button.add:only-child{width:34px;height:34px;font-size:20px;background:var(--bg3);color:var(--text);box-shadow:none}
@@ -313,9 +316,14 @@ function qtyHtml(k,n){
 const ICON_CAT={CERVEZA:'🍺',GASEOSA:'🥤',HIELO:'🧊',CARBON:'🔥',DESTILADO:'🥃',VINO:'🍷',AGUA:'💧',JUGO:'🧃',ENERG:'⚡',SNACK:'🍿',GOLOSINA:'🍬',CIGARR:'🚬',EMBUTIDO:'🌭',ASADITO:'🍢'};
 function icono(o,p){const c=String(p.categoria||'').toUpperCase();for(const k in ICON_CAT)if(c.includes(k))return ICON_CAT[k];return o==='asadito'?'🔥':'🛒';}
 // % de descuento vigente para el producto (misma regla que descPreview, sin el mínimo de compra)
-function descPct(o,p){let b=0;for(const pr of PROMOS()){if(pr.tipo!=='descuento')continue;if(pr.local&&pr.local!==o)continue;
+// Descuento % vigente para el producto (misma regla que la base; el mínimo de compra se avisa aparte)
+function descInfo(o,p){let b=0,min=0;for(const pr of PROMOS()){if(pr.tipo!=='descuento')continue;if(pr.local&&pr.local!==o)continue;
   if(pr.categorias&&pr.categorias.length&&!pr.categorias.includes(p.categoria))continue;
-  if(pr.productos&&pr.productos.length&&!pr.productos.includes(String(p.id)))continue;b=Math.max(b,Number(pr.porcentaje)||0);}return b;}
+  if(pr.productos&&pr.productos.length&&!pr.productos.includes(String(p.id)))continue;
+  const x=Number(pr.porcentaje)||0;if(x>b){b=x;min=Number(pr.monto_minimo)||0;}}return {pct:b,min};}
+function descPct(o,p){return descInfo(o,p).pct;}
+// Precio tachado + precio con descuento (redondeo igual que la base)
+function precioHtml(n,pct){return pct?'<s class="old">'+gs(n)+'</s> <span class="price">'+gs(n-Math.round(n*pct/100))+'</span>':'<span class="price">'+gs(n)+'</span>';}
 // Mayoría de edad: categorías +18 (alcohol, cigarrillos) definidas en la configuración
 function es18(o,p){return o==='bodega'&&!!p&&((cat.config&&cat.config.categorias_18)||[]).includes(p.categoria);}
 function has18(){return Object.keys(cart).some(k=>{const l=line(k);if(!l)return false;
@@ -327,22 +335,19 @@ function mayorHtml(){const on=$('f-18')&&$('f-18').checked;
 const packsVis=p=>p.envase?[]:(p.packs||[]); // incluye los packs sin stock (se muestran en gris)
 const conPack=p=>packsVis(p).length>0;
 function cardHtml(o,p){
-  const k=key(o,p.id),off=p.disponible===false,packs=packsVis(p),pc=descPct(o,p);
-  const tags='<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div>';
+  const k=key(o,p.id),off=p.disponible===false,packs=packsVis(p),d=descInfo(o,p),pc=d.pct;
+  const pic='<div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+(pc?'<span class="offb">'+pc+'%<small>OFF</small></span>':'')+'</div>';
+  const tags='<div class="tags">'+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div>'+
+    (pc&&d.min?'<div class="small" style="color:var(--acc2);margin-top:3px">Descuento en compras desde '+gs(d.min)+'</div>':'');
   // Con pack: primero el pack (lo que más queremos vender) y abajo la unidad
-  if(packs.length)return '<div class="item"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
-    '<div class="info"><div class="nom">'+esc(p.nombre)+'</div>'+tags+'</div></div>'+
-    packs.map(pc=>{const pk=key(o,p.id,pc.id),ahorro=p.precio*pc.cantidad-pc.precio;
-      if(pc.disponible===false)return '<div class="pack destac off"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr"><span class="price">'+gs(pc.precio)+'</span></div></div><div class="small">Pack sin stock<br>por ahora</div></div>';
-      return '<div class="pack destac"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr"><span class="price">'+gs(pc.precio)+'</span>'+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'<br><span class="small">'+gs(pc.precio/pc.cantidad)+' c/u</span></div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
-    '<div class="pack unidad'+(packs.some(x=>x.disponible!==false)?'':' sola')+'"><div class="info"><div class="nom">Por unidad</div><div class="pr">'+(off?'Agotado':'<span class="price">'+gs(p.precio)+'</span>')+'</div></div>'+(off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
-  return '<div class="item'+(off&&!packs.length?' off':'')+'"><div class="row"><div class="pic"><span aria-hidden="true">'+icono(o,p)+'</span>'+(p.imagen_url?'<img loading="lazy" src="'+esc(p.imagen_url)+'" alt="" onerror="this.remove()">':'')+'</div>'+
-    '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?(packs.length?'Agotado por unidad':'Agotado'):'<span class="price">'+gs(p.precio)+'</span>'+(packs.length?' c/u':''))+'</div>'+
-    '<div class="tags">'+(pc?'<span class="tag promo">🏷️ '+pc+'% off</span>':'')+(packs.length?'<span class="tag ok">📦 Pack</span>':'')+(p.envase?'<span class="tag ret">♻️ Retornable</span>':'')+(es18(o,p)?'<span class="tag">🔞 +18</span>':'')+'</div></div>'+
-    (off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div>'+
-    packs.map(pc=>{const pk=key(o,p.id,pc.id),ahorro=p.precio*pc.cantidad-pc.precio;
-      return '<div class="pack"><div class="info"><div class="nom">📦 Pack x'+pc.cantidad+'</div><div class="pr"><span class="price">'+gs(pc.precio)+'</span>'+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'</div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
-    '</div>';
+  if(packs.length)return '<div class="item"><div class="row">'+pic+'<div class="info"><div class="nom">'+esc(p.nombre)+'</div>'+tags+'</div></div>'+
+    packs.map(x=>{const pk=key(o,p.id,x.id),ahorro=p.precio*x.cantidad-x.precio,neto=x.precio-(pc?Math.round(x.precio*pc/100):0);
+      if(x.disponible===false)return '<div class="pack destac off"><div class="info"><div class="nom">📦 Pack x'+x.cantidad+'</div><div class="pr">'+precioHtml(x.precio,pc)+'</div></div><div class="small">Pack sin stock<br>por ahora</div></div>';
+      return '<div class="pack destac"><div class="info"><div class="nom">📦 Pack x'+x.cantidad+'</div><div class="pr">'+precioHtml(x.precio,pc)+(ahorro>0?' <span class="save">ahorrás '+gs(ahorro)+'</span>':'')+'<br><span class="small">'+gs(neto/x.cantidad)+' c/u</span></div></div><div class="qty" data-q="'+esc(pk)+'">'+qtyHtml(pk,cart[pk]||0)+'</div></div>';}).join('')+
+    '<div class="pack unidad'+(packs.some(x=>x.disponible!==false)?'':' sola')+'"><div class="info"><div class="nom">Por unidad</div><div class="pr">'+(off?'Agotado':precioHtml(p.precio,pc))+'</div></div>'+(off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
+  return '<div class="item'+(off?' off':'')+'"><div class="row">'+pic+
+    '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado':precioHtml(p.precio,pc))+'</div>'+tags+'</div>'+
+    (off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
 }
 function combosHtml(combos){
   if(!combos.length)return '';
@@ -411,7 +416,7 @@ function renderBar(anim){
   $('cartBtn').disabled=!t.n;
   $('bar').classList.toggle('hide',!t.n);document.body.classList.toggle('conbar',!!t.n);
   $('cartCount').textContent=t.n?(t.n+(t.n===1?' producto':' productos')):'Carrito vacío';
-  $('cartTot').textContent=t.n?gs(t.sub):'';
+  $('cartTot').textContent=t.n?gs(t.sub-descPreview().d):'';
   $('cartBadge').textContent=t.n;$('cartBadge').classList.toggle('hide',!t.n);
   if(anim){bump($('cartBtn'));bump($('cartBadge'));}
 }
