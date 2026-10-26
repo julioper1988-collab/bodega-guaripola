@@ -47,6 +47,8 @@ html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
 .tk{font-size:.85rem}.tk.anulada{opacity:.45;text-decoration:line-through}
 .auth{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px}.auth.on{display:flex}
 .auth .box{width:min(380px,100%)}.auth input{width:100%;background:var(--input);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
+.bill{display:grid;grid-template-columns:1fr 84px 96px;gap:8px;align-items:center;padding:4px 0}.bill input{width:100%;background:var(--input);border:1px solid var(--line);border-radius:8px;padding:8px;text-align:right}
+details.card>summary{cursor:pointer;font-weight:700;list-style:none}details.card>summary::after{content:' ▾';color:var(--muted)}details.card[open]>summary{margin-bottom:8px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ok);color:#111;font-weight:800;padding:10px 18px;border-radius:99px;display:none;z-index:30}
 </style>
 </head>
@@ -81,6 +83,14 @@ html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
       <div id="resumen"></div>
       <div id="tickets" style="margin-top:8px"></div>
     </div>
+    <details class="card" id="contador">
+      <summary>💵 Contar efectivo de la caja</summary>
+      <div class="muted" style="font-size:.85rem;margin-bottom:6px">Al cerrar, contá todo el efectivo que dejás en la caja y guardalo.</div>
+      <div id="bills"></div>
+      <div class="total" style="font-size:1.15rem"><span>Total contado</span><span id="billTotal" class="num">₲ 0</span></div>
+      <button class="btn primary big" id="guardarConteo">Guardar conteo</button>
+      <div class="muted" id="ultConteo" style="margin-top:8px;font-size:.85rem"></div>
+    </details>
   </aside>
 </div>
 
@@ -101,7 +111,8 @@ const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const TOKEN_KEY='caja_asaditos_token';
 const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna'}; // ch/mi: consumo sin pago en caja
 const $=id=>document.getElementById(id);
-let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),cobrando=false;
+const DENOM=[100000,50000,20000,10000,5000,2000,1000,500,100,50];
+let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),conteo=null,billetes={},cobrando=false;
 
 // Noche de trabajo: hasta las 6:00 cuenta como el día anterior (igual que Pedidos online)
 function hoy(){const d=new Date(Date.now()-6*3600e3);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
@@ -122,7 +133,7 @@ async function cargarProductos(){
   Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
   render();
 }
-async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];agotados=new Set(out.agotados||[]);renderVentas();render()}
+async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];agotados=new Set(out.agotados||[]);conteo=out.conteo||null;renderConteo();renderVentas();render()}
 async function iniciar(){
   $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
   if(!token){$('auth').classList.add('on');return}
@@ -148,6 +159,13 @@ function render(){
 // Solo se muestra si está agotado: el stock no se le muestra al empleado
 function quedan(id){return agotados.has(id)?'<small style="color:var(--bad);font-weight:700">Agotado</small>':''}
 function calcVuelto(){const r=+$('recibido').value||0,t=totalCarrito();$('vuelto').textContent=r?money(r-t):'—';$('vuelto').style.color=r&&r<t?'var(--bad)':''}
+// Contador de efectivo (conteo ciego: no muestra lo esperado)
+function renderBills(){
+  $('bills').innerHTML=DENOM.map(d=>`<div class="bill"><span>${money(d)}</span><input inputmode="numeric" data-bill="${d}" value="${billetes[d]||''}" placeholder="0"><b class="num" data-sub="${d}">${billetes[d]?money(d*billetes[d]):'—'}</b></div>`).join('');
+  totalBills();
+}
+function totalBills(){$('billTotal').textContent=money(DENOM.reduce((a,d)=>a+d*(billetes[d]||0),0))}
+function renderConteo(){$('ultConteo').textContent=conteo?'Último conteo guardado: '+money(conteo.total)+' a las '+new Date(conteo.created_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):''}
 function renderVentas(){
   const ok=ventas.filter(v=>!v.anulada),porMet={},porProd={};
   ok.forEach(v=>{porMet[v.metodo]=(porMet[v.metodo]||0)+(+v.total||0);(v.items||[]).forEach(i=>{const r=porProd[i.id]||(porProd[i.id]={n:i.nombre,c:0,t:0});r.c+=i.cant;r.t+=i.cant*i.precio})});
@@ -173,6 +191,14 @@ document.addEventListener('click',async e=>{
 // La barra de abajo se oculta mientras el ticket está a la vista (no tapa sus botones)
 if('IntersectionObserver' in window)new IntersectionObserver(es=>$('barra').classList.toggle('oculta',es[0].isIntersecting),{rootMargin:'0px 0px -40% 0px'}).observe($('ticketTit').parentNode);
 $('verTicket').onclick=()=>$('ticketTit').scrollIntoView({behavior:'smooth',block:'start'});
+$('bills').oninput=e=>{const d=e.target.dataset.bill;if(!d)return;e.target.value=e.target.value.replace(/\D/g,'');billetes[d]=+e.target.value||0;
+  e.target.parentNode.querySelector('[data-sub]').textContent=billetes[d]?money(d*billetes[d]):'—';totalBills()};
+$('guardarConteo').onclick=async()=>{
+  const total=DENOM.reduce((a,d)=>a+d*(billetes[d]||0),0);
+  if(!confirm('¿Guardar conteo de '+money(total)+'?'))return;
+  try{const out=await api('conteo',{fecha:hoy(),billetes});conteo=out.conteo;renderConteo();toast('Conteo guardado')}catch(err){alert(err.message)}
+};
+renderBills();
 $('recibido').oninput=e=>{e.target.value=e.target.value.replace(/\D/g,'');calcVuelto()};
 $('limpiar').onclick=()=>{carrito={};$('recibido').value='';$('err').textContent='';render()};
 $('cobrar').onclick=async()=>{

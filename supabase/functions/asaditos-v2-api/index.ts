@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
   const token = String(body.token || '');
   const session = await requireSession(token);
   if (!session) return json({ error: 'Sesión vencida o inválida.' }, 401);
-  if (session.caja && !['productos', 'venta', 'ventas', 'anular', 'logout'].includes(action)) {
+  if (session.caja && !['productos', 'venta', 'ventas', 'anular', 'conteo', 'logout'].includes(action)) {
     return json({ error: 'Este usuario es solo para la caja.' }, 403);
   }
 
@@ -176,7 +176,9 @@ Deno.serve(async (req) => {
     // Solo los agotados de la noche actual: la caja no muestra cuánto stock hay.
     const { data: stock } = await db.rpc('asadito_stock');
     const agotados = (stock ?? []).filter((s: any) => s.disponible !== null && s.disponible <= 0).map((s: any) => s.prod_id);
-    return json({ ok: true, ventas: data, agotados });
+    const { data: conteo } = await db.from('asaditos_v2_conteos').select('total,billetes,usuario,created_at')
+      .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    return json({ ok: true, ventas: data, agotados, conteo });
   }
 
   if (action === 'anular') {
@@ -184,6 +186,25 @@ Deno.serve(async (req) => {
       .eq('account_id', session.accountId).eq('id', String(body.id || ''));
     if (error) return json({ error: 'No se pudo anular.' }, 500);
     return json({ ok: true });
+  }
+
+  // Conteo de efectivo desde la caja: billetes {denominación: cantidad}; el total lo calcula el servidor
+  if (action === 'conteo') {
+    const fecha = String(body.fecha || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
+    const DENOM = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 100, 50];
+    const billetes: Record<string, number> = {};
+    let total = 0;
+    for (const d of DENOM) {
+      const n = Number(body.billetes?.[d] ?? 0);
+      if (!Number.isInteger(n) || n < 0 || n > 9999) return json({ error: 'Cantidad inválida.' }, 400);
+      if (n) { billetes[d] = n; total += d * n; }
+    }
+    const { data, error } = await db.from('asaditos_v2_conteos')
+      .insert({ account_id: session.accountId, fecha, billetes, total, usuario: session.username })
+      .select('total,billetes,usuario,created_at').single();
+    if (error) return json({ error: 'No se pudo guardar el conteo.' }, 500);
+    return json({ ok: true, conteo: data });
   }
 
   if (action === 'logout') {
