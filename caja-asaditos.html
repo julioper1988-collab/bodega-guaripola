@@ -17,6 +17,19 @@ button,input{font:inherit;color:inherit}
 .btn.primary{background:var(--acc);border-color:var(--acc);color:#111;font-weight:800}.btn.danger{color:var(--bad)}
 .wrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:14px;max-width:1300px;margin:0 auto}
 @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+/* Celular: tarjetas compactas, barra fija abajo con el total y botón al ticket */
+html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
+.rapidos{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}.rapidos .btn{flex:1;padding:8px 4px;font-size:.85rem}
+.barra{display:none}#ticketTit{scroll-margin-top:70px}
+@media(max-width:900px){
+  .wrap{padding:10px;gap:10px}#fechaTxt{display:none}
+  .grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .prod{min-height:72px;padding:10px 8px}.prod b{font-size:.85rem}
+  input{font-size:16px!important}
+  .barra{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;gap:10px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line)}
+  .barra.vacia{display:none}.barra .info{flex:1;line-height:1.15}.barra .info b{display:block;font-size:1.25rem}
+  body.con-barra{padding-bottom:84px}.toast{bottom:96px}
+}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .prod{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 10px;min-height:86px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;position:relative}
 .prod:active{transform:scale(.98);border-color:var(--acc)}.prod b{font-size:.95rem}.prod span{color:var(--acc);font-weight:700;font-variant-numeric:tabular-nums}
@@ -50,12 +63,13 @@ button,input{font:inherit;color:inherit}
   <section><div class="grid" id="grid"></div></section>
   <aside>
     <div class="card">
-      <h2>Ticket</h2>
+      <h2 id="ticketTit">Ticket</h2>
       <div id="ticket"></div>
       <div class="total"><span>Total</span><span id="total" class="num">₲ 0</span></div>
       <div class="metodos" id="metodos"></div>
       <div id="efBox">
         <div class="field"><label>Recibido</label><input id="recibido" inputmode="numeric" placeholder="0"></div>
+        <div class="rapidos" id="rapidos"></div>
         <div class="field"><label>Vuelto</label><b id="vuelto" class="num" style="flex:1">₲ 0</b></div>
       </div>
       <div class="err" id="err"></div>
@@ -79,6 +93,7 @@ button,input{font:inherit;color:inherit}
   <button class="btn primary big" id="entrar">Ingresar</button>
 </div></div>
 <div class="toast" id="toast"></div>
+<div class="barra vacia" id="barra"><div class="info"><span class="muted" id="barraUds"></span><b id="barraTot">₲ 0</b></div><button class="btn primary" id="verTicket" style="padding:12px 18px">Cobrar ›</button></div>
 
 <script>
 const API_URL='https://sdpysvowvwucjfnyosuf.supabase.co/functions/v1/asaditos-v2-api';
@@ -124,6 +139,11 @@ function render(){
   $('efBox').style.display=metodo==='ef'?'':'none';
   calcVuelto();
   $('cobrar').disabled=!lineas.length||cobrando;
+  const uds=lineas.reduce((a,p)=>a+carrito[p.id],0),t=totalCarrito();
+  $('barra').classList.toggle('vacia',!uds);document.body.classList.toggle('con-barra',!!uds);
+  $('barraUds').textContent=uds+' producto'+(uds===1?'':'s');$('barraTot').textContent=money(t);
+  // Montos rápidos para el efectivo recibido: justo y billetes que alcanzan
+  $('rapidos').innerHTML=t?[t,...[20000,50000,100000].filter(v=>v>t)].slice(0,4).map(v=>`<button class="btn" data-rec="${v}">${v===t?'Justo':money(v).replace('₲ ','')}</button>`).join(''):'';
 }
 function quedan(id){if(!(id in stock))return '';const q=stock[id]-(carrito[id]||0);return `<small style="color:${q<=0?'var(--bad)':q<=5?'#eab308':'var(--muted)'};font-weight:700">${q<=0?'Agotado'+(q<0?' ('+q+')':''):'Quedan '+q}</small>`}
 function calcVuelto(){const r=+$('recibido').value||0,t=totalCarrito();$('vuelto').textContent=r?money(r-t):'—';$('vuelto').style.color=r&&r<t?'var(--bad)':''}
@@ -143,11 +163,13 @@ document.addEventListener('click',async e=>{
   else if(b.dataset.mas){carrito[b.dataset.mas]++;render()}
   else if(b.dataset.menos){if(--carrito[b.dataset.menos]<=0)delete carrito[b.dataset.menos];render()}
   else if(b.dataset.met){metodo=b.dataset.met;render()}
+  else if(b.dataset.rec){$('recibido').value=b.dataset.rec;calcVuelto()}
   else if(b.dataset.anular){
     if(!confirm('¿Anular este ticket?'))return;
     try{await api('anular',{id:b.dataset.anular});await cargarVentas();toast('Ticket anulado')}catch(err){alert(err.message)}
   }
 });
+$('verTicket').onclick=()=>$('ticketTit').scrollIntoView({behavior:'smooth',block:'start'});
 $('recibido').oninput=e=>{e.target.value=e.target.value.replace(/\D/g,'');calcVuelto()};
 $('limpiar').onclick=()=>{carrito={};$('recibido').value='';$('err').textContent='';render()};
 $('cobrar').onclick=async()=>{
