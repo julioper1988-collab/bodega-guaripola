@@ -32,7 +32,7 @@ async function requireSession(token: string | undefined) {
   const digest = await sha256Hex(token);
   const { data, error } = await db
     .from('asaditos_v2_sessions')
-    .select('id,account_id,expires_at,asaditos_v2_accounts!inner(username,active)')
+    .select('id,account_id,expires_at,asaditos_v2_accounts!inner(username,active,rol,caja_de)')
     .eq('token_digest', digest)
     .maybeSingle();
   if (error || !data) return null;
@@ -42,7 +42,9 @@ async function requireSession(token: string | undefined) {
   }
   const account = Array.isArray(data.asaditos_v2_accounts) ? data.asaditos_v2_accounts[0] : data.asaditos_v2_accounts;
   if (!account?.active) return null;
-  return { sessionId: data.id, accountId: data.account_id, username: account.username };
+  // Usuario de caja: trabaja sobre la cuenta de su dueño (caja_de)
+  const caja = account.rol === 'caja';
+  return { sessionId: data.id, accountId: caja ? account.caja_de : data.account_id, username: account.username, caja };
 }
 
 Deno.serve(async (req) => {
@@ -60,7 +62,7 @@ Deno.serve(async (req) => {
 
     const { data: account, error } = await db
       .from('asaditos_v2_accounts')
-      .select('id,username,credential_digest,active')
+      .select('id,username,credential_digest,active,rol')
       .eq('username', username)
       .maybeSingle();
     if (error || !account || !account.active || !bcrypt.compareSync(password, account.credential_digest)) {
@@ -78,12 +80,24 @@ Deno.serve(async (req) => {
     });
     if (sessionError) return json({ error: 'No se pudo crear la sesión.' }, 500);
 
-    return json({ ok: true, token, username: account.username, expires_at: expiresAt });
+    return json({ ok: true, token, username: account.username, rol: account.rol, expires_at: expiresAt });
   }
 
   const token = String(body.token || '');
   const session = await requireSession(token);
   if (!session) return json({ error: 'Sesión vencida o inválida.' }, 401);
+  if (session.caja && !['productos', 'venta', 'ventas', 'anular', 'logout'].includes(action)) {
+    return json({ error: 'Este usuario es solo para la caja.' }, 403);
+  }
+
+  // Para la caja: solo nombre y precio de los productos (sin costos ni días)
+  if (action === 'productos') {
+    const { data, error } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', session.accountId).maybeSingle();
+    if (error) return json({ error: 'No se pudo cargar la base.' }, 500);
+    const productos = (data?.data?.products ?? []).filter((p: any) => p.active !== false)
+      .map((p: any) => ({ id: p.id, name: p.name, price: p.price }));
+    return json({ ok: true, productos });
+  }
 
   if (action === 'load') {
     const { data, error } = await db
