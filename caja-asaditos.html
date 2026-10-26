@@ -86,7 +86,7 @@ html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
 
 <div class="auth" id="auth"><div class="box card">
   <h2>Caja Asaditos</h2>
-  <p class="muted">Mismo usuario y contraseña del sistema de asaditos.</p>
+  <p class="muted">Usuario y contraseña de la caja.</p>
   <input id="user" placeholder="Usuario" autocomplete="username">
   <input id="pass" type="password" placeholder="Contraseña" autocomplete="current-password">
   <div class="err" id="authErr"></div>
@@ -117,8 +117,8 @@ async function api(action,payload={}){
 function toast(t){const el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.display='none',1600)}
 
 async function cargarProductos(){
-  const out=await api('load');
-  productos=((out.data&&out.data.products)||[]).filter(p=>p.active!==false);
+  const out=await api('productos');
+  productos=out.productos||[];
   Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
   render();
 }
