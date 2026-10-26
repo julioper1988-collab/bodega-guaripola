@@ -101,7 +101,7 @@ const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const TOKEN_KEY='caja_asaditos_token';
 const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna'}; // ch/mi: consumo sin pago en caja
 const $=id=>document.getElementById(id);
-let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],stock={},cobrando=false;
+let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),cobrando=false;
 
 // Noche de trabajo: hasta las 6:00 cuenta como el día anterior (igual que Pedidos online)
 function hoy(){const d=new Date(Date.now()-6*3600e3);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
@@ -122,7 +122,7 @@ async function cargarProductos(){
   Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
   render();
 }
-async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];stock={};(out.stock||[]).forEach(s=>{if(s.disponible!=null)stock[s.prod_id]=s.disponible});renderVentas();render()}
+async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];agotados=new Set(out.agotados||[]);renderVentas();render()}
 async function iniciar(){
   $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
   if(!token){$('auth').classList.add('on');return}
@@ -145,7 +145,8 @@ function render(){
   // Montos rápidos para el efectivo recibido: justo y billetes que alcanzan
   $('rapidos').innerHTML=t?[t,...[20000,50000,100000].filter(v=>v>t)].slice(0,4).map(v=>`<button class="btn" data-rec="${v}">${v===t?'Justo':money(v).replace('₲ ','')}</button>`).join(''):'';
 }
-function quedan(id){if(!(id in stock))return '';const q=stock[id]-(carrito[id]||0);return `<small style="color:${q<=0?'var(--bad)':q<=5?'#eab308':'var(--muted)'};font-weight:700">${q<=0?'Agotado'+(q<0?' ('+q+')':''):'Quedan '+q}</small>`}
+// Solo se muestra si está agotado: el stock no se le muestra al empleado
+function quedan(id){return agotados.has(id)?'<small style="color:var(--bad);font-weight:700">Agotado</small>':''}
 function calcVuelto(){const r=+$('recibido').value||0,t=totalCarrito();$('vuelto').textContent=r?money(r-t):'—';$('vuelto').style.color=r&&r<t?'var(--bad)':''}
 function renderVentas(){
   const ok=ventas.filter(v=>!v.anulada),porMet={},porProd={};
