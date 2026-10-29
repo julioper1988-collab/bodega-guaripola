@@ -2,7 +2,7 @@
 -- Noche = pedidos_noche(now()) (el día cambia a las 6:00, igual que los pedidos).
 -- disponible = viene (sobrante del último día cerrado) + producción − averiados
 --              − vendidos en caja (asaditos_v2_ventas) − pedidos online no cancelados.
--- Si ese día no tiene producción cargada en el sistema de asaditos, disponible = null (sin control).
+-- Siempre controla: lo que sobró (viene) es stock; la producción que se cargue en la noche suma al disponible.
 create or replace function public.asadito_stock()
 returns table(prod_id text, disponible int)
 language sql stable security definer set search_path = public
@@ -14,7 +14,6 @@ as $$
              from st, f, jsonb_each(coalesce(st.data->'days','{}'::jsonb)) d
             where d.key ~ '^\d{4}-\d{2}-\d{2}$' and d.key::date < f.f and coalesce((d.value->>'closed')::boolean, false)
             order by d.key desc limit 1),
-  ctrl as (select exists (select 1 from hoy, jsonb_each(hoy.it) x where coalesce(nullif(x.value->>'prod','')::numeric, 0) > 0) on_),
   caja as (select i->>'id' id, sum((i->>'cant')::int) n
              from asaditos_v2_ventas v, st, f, jsonb_array_elements(v.items) i
             where v.account_id = st.account_id and v.fecha = f.f and not v.anulada group by 1),
@@ -22,12 +21,12 @@ as $$
                from pedidos_online o, f, jsonb_array_elements(o.items) i
               where pedidos_noche(o.created_at) = f.f and o.estado <> 'cancelado' and i->>'origen' = 'asadito' group by 1)
   select p->>'id',
-         case when (select on_ from ctrl) then (
+         (
            coalesce(nullif((select it from prev)->(p->>'id')->>'sob','')::numeric, 0)
            + coalesce(nullif((select it from hoy)->(p->>'id')->>'prod','')::numeric, 0)
            - coalesce(nullif((select it from hoy)->(p->>'id')->>'av','')::numeric, 0)
            - coalesce((select n from caja where caja.id = p->>'id'), 0)
-           - coalesce((select n from online where online.id = p->>'id'), 0))::int end
+           - coalesce((select n from online where online.id = p->>'id'), 0))::int
     from st, jsonb_array_elements(coalesce(st.data->'products','[]'::jsonb)) p
    where coalesce(p->>'id','') <> '';
 $$;
