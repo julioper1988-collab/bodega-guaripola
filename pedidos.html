@@ -206,6 +206,8 @@ const SB_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const LS_ENV='gp_ped_env',LS_CART='gp_ped_cart', LS_CLI='gp_ped_cli', LS_LAST='gp_ped_last';
 // Perfil sin registro: todo queda guardado en este celular
 const LS_DIRS='gp_ped_dirs', LS_PREV='gp_ped_prev', LS_HIST='gp_ped_hist';
+// Identificador de este celular: la promo de 1ª compra no se repite desde el mismo dispositivo
+const DEV=(()=>{try{let d=localStorage.getItem('gp_ped_dev');if(!d){d=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));localStorage.setItem('gp_ped_dev',d);}return d;}catch(e){return '';}})();
 function aviso(t){let e=$('aviso');if(!e){e=document.createElement('div');e.id='aviso';document.body.appendChild(e);}e.textContent=t;e.classList.remove('on');void e.offsetWidth;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600);}
 let cat={config:{},asadito:[],bodega:[]}, tab='todos', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
 
@@ -458,7 +460,7 @@ async function chkNuevo(){
   const usa=c.promo_delivery_primera||PROMOS().some(x=>x.tipo==='fidelidad');
   if(!usa||t.length<9){esNuevo=false;prevPed=-1;telChk='';if($('sh-tot'))$('sh-tot').innerHTML=totHtml();return;}
   if(t===telChk)return;telChk=t;
-  try{const r=await rpc('pedidos_cliente_info',{p_tel:t});if(t!==telChk)return;esNuevo=!!(r&&r.nuevo);prevPed=r?Number(r.pedidos):-1;}catch(e){esNuevo=false;prevPed=-1;}
+  try{const r=await rpc('pedidos_cliente_info',{p_tel:t,p_dev:DEV});if(t!==telChk)return;esNuevo=!!(r&&r.nuevo);prevPed=r?Number(r.pedidos):-1;}catch(e){esNuevo=false;prevPed=-1;}
   if($('sh-tot')){$('sh-tot').innerHTML=totHtml();if(esNuevo&&ent==='delivery')bump($('sh-tot'));}
 }
 // Vista previa de descuentos % (la mejor promo vigente por línea; no aplica a combos ni envases)
@@ -632,6 +634,7 @@ async function enviar(){
   const v=id=>($(id)?.value||'').trim();
   const body={nombre:v('f-nom'),telefono:v('f-tel'),entrega:ent,direccion:ent==='delivery'?v('f-dir'):'',ubicacion:ent==='delivery'?v('f-ubi'):'',metodo_pago:pago,paga_con:pago==='efectivo'?v('f-paga'):'',notas:v('f-notas'),
     factura:$('f-fact')&&$('f-fact').checked?{ruc:v('f-ruc'),razon:v('f-razon')}:null,mayor_edad:!!($('f-18')&&$('f-18').checked),
+    dispositivo:DEV,
     items:Object.entries(cart).map(([k,c])=>{const l=line(k);if(!l)return null;if(l.o==='combo')return {origen:'combo',id:l.id,cantidad:c};return {origen:l.o,id:l.id,pack:l.pk||null,cantidad:c,envase:l.env?envs[k]||null:null};}).filter(Boolean)};
   const sinEnv=Object.keys(cart).find(k=>{const l=line(k);return l&&l.env&&!envs[k];});
   if(sinEnv){const e=document.querySelector('[data-envq="'+CSS.escape(sinEnv)+'"]');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}
