@@ -16030,6 +16030,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':'')+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
       (p.repartidor?'<div class="ped-meta">🛵 <b>'+h(p.repartidor)+'</b>'+(p.salio_at?' · salió '+hora(p.salio_at):' · todavía no salió')+(p.entregado_at?' · entregado '+hora(p.entregado_at):'')+'</div>':'')+
+      (p.alerta?'<div style="background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:6px 8px;font-size:13px">⚠️ '+h(p.alerta)+(p.promo==='delivery_gratis_primera'?' · se le aplicó delivery gratis de 1ª compra':'')+'</div>':'')+
       (p.mayor_18?'<div class="ped-meta" style="color:var(--red);font-weight:700">🔞 +18: verificar cédula al entregar</div>':'')+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
