@@ -16015,7 +16015,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     var vuelto=p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?' · paga con '+fmtGs(p.paga_con)+' → vuelto '+fmtGs(p.paga_con-p.total):'';
     var acts='';
     var btn=function(lbl,fn,cls){return '<button class="btn '+(cls||'btn-secondary')+' btn-sm" onclick="'+fn+'">'+lbl+'</button>';};
-    if(p.estado==='pendiente') acts+=btn('✅ Aceptar',"pedEstado('"+p.id+"','aceptado')",'btn-primary');
+    if(p.estado==='pendiente') acts+=btn('✅ Aceptar',"pedAceptar('"+p.id+"')",'btn-primary');
     if(p.estado==='aceptado') acts+=btn('🔥 Preparando',"pedEstado('"+p.id+"','preparando')",'btn-primary');
     if((p.estado==='aceptado'||p.estado==='preparando')&&p.entrega==='delivery') acts+=btn('🛵 En camino',"pedEstado('"+p.id+"','en_camino')",'btn-primary');
     if(['aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn('🎉 Entregado',"pedEstado('"+p.id+"','entregado')",'btn-primary');
@@ -16030,6 +16030,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<div class="ped-meta">'+(p.entrega==='delivery'?'🛵 '+h(p.direccion||'')+(p.ubicacion?' · <a target="_blank" rel="noopener" href="'+h(p.ubicacion)+'">📍 mapa</a>':'')+(p.delivery_km!=null?' · '+String(Math.round(p.delivery_km*10)/10).replace('.',',')+' km':''):'🏪 Retira en local')+'</div>'+
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
       (p.repartidor?'<div class="ped-meta">🛵 <b>'+h(p.repartidor)+'</b>'+(p.salio_at?' · salió '+hora(p.salio_at):' · todavía no salió')+(p.entregado_at?' · entregado '+hora(p.entregado_at):'')+'</div>':'')+
+      (p.eta_at&&['aceptado','preparando','en_camino'].indexOf(p.estado)>=0?'<div class="ped-meta">🕐 '+(p.entrega==='delivery'?'Llega':'Listo')+' aprox. '+hora(p.eta_at)+'</div>':'')+
+      (p.calificacion?'<div style="font-size:13px"><span style="color:#f5a623">'+'★'.repeat(p.calificacion)+'</span><span style="color:var(--border)">'+'★'.repeat(5-p.calificacion)+'</span>'+(p.calificacion_txt?' · '+h(p.calificacion_txt):'')+'</div>':'')+
       (p.alerta?'<div style="background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:6px 8px;font-size:13px">⚠️ '+h(p.alerta)+(p.promo==='delivery_gratis_primera'?' · se le aplicó delivery gratis de 1ª compra':'')+'</div>':'')+
       (p.mayor_18?'<div class="ped-meta" style="color:var(--red);font-weight:700">🔞 +18: verificar cédula al entregar</div>':'')+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
@@ -16054,6 +16056,20 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     if(est==='aceptado'||est==='en_camino'){var p=await getPed(id);if(p)pedWaMsg(p,est);}
     pedRenderLista(); pedPoll();
   };
+  // Aceptar eligiendo en cuánto llega / está listo: el cliente ve la hora en su pantalla
+  window.pedAceptar=function(id){
+    openModal('✅ Aceptar pedido','<p class="ped-meta" style="margin-bottom:10px">¿En cuánto tiempo llega (o está listo para retirar)? El cliente ve la hora estimada.</p><div class="ped-acts">'+
+      [15,20,30,45,60,90].map(function(m){return '<button class="btn btn-primary" onclick="pedAceptarCon(\''+id+'\','+m+')">'+m+' min</button>';}).join('')+
+      '<button class="btn btn-secondary" onclick="pedAceptarCon(\''+id+'\',0)">Sin hora</button></div>',null,'');
+  };
+  window.pedAceptarCon=async function(id,min){
+    closeModal();
+    var o={estado:'aceptado',updated_at:new Date().toISOString()};if(min)o.eta_at=new Date(Date.now()+min*60000).toISOString();
+    var r=await sb.from('pedidos_online').update(o).eq('id',id);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast('Pedido aceptado');var p=await getPed(id);if(p)pedWaMsg(p,'aceptado');
+    pedRenderLista(); pedPoll();
+  };
   window.pedEliminar=async function(id){
     if(!(await bgConfirm('¿Eliminar este pedido cancelado? No se puede deshacer.',{title:'Eliminar pedido',confirmText:'Eliminar',variant:'warning'})))return;
     var r=await sb.from('pedidos_online').delete().eq('id',id).eq('estado','cancelado');
@@ -16061,7 +16077,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
     toast('Pedido eliminado'); pedRenderLista();
   };
   function pedWaMsg(p,est){
-    var m={aceptado:'¡Hola '+p.cliente_nombre+'! Recibimos tu pedido #'+p.numero+' ✅ Total: '+fmtGs(p.total)+'. '+(p.entrega==='delivery'?'Te avisamos cuando salga.':'Te avisamos cuando esté listo para retirar.'),
+    var eta=p.eta_at?new Date(p.eta_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}):'';
+    var m={aceptado:'¡Hola '+p.cliente_nombre+'! Recibimos tu pedido #'+p.numero+' ✅ Total: '+fmtGs(p.total)+'. '+(p.entrega==='delivery'?(eta?'Llega aprox. a las '+eta+'. ':'')+'Te avisamos cuando salga.':(eta?'Va a estar listo aprox. a las '+eta+'. ':'')+'Te avisamos cuando esté listo para retirar.'),
       en_camino:'Hola '+p.cliente_nombre+', tu pedido #'+p.numero+' ya está en camino 🛵'}[est];
     if(!m) m='Hola '+p.cliente_nombre+', sobre tu pedido #'+p.numero+': ';
     window.open('https://wa.me/'+waNum(p.cliente_telefono)+'?text='+encodeURIComponent(m),'_blank');
@@ -16291,6 +16308,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       '<label style="display:flex;gap:10px;align-items:center;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="pc-promo1" style="width:20px;height:20px" '+(c.promo_delivery_primera?'checked':'')+'> 🎉 Delivery gratis en la primera compra online <span class="ped-meta">(se reconoce por el número de WhatsApp)</span></label>'+
       '<div class="form-grid">'+
       '<div class="form-group"><label>Costo delivery (Gs.)</label><input id="pc-deliv" inputmode="numeric" value="'+(Number(c.costo_delivery)||0)+'"></div>'+
+      '<div class="form-group"><label>Demora delivery (lo ve el cliente)</label><input id="pc-dem-d" placeholder="30–45 min" value="'+h(c.demora_delivery||'')+'"></div>'+
+      '<div class="form-group"><label>Demora retiro en local</label><input id="pc-dem-r" placeholder="15–20 min" value="'+h(c.demora_retiro||'')+'"></div>'+
       '<div class="form-group"><label>Pedido mínimo (Gs.)</label><input id="pc-min" inputmode="numeric" value="'+(Number(c.pedido_minimo)||0)+'"></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>WhatsApp del local (para que el cliente avise)</label><input id="pc-wa" placeholder="595981123456" value="'+h(c.whatsapp||'')+'"></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Formas de pago aceptadas</label><div class="ped-acts">'+Object.keys(PAGO_LBL).map(function(m){var on=(c.metodos_pago||['efectivo','transferencia']).indexOf(m)>=0;return '<label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-right:12px"><input type="checkbox" class="pc-pago" value="'+m+'" style="width:auto" '+(on?'checked':'')+'> '+PAGO_LBL[m]+'</label>';}).join('')+'</div></div>'+
@@ -16390,6 +16409,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       if(!(Math.abs(lat)<=90&&Math.abs(lng)<=180)){toast('Revisá la latitud y longitud del local','err');return;}
       obj.local_lat=lat;obj.local_lng=lng;
     }else{obj.local_lat=null;obj.local_lng=null;}
+    obj.demora_delivery=g('pc-dem-d').value.trim()||'30–45 min';obj.demora_retiro=g('pc-dem-r').value.trim()||'15–20 min';
     obj.categorias_18=[].slice.call(document.querySelectorAll('.pc-18:checked')).map(function(x){return x.value;});
     obj.repartidores=[].slice.call(document.querySelectorAll('.pc-rep')).map(function(r){return {nombre:r.querySelector('.pr-nom').value.trim(),tel:r.querySelector('.pr-tel').value.trim(),token:r.dataset.tk||uuid()};}).filter(function(x){return x.nombre&&x.tel.replace(/\D/g,'').length>=6;});
     obj.zonas_delivery=[].slice.call(document.querySelectorAll('.pc-zona')).map(function(r){return {km:parseFloat(String(r.querySelector('.pz-km').value).replace(',','.')),precio:Number(String(r.querySelector('.pz-pr').value).replace(/\D/g,''))};})
