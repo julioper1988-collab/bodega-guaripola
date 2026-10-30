@@ -119,6 +119,14 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #aviso{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:#243142;color:#fff;padding:11px 18px;border-radius:14px;font-size:14px;font-weight:600;opacity:0;transition:.25s;z-index:30;pointer-events:none;max-width:calc(100% - 32px);box-shadow:0 8px 24px #0003}
 body.conbar #aviso{bottom:calc(100px + env(safe-area-inset-bottom))}
 #aviso.on{opacity:1;transform:translate(-50%,0)}
+.sug{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.sug::-webkit-scrollbar{display:none}
+.sugi{flex:0 0 150px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.sugi .nom{font-size:13px;font-weight:700;line-height:1.25;min-height:32px;overflow-wrap:anywhere}.sugi .pr{font-size:13px}
+.sugi button{margin-top:auto;border:0;border-radius:10px;background:var(--accbg);color:var(--acc2);font-weight:800;padding:8px;cursor:pointer}
+.eta{margin-top:10px;font-weight:700}
+.calif{background:#fff;border-radius:16px;padding:14px;margin-top:14px;text-align:center}
+.stars{display:flex;justify-content:center;gap:6px;margin:10px 0}.stars button{border:0;background:none;font-size:34px;line-height:1;color:#d9dde3;cursor:pointer;transition:transform .12s}
+.stars button.on{color:#f5a623}.stars button:active{transform:scale(.85)}
 .chk{display:flex;align-items:center;gap:10px;margin-top:16px;color:var(--text);font-size:15px;font-weight:700;cursor:pointer}
 .chk input{width:20px;height:20px;accent-color:var(--acc)}
 .bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--border);z-index:10;padding:12px max(16px,env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-shadow:0 -6px 24px #19263b0d;transition:transform .25s ease}
@@ -547,7 +555,9 @@ function dirsHtml(){
 function entHtml(){
   const cli=lsGet(LS_CLI,{}),ds=lsGet(LS_DIRS,[]),dir0=($('f-dir')&&$('f-dir').value)||(ds[0]&&ds[0].dir)||cli.direccion||'';
   const gl=$('f-dirlabel')?$('f-dirlabel').value:(ds.some(d=>d.dir===dir0)?'':ds.length?'Otra':'Casa');
+  const dm=(cat.config||{})[ent==='delivery'?'demora_delivery':'demora_retiro'];
   return '<div class="seg"><button data-ent="retiro" class="'+(ent==='retiro'?'on':'')+'">Retiro en local</button><button data-ent="delivery" class="'+(ent==='delivery'?'on':'')+'">Delivery</button></div>'+
+    (dm?'<p class="small" style="margin-top:8px">🕐 '+(ent==='delivery'?'Entrega estimada':'Listo para retirar en')+': <b>'+esc(dm)+'</b></p>':'')+
     '<div class="slide'+(ent==='delivery'?' open':'')+'"><div><div id="sh-dirs">'+dirsHtml()+'</div>'+(zonas()?'<button type="button" class="btn sec" id="covBtn" style="margin-top:10px">🗺️ Ver zona de cobertura</button><div id="cov-map" class="hide" style="height:280px;border-radius:14px;margin-top:8px;overflow:hidden;background:#e9ebf0"></div>':'')+'<label>Dirección y referencia</label><input id="f-dir" class="in" autocomplete="street-address" value="'+esc(dir0)+'">'+
     '<label>Guardar esta dirección como</label><select id="f-dirlabel" class="in">'+[['','No guardar'],['Casa','🏠 Casa'],['Trabajo','💼 Trabajo'],['Otra','📍 Otra']].map(o=>'<option value="'+o[0]+'"'+(gl===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<input id="f-ubi" type="hidden" value="'+esc(($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi||'')+'"><button class="btn sec" id="ubiBtn" type="button">'+((($('f-ubi')&&$('f-ubi').value)||(ds.find(d=>d.dir===dir0)||{}).ubi)?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación')+'</button><div id="ubi-info" class="small" style="margin-top:6px"></div></div></div>';
@@ -558,6 +568,20 @@ function pagoHtml(){
     (pago!=='efectivo'?'<p class="small" style="margin-top:8px">'+PAGOS[pago][1]+'</p>':'');
 }
 // Redibuja líneas solo si cambió la cantidad de renglones; si no, actualiza subtotales en el lugar
+// «¿Te falta algo?»: hasta 3 sugerencias según lo que lleva (lo más vendido de cada grupo, sin retornables)
+function sugerencias(){
+  const ls=Object.keys(cart).map(line).filter(Boolean),cs=ls.filter(l=>l.o==='bodega').map(l=>String(l.p.categoria).toUpperCase());
+  const hasA=ls.some(l=>l.o==='asadito'||l.o==='combo'),hasB=cs.some(c=>/CERVEZ|GASEOS|AGUA|JUGO|ENERG|VINO|DESTIL|LICOR|ALCOHOL/.test(c));
+  const hasCerv=cs.some(c=>/CERVEZ/.test(c)),hasH=cs.some(c=>/HIELO/.test(c)),out=[];
+  const pick=(o,f)=>{if(out.length>=3||!abierto(o))return;const p=(cat[o]||[]).find(p=>p.disponible!==false&&!p.envase&&!Object.keys(cart).some(k=>k.startsWith(o+':'+p.id))&&!out.some(x=>x.p===p)&&f(p));if(p)out.push({o,p});};
+  if((hasB||hasA)&&!hasH)pick('bodega',p=>/HIELO/i.test(p.categoria));
+  if(hasA&&!hasB){pick('bodega',p=>/GASEOS/i.test(p.categoria));pick('bodega',p=>/CERVEZ/i.test(p.categoria));}
+  if(hasCerv&&!hasA)pick('asadito',()=>true);
+  if(hasA&&hasB&&!hasCerv)pick('bodega',p=>/CERVEZ/i.test(p.categoria));
+  return out;
+}
+function sugHtml(){const s=sugerencias();if(!s.length)return '';
+  return '<div class="sub">¿Te falta algo?</div><div class="sug">'+s.map(({o,p})=>'<div class="sugi"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+precioHtml(p.precio,descPct(o,p))+'</div><button data-k="'+esc(key(o,p.id))+'" data-d="1">+ Agregar</button></div>').join('')+'</div>';}
 function updateSheet(estructura){
   if(!totals().n){closeSheet();return;}
   if(estructura)$('sh-lines').innerHTML=linesHtml();
@@ -566,12 +590,13 @@ function updateSheet(estructura){
   if(!estructura&&Object.keys(cart).some(k=>!document.querySelector('[data-st="'+CSS.escape(k)+'"]')))$('sh-lines').innerHTML=linesHtml();
   $('sh-tot').innerHTML=totHtml();
   if($('sh-18')&&!!$('f-18')!==has18())$('sh-18').innerHTML=mayorHtml();
+  if($('sh-sug'))$('sh-sug').innerHTML=sugHtml();
 }
 function checkout(){
   const c=cat.config||{},t=totals(),cli=lsGet(LS_CLI,{});
   if(!metodos().includes(pago))pago=metodos()[0]||'efectivo';
   if(!t.n){closeSheet();return;}
-  $('box').innerHTML='<h2>Tu pedido <button class="x" onclick="closeSheet()" aria-label="Cerrar">✕</button></h2><div id="sh-lines">'+linesHtml()+'</div><div id="sh-tot">'+totHtml()+'</div>'+
+  $('box').innerHTML='<h2>Tu pedido <button class="x" onclick="closeSheet()" aria-label="Cerrar">✕</button></h2><div id="sh-lines">'+linesHtml()+'</div><div id="sh-sug">'+sugHtml()+'</div><div id="sh-tot">'+totHtml()+'</div>'+
     '<div class="h4">Tus datos</div><label>Nombre</label><input id="f-nom" class="in" autocomplete="name" value="'+esc(cli.nombre||'')+'">'+
     '<label>Teléfono / WhatsApp</label><input id="f-tel" class="in" type="tel" autocomplete="tel" value="'+esc(cli.telefono||'')+'">'+
     '<div class="h4">¿Cómo querés recibirlo?</div><div id="sh-ent">'+entHtml()+'</div>'+
@@ -665,6 +690,18 @@ async function enviar(){
 }
 const ESTADOS={pendiente:'⏳ Esperando confirmación',aceptado:'✅ Confirmado',preparando:'🔥 En preparación',en_camino:'🛵 En camino',entregado:'🎉 Entregado',cancelado:'❌ Cancelado'};
 let pollT=null;
+// Calificación al entregar (una sola vez por pedido)
+let doneTk='',estrellas=0;
+function califHtml(){return '<div class="calif"><b>¿Qué tal estuvo tu pedido?</b><div class="stars">'+[1,2,3,4,5].map(i=>'<button data-star="'+i+'" aria-label="'+i+' estrellas">★</button>').join('')+'</div>'+
+  '<textarea id="f-cal" class="in" rows="2" placeholder="Contanos algo (opcional)"></textarea><div id="cal-err" class="err"></div><button class="btn" id="calBtn">Enviar calificación</button></div>';}
+async function calificar(){
+  if(!estrellas){$('cal-err').textContent='Tocá las estrellas para calificar.';bump($('cal-err'));return;}
+  const b=$('calBtn');b.disabled=true;
+  try{const r=await rpc('pedidos_calificar',{p_token:doneTk,p_estrellas:estrellas,p_texto:($('f-cal').value||'').trim()});
+    if(r&&r.ok)$('calif').innerHTML='<div class="calif" id="cal-ok"><b>¡Gracias! '+'⭐'.repeat(estrellas)+'</b><p class="small" style="margin-top:6px">Tu opinión nos ayuda a mejorar.</p></div>';
+    else{$('cal-err').textContent=(r&&r.error)||'No se pudo enviar.';b.disabled=false;}
+  }catch(e){$('cal-err').textContent='Sin conexión. Probá de nuevo.';b.disabled=false;}
+}
 function showDone(r,body){
   const c=cat.config||{},wa=String(c.whatsapp||'').replace(/\D/g,'');
   let txt='';
@@ -676,15 +713,23 @@ function showDone(r,body){
   }
   $('box').innerHTML='<h2><span></span><button class="x" onclick="closeSheet()">✕</button></h2><div class="done"><div class="small">Pedido</div><div class="num">#'+esc(r.numero)+'</div>'+
     '<div class="estado" id="est">'+(ESTADOS[r.estado||'pendiente'])+'</div>'+(r.total?'<p style="margin-top:12px">Total: <b>'+gs(r.total)+'</b></p>':'')+
-    '<p class="small" style="margin-top:10px">Esta pantalla se actualiza sola.</p></div>'+
+    '<div class="eta small" id="eta"></div><p class="small" style="margin-top:10px">Esta pantalla se actualiza sola.</p></div><div id="calif"></div>'+
     (txt?'<a class="btn wa" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/'+wa+'?text='+encodeURIComponent(txt)+'">Avisar por WhatsApp</a>':'')+
     '<button class="btn sec" onclick="closeSheet()">Seguir pidiendo</button>';
   openSheet();
   clearInterval(pollT);
-  const tk=r.token;
+  const tk=r.token;doneTk=tk;estrellas=0;
+  const upd=s=>{
+    if(!$('est')||!s||!s.estado)return;$('est').textContent=ESTADOS[s.estado]||s.estado;
+    const dm=(cat.config||{})[s.entrega==='retiro'?'demora_retiro':'demora_delivery'],fin=s.estado==='entregado'||s.estado==='cancelado';
+    $('eta').innerHTML=fin?'':s.eta_at?'🕐 '+(s.entrega==='retiro'?'Listo para retirar':'Llega')+' aprox. a las <b>'+new Date(s.eta_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'})+'</b>':dm?'🕐 Demora estimada: '+esc(dm):'';
+    if(s.estado==='entregado'&&!s.calificacion&&!$('calBtn')&&!$('cal-ok'))$('calif').innerHTML=califHtml();
+    if(fin){clearInterval(pollT);lsSet(LS_LAST,null);}
+  };
+  upd({entrega:body?body.entrega:r.entrega,...r});
   pollT=setInterval(async()=>{
     if(!$('est')){clearInterval(pollT);return;}
-    try{const s=await rpc('pedidos_estado',{p_token:tk});if(s&&s.estado){$('est').textContent=ESTADOS[s.estado]||s.estado;if(s.estado==='entregado'||s.estado==='cancelado'){clearInterval(pollT);lsSet(LS_LAST,null);}}}catch(e){}
+    try{upd(await rpc('pedidos_estado',{p_token:tk}));}catch(e){}
   },20000);
 }
 // Repetir el último pedido (solo lo que sigue disponible)
@@ -729,6 +774,8 @@ document.addEventListener('click',e=>{
   else if(t.dataset.pago){pago=t.dataset.pago;$('sh-pago').innerHTML=pagoHtml();}
   else if(t.id==='ubiBtn'){getUbi();}
   else if(t.id==='covBtn'){verCobertura();}
+  else if(t.dataset.star){estrellas=+t.dataset.star;if($('cal-err'))$('cal-err').textContent='';document.querySelectorAll('.stars button').forEach(x=>x.classList.toggle('on',+x.dataset.star<=estrellas));bump(t);}
+  else if(t.id==='calBtn'){calificar();}
   else if(t.dataset.dir!=null){const d=lsGet(LS_DIRS,[])[+t.dataset.dir];if(d){$('f-dir').value=d.dir;$('f-ubi').value=d.ubi||'';$('f-dirlabel').value='';$('ubiBtn').textContent=d.ubi?'📍 Ubicación agregada ✓ · Actualizar':'📍 Compartir mi ubicación';ubiFuente=d.ubi?'guardada':'';$('sh-dirs').innerHTML=dirsHtml();$('sh-tot').innerHTML=totHtml();ubiInfo();}}
   else if(t.dataset.deldir!=null){const ds=lsGet(LS_DIRS,[]);ds.splice(+t.dataset.deldir,1);lsSet(LS_DIRS,ds);$('sh-dirs').innerHTML=dirsHtml();}
   else if(t.id==='repBtn'){repetir();}
