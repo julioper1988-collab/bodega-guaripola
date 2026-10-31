@@ -6254,6 +6254,21 @@ initMobileShell();
       }
       if((data||[]).length<500)break;
     }
+    // Cobros de deudas (fiados) recibidos en este turno: entran a la caja aunque no sean ventas del turno
+    r.cobros_fiado=0;r.cobros_fiado_efectivo=0;r.cobrosFiadoDetalle=[];
+    try{
+      const desde=caja.opened_at||(caja.fecha+'T00:00:00'), hasta=caja.closed_at||new Date().toISOString();
+      const {data:pf,error:epf}=await sb.from('bodega_pagos_fiado').select('monto,metodo_pago,cliente_nombre,created_at,caja_id')
+        .or('caja_id.eq.'+caja.id+',and(caja_id.is.null,created_at.gte."'+desde+'",created_at.lte."'+hasta+'")');
+      if(epf) throw epf;
+      for(const p of pf||[]){
+        const m=String(p.metodo_pago||'efectivo').toLowerCase(), t=Number(p.monto)||0;
+        r.cobros_fiado+=t;r.total_cobrado+=t;r.cobrosFiadoDetalle.push(p);
+        if(m==='efectivo'){r.efectivo+=t;r.cobros_fiado_efectivo+=t;}
+        else if(['transferencia','qr','debito','credito'].includes(m))r[m]+=t;
+        else r.efectivo+=t;
+      }
+    }catch(e){console.warn('Cobros de fiado del turno:',e.message||e);}
     return r;
   }
 
@@ -6290,10 +6305,11 @@ initMobileShell();
       <p>Sistema Bodega · ${fmtDate(caja.fecha)} · ${caja.estado==='abierta'?'Provisional: caja abierta':'Caja cerrada'}</p>
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Total vendido</div><div class="value" style="font-size:28px;font-weight:800">${fmtGs(ventas.total)}</div><div class="sub">Cobrado + fiado · ${ventas.cantidad} ventas registradas</div></div>
-        <div class="stat-card"><div class="label">Cobrado en las ventas</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.total_cobrado)}</div><div class="sub">Efectivo y todos los medios de pago</div></div>
+        <div class="stat-card"><div class="label">Cobrado en las ventas</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.total_cobrado-(ventas.cobros_fiado||0))}</div><div class="sub">Efectivo y todos los medios de pago</div></div>
+        ${ventas.cobros_fiado?`<div class="stat-card"><div class="label">Cobros de fiado del turno</div><div class="value" style="font-size:24px;font-weight:700;color:var(--green)">${fmtGs(ventas.cobros_fiado)}</div><div class="sub">${ventas.cobrosFiadoDetalle.length} pago(s) de deudas · entran a la caja</div></div>`:''}
         <div class="stat-card"><div class="label">Vendido a fiado</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.fiado)}</div><div class="sub">Importe originalmente fiado, incluidos pagos parciales</div></div>
       </div>
-      <p style="font-size:12px">Fuente: ventas vinculadas a este arqueo en Sistema Bodega. El fiado no representa el saldo pendiente actual. Este resumen no incluye apertura, ingresos varios ni cobros posteriores de deudas.</p>
+      <p style="font-size:12px">Fuente: ventas vinculadas a este arqueo en Sistema Bodega. El fiado no representa el saldo pendiente actual. Este resumen no incluye apertura ni ingresos varios. Los cobros de fiado del turno sí se suman a lo esperado en caja.</p>
     </div>`;
   }
 
@@ -6604,7 +6620,7 @@ initMobileShell();
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Estado</div><div class="value" style="font-size:22px;color:${caja.estado==='abierta'?'var(--green)':'var(--amber)'}">${caja.estado}</div><div class="sub">${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}</div></div>
         <div class="stat-card"><div class="label">Apertura</div><div class="value">${fmtGs(apertura)}</div><div class="sub">${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'}</div></div>
-        <div class="stat-card"><div class="label">Ventas efectivo del turno</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas</div></div>
+        <div class="stat-card"><div class="label">Ventas efectivo del turno</div><div class="value" style="color:var(--green)">${fmtGs(ventas.efectivo)}</div><div class="sub">${ventas.cantidad} ventas${ventas.cobros_fiado_efectivo?' · incluye '+fmtGs(ventas.cobros_fiado_efectivo)+' de cobros de fiado':''}</div></div>
         <div class="stat-card"><div class="label">Gastos varios</div><div class="value" style="color:var(--red)">${fmtGs(gastos.total)}</div></div>
         <div class="stat-card"><div class="label">Ingresos varios</div><div class="value" style="color:var(--green)">${fmtGs(ingresos.total)}</div></div>
         <div class="stat-card"><div class="label">Efectivo esperado</div><div class="value" style="color:var(--accent2)">${fmtGs(esperado)}</div><div class="sub">apertura + efectivo - gastos + ingresos</div></div>
@@ -7416,7 +7432,9 @@ initMobileShell();
       const data=await loadClientesData();
       const cliente=data.clientes.find(c=>c.id===clienteId);
       const deudas=calcResumenCliente(cliente,data).fiados.filter(f=>(Number(f.saldo)||0)>0).sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')));
-      let restante=monto;
+      let restante=monto,pagoErr=null;
+      const {data:cjab}=await sb.from('bodega_caja').select('id').is('closed_at',null).order('opened_at',{ascending:false}).limit(1);
+      const cajaId=(cjab&&cjab[0]&&cjab[0].id)||null;
       for(const f of deudas){
         if(restante<=0) break;
         const saldo=Number(f.saldo)||0;
@@ -7426,10 +7444,13 @@ initMobileShell();
         const estado=nuevoSaldo<=0?'pagado':'pendiente';
         const {error}=await sb.from('bodega_fiados').update({monto_pagado:nuevoPagado,saldo:nuevoSaldo,estado}).eq('id',f.id);
         if(error) throw error;
-        await sb.from('bodega_pagos_fiado').insert({fiado_id:f.id,cliente_id:clienteId,cliente_nombre:cliente.nombre||cliente.razon_social,monto:aplicado,metodo_pago:metodo,notas}).then(()=>{}).catch(()=>{});
+        // el pago queda registrado en la caja abierta (antes fallaba sin aviso y no sumaba en el arqueo)
+        const {error:ep}=await sb.from('bodega_pagos_fiado').insert({fiado_id:f.id,cliente_id:clienteId,cliente_nombre:cliente.nombre||cliente.razon_social,monto:aplicado,metodo_pago:metodo,notas,caja_id:cajaId,fecha:fechaHoyPY()});
+        if(ep) pagoErr=ep;
         restante-=aplicado;
       }
-      toast('Pago registrado: '+money(monto-restante));
+      toast('Pago registrado: '+money(monto-restante)+(cajaId?'':' · sin caja abierta: no suma en ningún arqueo'),cajaId?'ok':'err');
+      if(pagoErr) toast('El saldo se actualizó, pero el pago no quedó en la caja: '+(pagoErr.message||pagoErr),'err');
       closeModal();
       renderClientes();
     }catch(e){toast('Error registrando pago: '+(e.message||e),'err');}
