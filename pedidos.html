@@ -384,11 +384,12 @@ function seccionHtml(o,items,conNav){
   let h='<section class="'+(ab?'':'cerrado')+'"><div class="sectionhead"><h3>'+(o==='asadito'?'🔥 Asaditos':'🛒 Bodega')+'</h3><span class="st'+(ab?'':' cl')+'">'+(ab?'Abierto':'Cerrado')+'</span></div>'+
     (!ab?'<div class="banner closed">🔒 '+(o==='asadito'?'El asadito':'La bodega')+' está cerrado ahora.'+(proxima(o)?' Abre '+proxima(o)+'.':'')+'</div>':'')+(ht?'<div class="hor">🕐 '+esc(ht)+'</div>':'');
   if(!items.length)return h+'<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div></section>';
-  // orden alfabético dentro de cada categoría (los destacados siguen siendo los más vendidos)
+  // orden por marca dentro de cada categoría (sin «CERVEZA», «WHISKY»… al inicio): Corona y todos sus tamaños juntos
   const catOrd=[...new Set(items.map(p=>p.categoria))];
-  items=items.slice().sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{numeric:true,sensitivity:'base'}));
-  // los productos con pack van primero, todos juntos
-  const pk=o==='bodega'?items.filter(conPack).sort((a,b)=>packsVis(b).some(x=>x.disponible!==false)-packsVis(a).some(x=>x.disponible!==false)):[],resto=pk.length?items.filter(p=>!conPack(p)):items,cs=[...new Set(resto.map(p=>p.categoria))].sort((x,y)=>catOrd.indexOf(x)-catOrd.indexOf(y));
+  const marca=n=>String(n||'').toUpperCase().replace(/^(CERVEZA|WHISKY|LICOR|VINO|RON|CAÑA|GASEOSA|AGUA|JUGO|ENERGIZANTE)\s+/,'').replace(/[´'’]/g,'');
+  items=items.slice().sort((a,b)=>marca(a.nombre).localeCompare(marca(b.nombre),'es',{numeric:true,sensitivity:'base'}));
+  // (los packs se muestran dentro de cada producto; ya no hay sección aparte)
+  const pk=[],resto=pk.length?items.filter(p=>!conPack(p)):items,cs=[...new Set(resto.map(p=>p.categoria))].sort((x,y)=>catOrd.indexOf(x)-catOrd.indexOf(y));
   if(conNav&&cs.length+(pk.length?1:0)>2)h+='<div class="catnav">'+(pk.length?'<button data-goto="c-'+o+'-pk">📦 packs</button>':'')+cs.map((c,i)=>'<button data-goto="c-'+o+'-'+i+'">'+esc(String(c).toLowerCase())+'</button>').join('')+'</div>';
   if(pk.length)h+='<div class="cat" id="c-'+o+'-pk" style="color:var(--acc2)">📦 Llevá en pack y ahorrá · '+pk.length+'</div><div class="products">'+pk.map(p=>cardHtml(o,p)).join('')+'</div>';
   cs.forEach((c,i)=>{const ps=resto.filter(p=>p.categoria===c);h+='<div class="cat" id="c-'+o+'-'+i+'">'+esc(c)+' · '+ps.length+'</div><div class="products">'+ps.map(p=>cardHtml(o,p)).join('')+'</div>';});
