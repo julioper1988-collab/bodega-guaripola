@@ -85,6 +85,12 @@ declare r pedidos_online; v_del uuid;
 begin
   select * into r from pedidos_online where id = p_id for update;
   if r.venta_bodega_id is null then return jsonb_build_object('ok',true,'omitido',true); end if;
+  -- si la venta ya se borró a mano en la bodega (y ahí se devolvió el stock), solo se desvincula
+  if not exists (select 1 from bodega_ventas where id = r.venta_bodega_id) then
+    update pedidos_online set venta_bodega_id = null, venta_bodega_num = null, bodega_cargado = false,
+           venta_bodega_aviso = 'La venta #'||r.venta_bodega_num||' ya había sido borrada en la bodega' where id = r.id;
+    return jsonb_build_object('ok',true,'ya_borrada',true);
+  end if;
   select b.id into v_del from bodega_productos b join bodega_categorias c on c.id = b.categoria_id
    where lower(b.nombre) = 'delivery' and c.nombre = 'SERVICIOS' order by b.activo desc limit 1;
   update bodega_productos bp set stock = bp.stock + d.cantidad
