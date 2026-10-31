@@ -216,6 +216,13 @@ const LS_ENV='gp_ped_env',LS_CART='gp_ped_cart', LS_CLI='gp_ped_cli', LS_LAST='g
 const LS_DIRS='gp_ped_dirs', LS_PREV='gp_ped_prev', LS_HIST='gp_ped_hist';
 // Identificador de este celular: la promo de 1ª compra no se repite desde el mismo dispositivo
 const DEV=(()=>{try{let d=localStorage.getItem('gp_ped_dev');if(!d){d=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));localStorage.setItem('gp_ped_dev',d);}return d;}catch(e){return '';}})();
+// Contador de visitas (anónimo): visita, agregó al carrito, pidió. Origen: ?src=ig / wa / estado…
+const SRC=(()=>{try{let s=new URLSearchParams(location.search).get('src');
+  if(!s)s=sessionStorage.getItem('gp_ped_src');
+  if(!s){const u=navigator.userAgent||'',r=document.referrer||'';s=/Instagram/i.test(u)||/instagram\./i.test(r)?'ig':/FBAN|FBAV|FB_IAB|FBIOS|Messenger/i.test(u)||/facebook\.|fb\./i.test(r)?'fb':/TikTok|musical_ly|Bytedance/i.test(u)||/tiktok\./i.test(r)?'tiktok':/google\./i.test(r)?'google':r&&!r.includes(location.host)?'web':'directo';}
+  s=String(s).toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20)||'directo';sessionStorage.setItem('gp_ped_src',s);return s;}catch(e){return 'directo';}})();
+function track(ev){try{if(!DEV)return;rpc('pedidos_registrar_visita',{p_evento:ev,p_dev:DEV,p_src:SRC,p_movil:/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent||'')}).catch(()=>{});}catch(e){}}
+setTimeout(()=>track('visita'),1200);
 function aviso(t){let e=$('aviso');if(!e){e=document.createElement('div');e.id='aviso';document.body.appendChild(e);}e.textContent=t;e.classList.remove('on');void e.offsetWidth;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600);}
 let cat={config:{},asadito:[],bodega:[]}, tab='todos', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
 
@@ -437,6 +444,7 @@ function setQty(k,v,abs){
   if(n===prev&&!abs)return;
   if(n<=0){delete cart[k];if(envs[k]){delete envs[k];lsSet(LS_ENV,envs);}}else cart[k]=n;
   lsSet(LS_CART,cart);
+  if(n>prev&&!window._trC){window._trC=1;track('carrito');}
   document.querySelectorAll('.qty[data-q="'+CSS.escape(k)+'"]').forEach(q=>{
     const hadInput=!!q.querySelector('.qn');
     if(!!n!==hadInput){q.innerHTML=qtyHtml(k,n);}
@@ -684,6 +692,7 @@ async function enviar(){
      if(body.entrega==='delivery'&&body.direccion&&lb){let ds=lsGet(LS_DIRS,[]).filter(d=>d.dir!==body.direccion&&!(lb!=='Otra'&&d.label===lb));ds.unshift({label:lb,dir:body.direccion,ubi:body.ubicacion||''});lsSet(LS_DIRS,ds.slice(0,6));}
      lsSet(LS_PREV,{cart:{...cart},envs:{...envs},ts:Date.now(),n:Object.values(cart).reduce((a,b)=>a+b,0)});
      const hs=lsGet(LS_HIST,[]).filter(x=>x.token!==r.token);hs.unshift({token:r.token,numero:r.numero,total:r.total,ts:Date.now()});lsSet(LS_HIST,hs.slice(0,15));misBtn();}
+    track('pedido');
     cart={};lsSet(LS_CART,cart);envs={};lsSet(LS_ENV,envs);esNuevo=false;telChk='';render();
     showDone(r,body);
   }catch(e){err('Sin conexión. Probá de nuevo.');b.disabled=false;b.textContent='Confirmar pedido';}
