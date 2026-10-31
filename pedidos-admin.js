@@ -15,15 +15,47 @@
   window.renderPedidosOnline=async function(){
     var c=g('content'); if(!c) return;
     c.innerHTML='<div id="ped-root"><div class="ped-tabs">'+
-      ['pedidos:📦 Pedidos','catalogo:🧾 Catálogo online','promos:🏷️ Promociones','config:⚙️ Configuración'].map(function(x){var k=x.split(':');return '<button class="btn btn-secondary btn-sm'+(tab===k[0]?' on':'')+'" onclick="pedTab(\''+k[0]+'\')">'+k[1]+'</button>';}).join('')+
+      ['pedidos:📦 Pedidos','catalogo:🧾 Catálogo online','promos:🏷️ Promociones','visitas:📊 Visitas','config:⚙️ Configuración'].map(function(x){var k=x.split(':');return '<button class="btn btn-secondary btn-sm'+(tab===k[0]?' on':'')+'" onclick="pedTab(\''+k[0]+'\')">'+k[1]+'</button>';}).join('')+
       (typeof addToVenta==='function'?'<a class="btn btn-secondary btn-sm" href="pedidos-admin.html" target="_blank" rel="noopener">📲 App Pedidos</a>':'')+
       '</div><div id="ped-body"><div class="spinner"></div></div></div>';
     if(tab==='pedidos') await pedRenderLista();
     else if(tab==='catalogo') await pedRenderCatalogo();
     else if(tab==='promos') await pedRenderPromos();
+    else if(tab==='visitas') await pedRenderVisitas();
     else await pedRenderConfig();
   };
   window.pedTab=function(t){tab=t;renderPedidosOnline();};
+
+  // ─── VISITAS DE LA PÁGINA ───
+  var visDias=7;
+  window.pedVisDias=function(d){visDias=d;pedRenderVisitas();};
+  var SRC_LBL={ig:'📸 Instagram',wa:'💬 WhatsApp',estado:'🟢 Estados',fb:'📘 Facebook',tiktok:'🎵 TikTok',google:'🔎 Google',web:'🌐 Otra web',directo:'🔗 Directo / sin link',otro:'❔ Otro'};
+  async function pedRenderVisitas(){
+    var b=g('ped-body'); if(!b) return;
+    var f=function(d){var x=new Date();x.setDate(x.getDate()-d);return x.toLocaleDateString('en-CA',{timeZone:'America/Asuncion'});};
+    var hasta=f(0), desde=f(visDias-1);
+    var r=await sb.rpc('pedidos_visitas_resumen',{p_desde:desde,p_hasta:hasta});
+    if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
+    var d=r.data||{}, pct=function(a,t){return t?Math.round(a/t*100)+'%':'—';};
+    var kpi=function(t,v,s){return '<div class="ped-card" style="gap:2px"><div class="ped-meta">'+t+'</div><b style="font-size:22px">'+v+'</b><div class="ped-meta">'+(s||'&nbsp;')+'</div></div>';};
+    var dias=d.por_dia||[], mx=Math.max.apply(null,dias.map(function(x){return x.visitas;}).concat([1]));
+    var horas=new Array(24).fill(0);(d.por_hora||[]).forEach(function(x){horas[x.h]=x.visitas;});var mh=Math.max.apply(null,horas.concat([1]));
+    var base=URL_PUBLICA;
+    b.innerHTML='<div class="ped-tabs">'+[[1,'Hoy'],[7,'7 días'],[30,'30 días']].map(function(x){return '<button class="btn btn-secondary btn-sm'+(visDias===x[0]?' on':'')+'" onclick="pedVisDias('+x[0]+')">'+x[1]+'</button>';}).join('')+'</div>'+
+      '<div class="ped-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">'+
+        kpi('Visitas',d.visitas||0,(d.personas||0)+' personas distintas')+
+        kpi('Personas nuevas',d.nuevos||0,'primera vez que entran')+
+        kpi('Agregaron al carrito',d.carrito||0,pct(d.carrito||0,d.personas||0)+' de las personas')+
+        kpi('Hicieron pedido',d.pedido||0,pct(d.pedido||0,d.personas||0)+' de las personas')+
+      '</div>'+
+      '<div class="ped-card" style="margin-top:12px"><b>Por día</b>'+(dias.length?'<table><tr><th>Día</th><th>Visitas</th><th>Personas</th><th>Pedidos</th><th style="width:40%"></th></tr>'+dias.slice().reverse().map(function(x){
+          return '<tr><td>'+h(new Date(x.d+'T12:00:00').toLocaleDateString('es-PY',{weekday:'short',day:'2-digit',month:'2-digit'}))+'</td><td>'+x.visitas+'</td><td>'+x.personas+'</td><td>'+x.pedidos+'</td><td><div style="height:8px;border-radius:4px;background:var(--accent);width:'+Math.round(x.visitas/mx*100)+'%"></div></td></tr>';}).join('')+'</table>':'<div class="ped-meta">Todavía no hay visitas registradas.</div>')+'</div>'+
+      '<div class="ped-card" style="margin-top:12px"><b>De dónde vienen</b>'+((d.por_src||[]).length?'<table><tr><th>Origen</th><th>Visitas</th><th>Pedidos</th></tr>'+(d.por_src||[]).map(function(x){return '<tr><td>'+h(SRC_LBL[x.src]||x.src)+'</td><td>'+x.visitas+'</td><td>'+x.pedidos+'</td></tr>';}).join('')+'</table>':'<div class="ped-meta">Sin datos.</div>')+
+        '<div class="ped-meta" style="margin-top:8px">Usá un link distinto en cada lugar para saber de dónde vienen:</div>'+
+        [['ig','Instagram'],['wa','WhatsApp'],['estado','Estados de WhatsApp']].map(function(x){var u=base+'?src='+x[0];return '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap"><span class="ped-meta" style="min-width:130px">'+x[1]+'</span><code style="font-size:12px;word-break:break-all">'+h(u)+'</code><button class="btn btn-secondary btn-sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+u+'\').then(function(){toast(\'Link copiado\')})">Copiar</button></div>';}).join('')+'</div>'+
+      '<div class="ped-card" style="margin-top:12px"><b>Horarios con más visitas</b><div style="display:flex;align-items:flex-end;gap:2px;height:90px;margin-top:8px">'+horas.map(function(x,i){return '<div title="'+i+' h · '+x+' visitas" style="flex:1;min-height:2px;border-radius:3px 3px 0 0;background:var(--accent);opacity:'+(x?1:.25)+';height:'+Math.max(2,Math.round(x/mh*100))+'%"></div>';}).join('')+'</div><div class="ped-meta" style="display:flex;justify-content:space-between"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>'+
+        '<div class="ped-meta" style="margin-top:8px">'+pct(d.movil||0,d.visitas||0)+' de las visitas desde el celular.</div></div>';
+  }
 
   // ─── LISTA DE PEDIDOS ───
   window.pedFiltro=function(f){filtro=f;pedRenderLista();};
