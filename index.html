@@ -659,10 +659,10 @@ window.bgLoadZXing=function(){
   --text3:     #b0b8d0;
 
   /* ── Brand / Accent ── */
-  --accent:    #4f7ef8;
-  --accent2:   #3a63d4;
-  --accent-bg: rgba(79,126,248,.12);
-  --accent-glow: 0 0 20px rgba(79,126,248,.25);
+  --accent:    #ef6a24;
+  --accent2:   #d65413;
+  --accent-bg: rgba(239,106,36,.12);
+  --accent-glow: 0 0 20px rgba(239,106,36,.25);
 
   /* ── Semantic ── */
   --green:     #22c55e;
@@ -815,7 +815,7 @@ body {
 #sidebar nav a span:not(.ico) { opacity: 1; display: inline; }
 #sidebar nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
 #sidebar nav a.active {
-  background: rgba(79,126,248,.25);
+  background: rgba(239,106,36,.25);
   color: #fff; font-weight: 600;
 }
 #sidebar nav a.active::before { display: none; }
@@ -942,7 +942,7 @@ thead th {
   border-bottom: 1px solid var(--border);
 }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-tbody tr:hover { background: rgba(79,126,248,.06); }
+tbody tr:hover { background: rgba(239,106,36,.06); }
 tbody td {
   padding: 11px 14px; font-size: 13px;
   color: var(--text);
@@ -960,11 +960,11 @@ tbody tr:last-child { border-bottom: none; }
 }
 .btn-primary {
   background: var(--accent); color: #fff;
-  box-shadow: 0 2px 8px rgba(79,126,248,.3);
+  box-shadow: 0 2px 8px rgba(239,106,36,.3);
 }
 .btn-primary:hover {
   background: var(--accent2);
-  box-shadow: 0 4px 12px rgba(79,126,248,.4);
+  box-shadow: 0 4px 12px rgba(239,106,36,.4);
   transform: translateY(-1px);
 }
 .btn-secondary {
@@ -1014,7 +1014,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,126,248,.15);
+  box-shadow: 0 0 0 3px rgba(239,106,36,.15);
   background: var(--bg2);
 }
 select option { background: var(--bg2); color: var(--text); }
@@ -1233,7 +1233,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   letter-spacing: .5px;
 }
 #venta-table tbody tr { border-bottom: 1px solid var(--border); }
-#venta-table tbody tr:hover { background: rgba(79,126,248,.07); }
+#venta-table tbody tr:hover { background: rgba(239,106,36,.07); }
 #venta-table tbody td { padding: 10px 14px; font-size: 13px; color: var(--text); }
 
 /* ── Derecha (panel de cobro) ── */
@@ -1273,7 +1273,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   color: var(--accent);
   background: var(--accent-bg);
   font-weight: 800;
-  box-shadow: 0 0 0 2px rgba(79,126,248,.2);
+  box-shadow: 0 0 0 2px rgba(239,106,36,.2);
 }
 .pay-grid {
   display: grid;
@@ -1283,18 +1283,18 @@ input::placeholder { color: var(--text2); opacity: .7; }
 
 /* ── Botón COBRAR ── */
 .cobrar-btn {
-  background: linear-gradient(135deg, #4f7ef8 0%, #3a63d4 100%);
+  background: linear-gradient(135deg, #ef6a24 0%, #d65413 100%);
   color: #fff; border: none;
   border-radius: var(--radius); padding: 16px;
   font-size: 17px; font-weight: 800;
   cursor: pointer; width: 100%;
   transition: all .15s; font-family: inherit;
   letter-spacing: .4px;
-  box-shadow: 0 4px 16px rgba(79,126,248,.35);
+  box-shadow: 0 4px 16px rgba(239,106,36,.35);
 }
 .cobrar-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(79,126,248,.5);
+  box-shadow: 0 6px 24px rgba(239,106,36,.5);
 }
 .cobrar-btn:active { transform: translateY(0); }
 
@@ -1547,7 +1547,7 @@ input[type=number] { -moz-appearance: textfield; }
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 900; color: #fff;
   letter-spacing: -.5px; flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(79,126,248,.4);
+  box-shadow: 0 2px 8px rgba(239,106,36,.4);
 }
 #sidebar .logo h1 { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
 #sidebar .logo p { font-size: 10px; color: var(--text2); margin-top: 1px; }
@@ -6052,7 +6052,13 @@ initMobileShell();
     usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
   };
   function mostrarMenuUsuario(){
-    openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button></div>`,null,'');
+    const admin=!usuarioActual||usuarioActual.rol==='admin', claro=document.body.classList.contains('theme-light'), may=document.body.classList.contains('con-mayorista');
+    openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap">`+
+      (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">👥 Usuarios y respaldo</button>`:'')+
+      `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'🌙 Tema oscuro':'☀️ Tema claro'}</button>`+
+      (admin?`<button class="btn btn-secondary" onclick="bgToggleMayorista();closeModal()">${may?'Ocultar ventas mayoristas':'Activar ventas mayoristas'}</button>`:'')+
+      `<button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button>`+
+      (admin?`<button class="btn btn-secondary" onclick="resetConfig()" title="Solo si cambia la base de datos">🔌 Cambiar conexión</button>`:'')+`</div>`,null,'');
   }
   window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){_swallow(e)}lsRemove('bg_usuario_actual');lsRemove('bg_usuario_offline');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){_swallow(e)}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
@@ -10108,7 +10114,7 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(79,126,248,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;margin-bottom:10px">🛒</div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Nueva venta</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Registrar venta al mostrador</div>
@@ -10182,7 +10188,7 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(79,126,248,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;margin-bottom:10px">📦</div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Productos</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y editar el catálogo</div>
@@ -10256,7 +10262,7 @@ async function revertirStockCompraReal(compraId, detalles){
   justify-content:space-between;
   gap:16px;
   background:
-    radial-gradient(circle at top left, rgba(79,126,248,.14), transparent 34%),
+    radial-gradient(circle at top left, rgba(239,106,36,.14), transparent 34%),
     var(--bg2);
 }
 .compras-module-head h3{
@@ -10306,7 +10312,7 @@ async function revertirStockCompraReal(compraId, detalles){
   color:#fff;
   background:var(--accent);
   border-color:var(--accent);
-  box-shadow:0 4px 16px rgba(79,126,248,.28);
+  box-shadow:0 4px 16px rgba(239,106,36,.28);
 }
 #compras-tab-content > .card:first-child{ margin-top:0; }
 @media(max-width:900px){
@@ -10428,7 +10434,7 @@ async function revertirStockCompraReal(compraId, detalles){
     color: #fff !important;
   }
   #sidebar nav a.active {
-    background: rgba(79,126,248,.25) !important;
+    background: rgba(239,106,36,.25) !important;
     color: #fff !important;
     font-weight: 600 !important;
   }
@@ -10573,7 +10579,7 @@ async function revertirStockCompraReal(compraId, detalles){
     position: relative !important;
   }
   .hist-table-wrap tbody tr:hover {
-    background: rgba(79,126,248,.07) !important;
+    background: rgba(239,106,36,.07) !important;
   }
   .hist-table-wrap tbody td {
     padding: 3px 0 !important;
@@ -10816,7 +10822,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu a:hover,
   #sidebar nav#macos-main-menu button.mac-menu-trigger:hover,
   #sidebar nav#macos-main-menu .mac-menu-group.open > button.mac-menu-trigger{background:rgba(255,255,255,.12)!important;color:#fff!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(79,126,248,.28)!important;color:#fff!important;font-weight:650!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;font-weight:650!important;}
   #sidebar nav#macos-main-menu .ico,
   #sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-caret{font-size:9px!important;opacity:.72!important;margin-left:1px!important;}
@@ -10828,7 +10834,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu,
   #sidebar nav#macos-main-menu .mac-menu-group:hover > .mac-submenu{display:block!important;}
   #sidebar nav#macos-main-menu .mac-submenu a{height:30px!important;margin:0!important;width:100%!important;justify-content:flex-start!important;padding:0 12px!important;border-radius:7px!important;color:rgba(255,255,255,.82)!important;font-size:12.5px!important;}
-  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(79,126,248,.22)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(239,106,36,.22)!important;color:#fff!important;}
   #sidebar .cfg-btn{height:30px!important;min-height:30px!important;padding:0 10px!important;border-top:none!important;border-left:1px solid rgba(255,255,255,.1)!important;margin-left:6px!important;display:flex!important;align-items:center!important;color:rgba(255,255,255,.45)!important;background:transparent!important;flex-shrink:0!important;}
   #sidebar .cfg-btn svg{width:11px!important;height:11px!important;}
   #sidebar .cfg-btn span{opacity:1!important;font-size:11px!important;}
@@ -10848,7 +10854,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu::-webkit-scrollbar{display:none!important;}
   #sidebar nav#macos-main-menu .mac-menu-group{position:relative!important;display:inline-flex!important;flex-shrink:0!important;}
   #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{height:30px!important;min-height:30px!important;padding:0 11px!important;border:0!important;border-radius:8px!important;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86)!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important;display:inline-flex!important;align-items:center!important;gap:4px!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(79,126,248,.3)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.3)!important;color:#fff!important;}
   #sidebar nav#macos-main-menu .ico,#sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-submenu{display:none!important;position:fixed!important;top:74px!important;left:8px!important;right:8px!important;padding:8px!important;background:rgba(28,31,45,.99)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:12px!important;box-shadow:0 16px 40px rgba(0,0,0,.6)!important;z-index:9999!important;}
   #sidebar nav#macos-main-menu .mac-menu-group.open>.mac-submenu{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;}
@@ -10954,16 +10960,15 @@ async function revertirStockCompraReal(compraId, detalles){
     }catch(e){console.warn('No se pudo registrar páginas del menú',e)}
   }
   function menuHtml(){
-    return '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Inicio <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
+    return '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Vender <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
       '<a href="#" id="nav-ventas" data-page="ventas">Nueva venta</a><a href="#" id="nav-historial-ventas" data-page="historial-ventas">Historial de ventas</a><a href="#" id="nav-caja" data-page="caja">Arqueo de caja</a><a href="#" id="nav-clientes" data-page="clientes">Clientes</a></div></div>'+
-      '<div class="mac-menu-group"><a href="#" id="nav-dashboard" data-page="dashboard">Dashboard</a></div>'+
       '<div class="mac-menu-group"><a href="#" id="nav-pedidos" data-page="pedidos">Pedidos online <span id="ped-badge" class="ped-badge" style="display:none"></span></a></div>'+
       '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Productos <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
       '<a href="#" id="nav-productos" data-page="productos">Lista de productos</a><a href="#" id="nav-ajustes" data-page="ajustes">Ajuste de stock</a><a href="#" id="nav-inventario" data-page="inventario">Inventario</a><a href="#" id="nav-proveedores" data-page="proveedores">Proveedores</a><a href="#" id="nav-categorias" data-page="categorias">Categorías</a></div></div>'+
       '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Compras <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
       '<a href="#" id="nav-compras" data-page="compras">Compra nueva</a><a href="#" id="nav-historial-compras" data-page="historial-compras">Historial de compras</a></div></div>'+
-      '<div class="mac-menu-group"><a href="#" id="nav-reportes" data-page="reportes">Reportes</a></div>'+
-      '<div class="mac-menu-group"><a href="#" id="nav-usuarios" data-page="usuarios">Usuarios</a></div>';
+      '<div class="mac-menu-group has-submenu"><button type="button" class="mac-menu-trigger">Reportes <span class="mac-caret">▾</span></button><div class="mac-submenu">'+
+      '<a href="#" id="nav-dashboard" data-page="dashboard">Dashboard</a><a href="#" id="nav-reportes" data-page="reportes">Reportes</a></div></div>';
   }
   function buildMenu(){
     var sb=byId('sidebar'); if(!sb) return;
@@ -11027,7 +11032,7 @@ async function revertirStockCompraReal(compraId, detalles){
     #sidebar nav#macos-main-menu{height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important;padding:12px!important;margin:0!important;overflow:visible!important;white-space:normal!important;flex:0 0 auto!important;}
     #sidebar nav#macos-main-menu .mac-menu-group{width:100%!important;height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;position:relative!important;}
     #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{width:100%!important;height:46px!important;min-height:46px!important;padding:0 14px!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:13px!important;background:rgba(255,255,255,.055)!important;color:rgba(255,255,255,.9)!important;font-size:15px!important;font-weight:750!important;text-decoration:none!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;margin:0!important;box-shadow:none!important;}
-    #sidebar nav#macos-main-menu a.active{background:rgba(79,126,248,.28)!important;color:#fff!important;border-color:rgba(79,126,248,.42)!important;}
+    #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;border-color:rgba(239,106,36,.42)!important;}
     #sidebar nav#macos-main-menu .mac-caret{font-size:11px!important;margin-left:auto!important;opacity:.75!important;}
     #sidebar nav#macos-main-menu .mac-submenu{position:static!important;display:none!important;min-width:0!important;width:100%!important;top:auto!important;left:auto!important;right:auto!important;padding:6px 0 2px 12px!important;margin:0!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;}
     #sidebar nav#macos-main-menu .mac-menu-group:hover>.mac-submenu{display:none!important;}
@@ -11788,8 +11793,8 @@ small,
 #content:has([id*="inventario"]) [style*="color: var(--accent)"],
 #content:has([id*="inventario"]) [style*="color:var(--blue)"],
 #content:has([id*="inventario"]) [style*="color: var(--blue)"],
-#content:has([id*="inventario"]) [style*="color:#4f7ef8"],
-#content:has([id*="inventario"]) [style*="color: #4f7ef8"],
+#content:has([id*="inventario"]) [style*="color:#ef6a24"],
+#content:has([id*="inventario"]) [style*="color: #ef6a24"],
 #content:has([id*="inventario"]) .stock,
 #content:has([id*="inventario"]) .stock-value,
 #content:has([id*="inventario"]) .stock-real,
@@ -14188,16 +14193,16 @@ window.renderInicio = function(){
   cont.innerHTML=''+
     '<style>'+
       '.ini2{max-width:1120px;margin:0 auto;padding:4px 2px 18px}'+
-      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(79,126,248,.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
-      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(79,126,248,.13);border:1px solid rgba(255,255,255,.08)}'+
-      '.ini2-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#9db5ff;font-weight:800;margin-bottom:6px}'+
+      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(239,106,36,.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
+      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(239,106,36,.13);border:1px solid rgba(255,255,255,.08)}'+
+      '.ini2-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#ffc099;font-weight:800;margin-bottom:6px}'+
       '.ini2-title{font-size:28px;font-weight:950;letter-spacing:-.8px;line-height:1.05;color:var(--text);position:relative;z-index:1}'+
       '.ini2-sub{font-size:13px;color:var(--text3);margin-top:8px;position:relative;z-index:1;max-width:650px}'+
       '.ini2-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px;position:relative;z-index:1}'+
       '.ini2-action{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:var(--text);border-radius:15px;padding:14px 12px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s,background .12s}'+
-      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(79,126,248,.14)}'+
+      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(239,106,36,.14)}'+
       '.ini2-action:active{transform:scale(.99)}'+
-      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(79,126,248,.18);font-size:18px;flex:0 0 auto}'+
+      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(239,106,36,.18);font-size:18px;flex:0 0 auto}'+
       '.ini2-action b{display:block;font-size:13px;font-weight:900;color:var(--text)}'+
       '.ini2-action small{display:block;font-size:11px;color:var(--text2);margin-top:2px;line-height:1.2}'+
       '.ini2-green .ini2-action-ico{background:rgba(34,197,94,.16)}.ini2-amber .ini2-action-ico{background:rgba(245,158,11,.16)}'+
@@ -14207,7 +14212,7 @@ window.renderInicio = function(){
       '.ini2-panel-h span{font-size:11px;color:var(--text2);font-weight:700}'+
       '.ini2-list{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}'+
       '.ini2-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;text-decoration:none;color:var(--text);cursor:pointer;min-height:72px}'+
-      '.ini2-row:hover{border-color:var(--accent);background:rgba(79,126,248,.08)}'+
+      '.ini2-row:hover{border-color:var(--accent);background:rgba(239,106,36,.08)}'+
       '.ini2-row b{font-size:13px}.ini2-row small{display:block;color:var(--text2);font-size:11px;margin-top:2px}.ini2-arrow{color:var(--text2);font-weight:900;font-size:18px}'+
       '@media(max-width:900px){.ini2{padding:0}.ini2-hero{border-radius:0 0 22px 22px;margin:-20px -20px 16px;padding:22px 20px}.ini2-title{font-size:24px}.ini2-actions{grid-template-columns:1fr 1fr}.ini2-list{grid-template-columns:1fr}.ini2-action{padding:13px 10px}.ini2-action small{display:none}}'+
       '@media(max-width:430px){.ini2-actions{grid-template-columns:1fr 1fr}.ini2-title{font-size:22px}}'+
@@ -14247,8 +14252,8 @@ body.theme-light{
   --bg:#f4f6fa; --bg2:#ffffff; --bg3:#eef1f7; --bg4:#e3e7f0;
   --border:#d7dce8; --border2:#c2c9da;
   --text:#161a24; --text2:#6b7280; --text3:#374151;
-  --accent:#3a63d4; --accent2:#2b4bb0;
-  --accent-bg:rgba(58,99,212,.10); --accent-glow:0 0 20px rgba(58,99,212,.18);
+  --accent:#d65413; --accent2:#b8460f;
+  --accent-bg:rgba(214,84,19,.10); --accent-glow:0 0 20px rgba(214,84,19,.18);
   --green:#16a34a; --green-bg:rgba(22,163,74,.10);
   --red:#dc2626;   --red-bg:rgba(220,38,38,.10);
   --amber:#d97706; --amber-bg:rgba(217,119,6,.10);
@@ -15099,15 +15104,15 @@ body:not(.theme-light){
   --bg:#1f2534; --bg2:#283044; --bg3:#232a3b; --bg4:#313a51;
   --border:#3a4560; --border2:#47536f;
   --text:#eef1f8; --text2:#a3acc4; --text3:#cbd2e3;
-  --accent:#5b8bff; --accent2:#4673ea;
-  --accent-bg:rgba(91,139,255,.16); --accent-glow:0 0 20px rgba(91,139,255,.22);
+  --accent:#f47a35; --accent2:#e0621c;
+  --accent-bg:rgba(244,122,53,.16); --accent-glow:0 0 20px rgba(244,122,53,.22);
   --shadow:0 2px 8px rgba(8,12,24,.25); --shadow-md:0 4px 20px rgba(8,12,24,.30); --shadow-lg:0 8px 40px rgba(8,12,24,.35);
 }
 body:not(.theme-light) #sidebar{background:#2a3247!important;border-bottom-color:rgba(255,255,255,.08)!important;box-shadow:0 1px 6px rgba(8,12,24,.3)!important}
 body:not(.theme-light) #bg-mobile-topbar{background:rgba(42,50,71,.97)!important}
 /* Arqueo: casillas del conteo de billetes en blanco con número oscuro (antes oscuro sobre oscuro) */
 input[onkeydown^="cajaDenomEnter"]{background:#fff!important;color:#111827!important;font-size:22px!important;font-weight:900!important;-webkit-text-fill-color:#111827}
-input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.45)!important}
+input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.45)!important}
 /* Fotos de productos */
 .bg5-thumb{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#fff;padding:2px;border:1px solid var(--border);flex:0 0 auto;vertical-align:middle;margin-right:8px}
 .ac-item .bg5-thumb{float:left;width:44px;height:44px}
@@ -15684,7 +15689,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       return '<button type="button" class="bg5-tile'+(st<=0?' sin':'')+'" onclick="bg5Tile(\''+esc(p.id)+'\')" title="'+esc(p.nombre)+'">'+
         (enCarro[p.id]?'<span class="qn">'+enCarro[p.id]+'</span>':'')+
         (st<=0?'<span class="st cero">Sin stock</span>':(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'<span class="st">'+st+'</span>':''))+
-        '<div class="im" style="'+(p.imagen_url?'':'background:'+esc(col))+'">'+im+'</div>'+
+        '<div class="im" style="'+(p.imagen_url?'':(/^#[0-9a-f]{6}$/i.test(col)?'background:'+col+'26;color:'+col:'background:'+esc(col)))+'">'+im+'</div>'+
         '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(precioDe(p))+'</div></button>';
     }).join('')||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">No hay productos para mostrar</div>';
     var pg=gsx('bg5-pag');
@@ -15868,7 +15873,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
       return '<div role="button" tabindex="0" class="bg5-tile" onclick="bgcAdd(\''+esc(p.id)+'\',null)" title="'+esc(p.nombre)+'">'+
         (enOrden[p.id]?'<span class="qn">'+enOrden[p.id]+'</span>':'')+
         '<span class="st'+(st<=0?' cero':'')+'">'+st+'</span>'+
-        '<div class="im" style="'+(p.imagen_url?'':'background:'+esc(col))+'">'+im+'</div>'+
+        '<div class="im" style="'+(p.imagen_url?'':(/^#[0-9a-f]{6}$/i.test(col)?'background:'+col+'26;color:'+col:'background:'+esc(col)))+'">'+im+'</div>'+
         '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(p.precio_costo||0)+'</div>'+
         (r>0?'<div class="rot">Vende '+r+'/día</div>':'')+
         (embs.length?'<div class="pk">'+embs.slice(0,3).map(function(e){ return '<button type="button" onclick="bgcAdd(\''+esc(p.id)+'\',\''+esc(e.id)+'\',event)">x'+n(e.cantidad)+'</button>'; }).join('')+'</div>':'')+
@@ -15955,6 +15960,33 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(91,139,255,.4
 </script>
 <!-- ══ FIN PARCHE 8 ══ -->
 <!-- ══ PEDIDOS ONLINE (asadito + bodega) ══ -->
+<style id="bg-visual-v1">
+/* Pasada visual: menú corto, lo técnico va al menú del usuario, mayorista opcional, mosaicos suaves */
+#bg-theme-btn,#sidebar .cfg-btn{display:none!important}
+body #sidebar nav#macos-main-menu > a#nav-usuarios{display:none!important} /* Usuarios va en el menú del usuario */
+body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
+#sidebar .logo{cursor:pointer}
+.bg5-tile .im .ini{color:inherit}
+</style>
+<script id="bg-visual-v1-js">
+(function(){
+  var K='bg_mayorista';
+  function on(){try{return localStorage.getItem(K)==='1';}catch(e){return false;}}
+  function apply(){document.body.classList.toggle('con-mayorista',on());}
+  window.bgToggleMayorista=function(){
+    try{localStorage.setItem(K,on()?'0':'1');}catch(e){}
+    apply();
+    if(!on()&&typeof ventaTipo!=='undefined'&&ventaTipo==='mayorista'&&typeof setVTipo==='function')setVTipo('minorista');
+    toast(on()?'Ventas mayoristas activadas':'Ventas mayoristas ocultas');
+  };
+  function boot(){
+    apply();
+    var lg=document.querySelector('#sidebar .logo');
+    if(lg&&!lg.__inicio){lg.__inicio=1;lg.title='Inicio';lg.addEventListener('click',function(){if(typeof goTo==='function')goTo('inicio');});}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
 <link rel="stylesheet" href="pedidos-admin.css">
 <script src="pedidos-admin.js"></script>
 <!-- ══ FIN PEDIDOS ONLINE ══ -->
