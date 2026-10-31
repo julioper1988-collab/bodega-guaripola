@@ -231,6 +231,11 @@
     // productos del sistema de control de asaditos (no se modifican; la configuración online va aparte)
     var ra=await sb.rpc('pedidos_asadito_admin'); if(!ra.error) ra.data=(ra.data||[]).filter(function(p){return p.activo;});
     var CATS_A=['ASADITO','EMBUTIDO','BEBIDA','OTROS'];
+    // foto del asadito para la página de pedidos (se guarda en la configuración online)
+    var fotoA=function(p){return '<label title="'+(p.imagen_url?'Cambiar foto':'Agregar foto')+'" style="flex:0 0 auto;width:44px;height:44px;margin-left:8px;border-radius:10px;border:1px dashed var(--border2,#ccc);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:var(--bg3,#f3f4f6)">'+
+      (p.imagen_url?'<img src="'+h(p.imagen_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">':'📷')+
+      '<input type="file" accept="image/*" hidden onchange="pedAsaditoFoto(\''+p.id+'\',this,\''+h(p.imagen_url||'')+'\')"></label>'+
+      (p.imagen_url?'<button type="button" class="btn btn-secondary btn-sm" title="Quitar foto" style="padding:2px 6px;margin-left:2px" onclick="pedAsaditoFoto(\''+p.id+'\',null,\''+h(p.imagen_url)+'\')">✕</button>':'');};
     var catSel=function(p){return '<select style="width:auto;padding:4px;font-size:12px" onclick="event.stopPropagation()" onchange="pedAsaditoCat(\''+p.id+'\',this.value)">'+CATS_A.map(function(c){return '<option'+(p.categoria===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>';};
     var t=bodQ, qb=sb.from('bodega_productos').select('id,nombre,precio_venta,stock,vender_online,envase_id,destacado_online').eq('activo',true).order('nombre').limit(200);
     qb=t?qb.ilike('nombre','%'+t.replace(/[%_,()]/g,' ')+'%'):qb.eq('vender_online',true);
@@ -243,7 +248,7 @@
     var row=function(origen,p,precio,sub){return '<label class="ped-row"><input type="checkbox" '+(p.vender_online?'checked':'')+' onchange="pedToggle(\''+origen+'\',\''+p.id+'\',this.checked)"><span style="flex:1">'+h(p.nombre)+(sub?' <span class="ped-meta">· '+h(sub)+'</span>':'')+'</span><span class="ped-meta">'+fmtGs(precio)+'</span></label>';};
     b.innerHTML='<div class="alert" style="margin-bottom:12px">Marcá lo que tus clientes pueden pedir en <a href="'+h(URL_PUBLICA)+'" target="_blank" rel="noopener">'+h(URL_PUBLICA)+'</a>. Los precios son los mismos del sistema. Tocá ⭐ para mostrar un producto en «Destacados» (hasta 8).</div>'+
       '<div class="ped-grid">'+
-      '<div class="card"><div class="card-header"><h3>🔥 Asadito</h3></div>'+'<div class="ped-meta" style="padding:8px 12px">Productos y precios de tu sistema de control de asaditos.</div>'+(ra.error?'<div class="alert alert-error">'+h(ra.error.message)+'</div>':(ra.data||[]).map(function(p){return '<div style="display:flex;align-items:center">'+row('asadito',p,p.precio,'').replace('class="ped-row"','class="ped-row" style="flex:1"')+catSel(p)+'</div>';}).join(''))+'</div>'+
+      '<div class="card"><div class="card-header"><h3>🔥 Asadito</h3></div>'+'<div class="ped-meta" style="padding:8px 12px">Productos y precios de tu sistema de control de asaditos.</div>'+(ra.error?'<div class="alert alert-error">'+h(ra.error.message)+'</div>':(ra.data||[]).map(function(p){return '<div style="display:flex;align-items:center">'+fotoA(p)+row('asadito',p,p.precio,'').replace('class="ped-row"','class="ped-row" style="flex:1"')+catSel(p)+'</div>';}).join(''))+'</div>'+
       '<div class="card"><div class="card-header"><h3>🛒 Bodega</h3></div><div style="padding:10px"><input id="ped-bodq" placeholder="Buscar producto para agregar…" value="'+h(bodQ)+'" oninput="pedBodQ(this.value)" style="width:100%"></div>'+
       (lista.length?lista.map(function(p){return '<div style="display:flex;align-items:center">'+row('bodega',p,p.precio_venta,(Number(p.stock)||0)+' en stock').replace('class="ped-row"','class="ped-row" style="flex:1"')+envSel(p)+(p.vender_online?'<button type="button" class="btn btn-secondary btn-sm" title="Destacar en la página" style="margin:0 8px 0 6px;flex:0 0 auto;'+(p.destacado_online?'color:#f59e0b;border-color:#f59e0b':'opacity:.45')+'" onclick="pedDestacar(\''+p.id+'\','+(!p.destacado_online)+')">⭐</button>':'')+'</div>';}).join(''):'<div class="ped-meta" style="padding:12px">'+(t?'Sin resultados':'Todavía no hay productos de bodega online. Buscá arriba para agregar.')+'</div>')+'</div>'+
       '</div>';
@@ -254,6 +259,32 @@
     var r=await sb.from('pedidos_asadito_online').upsert({prod_id:id,categoria:cat,updated_at:new Date().toISOString()},{onConflict:'prod_id'});
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast('Categoría: '+cat);
+  };
+  // Reduce la foto a 400px y la pasa a WebP (igual que en bodega)
+  function fotoWebp(file){
+    return new Promise(function(res,rej){
+      var img=new Image(), u=URL.createObjectURL(file);
+      img.onload=function(){var r=Math.min(1,400/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);c.toBlob(function(b){b?res(b):rej(new Error('No se pudo procesar la imagen'));},'image/webp',0.8);};
+      img.onerror=function(){URL.revokeObjectURL(u);rej(new Error('Archivo de imagen inválido'));};
+      img.src=u;
+    });
+  }
+  window.pedAsaditoFoto=async function(id,inp,anterior){
+    try{
+      var url=null;
+      if(inp){var f=inp.files&&inp.files[0];inp.value='';if(!f)return;
+        toast('Subiendo foto…');
+        var blob=await fotoWebp(f), path='asadito/'+id+'/'+Date.now()+'.webp';
+        var up=await sb.storage.from('productos').upload(path,blob,{contentType:'image/webp',cacheControl:'31536000',upsert:false});
+        if(up.error) throw up.error;
+        url=sb.storage.from('productos').getPublicUrl(path).data.publicUrl;
+      }else if(!(await bgConfirm('¿Quitar la foto de este asadito?'))) return;
+      var r=await sb.from('pedidos_asadito_online').upsert({prod_id:id,imagen_url:url,updated_at:new Date().toISOString()},{onConflict:'prod_id'});
+      if(r.error) throw r.error;
+      var m=String(anterior||'').match(/\/object\/public\/productos\/(.+)$/); if(m) sb.storage.from('productos').remove([decodeURIComponent(m[1].split('?')[0])]).catch(function(){});
+      toast(url?'📷 Foto guardada':'Foto quitada'); pedRenderCatalogo();
+    }catch(e){toast('No se pudo guardar la foto: '+(e.message||e),'err');}
   };
   window.pedEnvase=async function(id,envId){
     var r=await sb.from('bodega_productos').update({envase_id:envId||null}).eq('id',id);
