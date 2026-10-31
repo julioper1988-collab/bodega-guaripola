@@ -91,7 +91,9 @@ self.addEventListener('fetch', event => {
   const method = event.request.method;
 
   // Página pública de pedidos: siempre red, sin cachear como index.html
-  if(/\/(pedidos(-nuevo)?|entrega)\.html$/.test(new URL(url).pathname)) return;
+  if(/\/(pedidos(-nuevo|-admin)?|entrega)\.html$/.test(new URL(url).pathname)) return;
+  // App Pedidos (módulo compartido con la app Bodega): siempre la última versión desde la red
+  if(/\/pedidos-admin\.(js|css|webmanifest)$/.test(new URL(url).pathname)) return;
 
   // Supabase POST/PATCH/DELETE: directo a la red, sin encolar.
   // (La cola anterior respondía 202 falso: la app mostraba error y luego la
@@ -228,11 +230,16 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || './index.html#pedidos', self.registration.scope).href;
+  // Los avisos de pedidos abren la app Pedidos (o la app Bodega si es la que está abierta)
+  let dest = event.notification.data?.url || './pedidos-admin.html';
+  if(dest.includes('index.html#pedidos')) dest = './pedidos-admin.html';
+  const url = new URL(dest, self.registration.scope).href;
   event.waitUntil((async () => {
     const list = await self.clients.matchAll({type:'window', includeUncontrolled:true});
+    const adm = list.find(c => c.url.includes('pedidos-admin.html'));
+    if(adm){ await adm.focus(); adm.postMessage({type:'OPEN_PEDIDOS'}); return; }
     for(const c of list){
-      if(c.url.startsWith(self.registration.scope) && !c.url.includes('pedidos.html')){
+      if(c.url.startsWith(self.registration.scope) && !/pedidos\.html|entrega\.html/.test(c.url)){
         await c.focus();
         c.postMessage({type:'OPEN_PEDIDOS'});
         return;

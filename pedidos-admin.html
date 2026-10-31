@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Guaripola Pedidos</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1c2838">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="pedidos-admin.webmanifest">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<style>
+/* App Pedidos: base mínima que necesita el módulo compartido (pedidos-admin.js / .css) */
+:root{--bg:#f4f5f8;--bg2:#fff;--bg3:#f0f1f4;--bg4:#e8eaf0;--border:#e2e5ec;--border2:#d5d9e2;--text:#202733;--text2:#7b828d;--text3:#3d4450;
+  --accent:#ef6a24;--accent2:#d65413;--accent-bg:#fff3ea;--green:#2b8a3e;--green-bg:#e9f7ec;--red:#d63c3c;--red-bg:#fdecec;--amber:#b7791f;--amber-bg:#fff6e5;
+  --radius:10px;--radius-lg:16px;--shadow:0 2px 10px #19263b0d;--shadow-lg:0 12px 40px #0003;color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent2)}
+.top{position:sticky;top:0;z-index:20;background:#1c2838;color:#fff;padding:calc(10px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px}
+.top h1{font-size:17px;flex:1;display:flex;align-items:center;gap:8px}
+.top .who{font-size:12px;color:#c6cdd7;background:none;border:1px solid #ffffff33;border-radius:999px;padding:5px 10px;cursor:pointer}
+.top a.bod{font-size:12px;color:#fff;text-decoration:none;border:1px solid #ffffff33;border-radius:999px;padding:5px 10px}
+#content{max-width:1200px;margin:0 auto;padding:14px max(14px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px}
+.card-header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.card-header h3{font-size:15px;font-weight:800;flex:1}
+table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius);border:none;cursor:pointer;font:600 13px inherit;font-family:inherit;transition:background .15s,transform .12s;text-decoration:none}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--bg2);color:var(--text3);border:1px solid var(--border2)}.btn-secondary:hover{border-color:var(--accent);color:var(--accent2)}
+.btn-danger{background:transparent;color:var(--red);border:1px solid var(--border2)}
+.btn-sm{padding:6px 11px;font-size:12px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}.form-group label{font-size:12px;color:var(--text2);font-weight:600}
+input,select,textarea{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:9px 11px;font-size:14px;outline:none;width:100%;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px #ef6a2426}
+.alert{padding:12px 16px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;font-weight:500;border-left:4px solid var(--border2);background:var(--bg2)}
+.alert-warning{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
+.alert-error{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+.spinner{width:32px;height:32px;margin:30px auto;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay{position:fixed;inset:0;background:#0b152087;z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+.overlay.show{display:flex}
+.modal{background:var(--bg2);border-radius:var(--radius-lg);width:100%;max-width:640px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal-header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-header h3{flex:1;font-size:16px;font-weight:800}
+.modal-header .close{background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:4px;line-height:1}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--bg3)}
+#toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));right:16px;left:16px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.toast-msg{background:#243142;color:#fff;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:600;box-shadow:0 8px 24px #0003;max-width:420px;border-left:4px solid var(--green)}
+.toast-msg.err{border-left-color:var(--red)}
+.login{max-width:380px;margin:40px auto;background:#fff;border-radius:20px;padding:24px;box-shadow:var(--shadow)}
+.login h2{font-size:20px;margin-bottom:4px}.login p{color:var(--text2);font-size:13px;margin-bottom:16px}
+.login .form-group{margin-bottom:12px}
+@media (max-width:700px){.form-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px}.modal-footer .btn{flex:1;justify-content:center}}
+</style>
+<link rel="stylesheet" href="pedidos-admin.css">
+</head>
+<body>
+<header class="top">
+  <h1>🛵 Guaripola Pedidos <span id="ped-badge" class="ped-badge" style="display:none"></span></h1>
+  <a class="bod" href="index.html">🛒 Bodega</a>
+  <button class="who" id="who" onclick="menuUsuario()">👤</button>
+</header>
+<div id="content"><div class="spinner"></div></div>
+
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modal-title"></h3><button class="close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="modal-confirm">Guardar</button></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// Misma base y misma sesión que la app Bodega (mismo dominio): si ya entraste allá, entrás directo
+const SB_URL=(()=>{try{return localStorage.getItem('bg_url')||'';}catch(e){return '';}})()||'https://sdpysvowvwucjfnyosuf.supabase.co';
+const SB_KEY=(()=>{try{return localStorage.getItem('bg_key')||'';}catch(e){return '';}})()||'sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const gs=id=>document.getElementById(id);
+const fmtGs=n=>'Gs. '+Math.round(n||0).toLocaleString('es-PY');
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function toast(msg,type='ok'){const el=document.createElement('div');el.className='toast-msg '+type;el.textContent=msg;gs('toast').appendChild(el);setTimeout(()=>el.remove(),3500);}
+function openModal(title,body,confirmFn,confirmText='Guardar'){
+  gs('modal-title').textContent=title;gs('modal-body').innerHTML=body;gs('modal-confirm').textContent=confirmText;
+  gs('modal-confirm').onclick=confirmFn;gs('modal-confirm').style.display=confirmFn?'':'none';gs('modal-overlay').classList.add('show');
+}
+function closeModal(){gs('modal-overlay').classList.remove('show');gs('modal-confirm').style.display='';}
+function bgConfirm(mensaje,opts={}){
+  return new Promise(resolve=>{
+    const {title='¿Confirmar acción?',confirmText='Confirmar',cancelText='Cancelar',variant='primary'}=opts;
+    gs('modal-title').textContent=({danger:'⚠️',warning:'🔔'}[variant]||'❓')+' '+title;
+    gs('modal-body').innerHTML='<p style="font-size:14px;line-height:1.6;margin:0 0 18px">'+mensaje+'</p><div style="display:flex;gap:10px;justify-content:flex-end"><button id="bgc-no" class="btn btn-secondary">'+escapeHtml(cancelText)+'</button><button id="bgc-si" class="btn '+(variant==='danger'?'btn-danger':'btn-primary')+'">'+escapeHtml(confirmText)+'</button></div>';
+    gs('modal-confirm').style.display='none';gs('modal-overlay').classList.add('show');
+    const fin=v=>{closeModal();resolve(v);};gs('bgc-si').onclick=()=>fin(true);gs('bgc-no').onclick=()=>fin(false);
+  });
+}
+// El módulo navega con goTo('pedidos'): acá es la única pantalla
+function goTo(){if(window.renderPedidosOnline&&usuario)renderPedidosOnline();}
+
+// ─── Usuario: mismos usuarios y PIN que la app Bodega; hace falta el módulo «Pedidos online» o ser admin ───
+let usuario=null;
+const puede=u=>u&&u.activo!==false&&(u.rol==='admin'||!!(u.modulos||{}).pedidos);
+async function entrar(){
+  const {data:s}=await sb.auth.getSession();
+  if(s&&s.session&&s.session.user){
+    const {data:p}=await sb.from('bodega_usuarios').select('*').eq('auth_id',s.session.user.id).maybeSingle();
+    if(p&&puede(p)){usuario=p;gs('who').textContent='👤 '+p.nombre;renderPedidosOnline();return;}
+    if(p){gs('content').innerHTML='<div class="login"><h2>Sin acceso</h2><p>'+escapeHtml(p.nombre)+' no tiene permiso para «Pedidos online». Pedile al administrador que lo habilite en Usuarios.</p><button class="btn btn-secondary" onclick="salir()">Entrar con otro usuario</button></div>';return;}
+  }
+  login();
+}
+async function login(){
+  const {data,error}=await sb.from('bodega_usuarios_login').select('*').order('nombre');
+  if(error){gs('content').innerHTML='<div class="login"><h2>Sin conexión</h2><p>No se pudo conectar. Revisá internet y volvé a intentar.</p><button class="btn btn-primary" onclick="entrar()">Reintentar</button></div>';return;}
+  gs('content').innerHTML='<div class="login"><h2>🛵 Guaripola Pedidos</h2><p>Entrá con tu usuario y PIN (los mismos de la app Bodega).</p>'+
+    '<div class="form-group"><label>Usuario</label><select id="l-user">'+(data||[]).map(u=>'<option value="'+escapeHtml(u.auth_email)+'">'+escapeHtml(u.nombre)+'</option>').join('')+'</select></div>'+
+    '<div class="form-group"><label>PIN</label><input id="l-pin" type="password" inputmode="numeric" onkeydown="if(event.key===\'Enter\')ingresar()"></div>'+
+    '<button class="btn btn-primary" style="width:100%;justify-content:center" id="l-btn" onclick="ingresar()">Entrar</button></div>';
+}
+async function ingresar(){
+  const b=gs('l-btn');b.disabled=true;
+  const {error}=await sb.auth.signInWithPassword({email:gs('l-user').value,password:'gpola_'+(gs('l-pin').value||'')});
+  b.disabled=false;
+  if(error){toast('Usuario o PIN incorrecto','err');return;}
+  try{sb.rpc('registrar_login');}catch(e){}
+  entrar();
+}
+async function salir(){try{await sb.auth.signOut();}catch(e){}usuario=null;gs('who').textContent='👤';closeModal();login();}
+function menuUsuario(){if(!usuario)return;openModal('Usuario','<p style="margin-bottom:12px">'+escapeHtml(usuario.nombre)+' · '+escapeHtml(usuario.rol)+'</p><button class="btn btn-secondary" onclick="salir()">Cerrar sesión</button>',null,'');}
+</script>
+<script src="pedidos-admin.js"></script>
+<script>
+entrar();
+// Avisos push y apertura desde la notificación: mismo service worker que la app Bodega
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>
