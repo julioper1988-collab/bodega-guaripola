@@ -1,0 +1,23 @@
+/* Pedidos online (admin): compartido por index.html y pedidos-admin.html */
+.ped-badge{display:inline-block;min-width:18px;padding:1px 6px;margin-left:4px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;text-align:center}
+.ped-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ped-tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ped-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.ped-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.ped-card.pendiente{border-color:var(--red);box-shadow:0 0 0 2px var(--red-bg)}
+.ped-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ped-num{font-size:18px;font-weight:800}
+.ped-est{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--bg3);text-transform:uppercase}
+.ped-est.pendiente{background:var(--red-bg);color:var(--red)}
+.ped-est.entregado{background:var(--green-bg);color:var(--green)}
+.ped-sec{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-top:4px}
+.ped-it{display:flex;justify-content:space-between;font-size:13px}
+.ped-tot{display:flex;justify-content:space-between;font-weight:800;border-top:1px solid var(--border);padding-top:6px}
+.ped-acts{display:flex;gap:6px;flex-wrap:wrap}
+.ped-meta{font-size:13px;color:var(--text2);overflow-wrap:anywhere}
+.ped-meta a{color:var(--accent)}
+.ped-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer}
+.ped-row input{width:18px;height:18px}
+.ped-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+.ped-sum div{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.ped-sum b{display:block;font-size:18px}
