@@ -16025,6 +16025,12 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
   body #content .search-bar:has(#hv-fecha-desde) > .form-group{max-width:none!important;min-width:0!important;margin:0!important}
   body #content .search-bar:has(#hv-fecha-desde) > .form-group > div{flex-direction:column;gap:4px!important}
   body #content .search-bar:has(#hv-fecha-desde) input,body #content .search-bar:has(#hv-fecha-desde) select{min-width:0!important;width:100%!important}
+  /* Productos: categoría y «Cargar producto» en la misma fila */
+  body #content .prod-excel-toolbar{display:flex!important;flex-wrap:wrap;gap:8px}
+  body #content .prod-excel-toolbar > .scan-row{flex:1 1 100%!important;min-width:0!important}
+  body #content .prod-excel-toolbar > *{margin:0!important}
+  body #content .prod-excel-toolbar select{flex:1 1 0!important;width:auto!important;min-width:0!important}
+  body #content .prod-excel-toolbar .product-new-btn{flex:0 0 auto!important}
   /* Clientes: buscador a lo ancho */
   body #content div:has(> .form-group > #cli-search){grid-template-columns:1fr auto!important}
   body #content div:has(> .form-group > #cli-search) > .form-group:first-child{grid-column:1/-1}
@@ -16072,6 +16078,138 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     row.addEventListener('change',function(){b.textContent=txt();});
   }
   new MutationObserver(function(){if(document.getElementById('inv-meta-row'))metaToggle();}).observe(document.documentElement,{childList:true,subtree:true});
+})();
+</script>
+<style id="bg-inicio-v2">
+/* Cámara: en PC el lector USB escribe en el buscador → se oculta; en el celular queda solo el ícono */
+@media (hover:hover) and (pointer:fine){
+  body .scan-btn,body button[onclick^="invAbrirCamara"]{display:none!important}
+}
+@media (hover:none),(pointer:coarse){
+  body .scan-btn,body button[onclick^="invAbrirCamara"]{font-size:0!important;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px!important}
+  body .scan-btn::before,body button[onclick^="invAbrirCamara"]::before{content:'📷';font-size:20px}
+}
+/* Inicio */
+.in3{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.in3-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.in3-hola{font-size:20px;font-weight:900;color:var(--text)}.in3-hola small{display:block;font-size:12px;font-weight:600;color:var(--text3)}
+.in3-caja{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer}
+.in3-caja i{width:9px;height:9px;border-radius:50%;background:var(--red)}.in3-caja.on i{background:var(--green)}
+.in3-vender{display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:16px;padding:16px;font-family:inherit;font-size:18px;font-weight:900;color:#fff;background:linear-gradient(135deg,#ef6a24,#d65413);box-shadow:0 8px 24px rgba(239,106,36,.3);cursor:pointer}
+.in3-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.in3-k{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px 14px;min-width:0}
+.in3-k span{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
+.in3-k b{display:block;font-size:20px;font-weight:900;color:var(--text);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.in3-k small{display:block;font-size:11px;font-weight:700;color:var(--text3);margin-top:2px}.in3-k small.up{color:var(--green)}.in3-k small.down{color:var(--red)}
+.in3-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;align-items:start}
+.in3-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.in3-card h3{font-size:13px;font-weight:900;margin:0;padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text);display:flex;justify-content:space-between;gap:8px}
+.in3-card h3 a{font-size:11px;color:var(--accent);cursor:pointer;font-weight:800}
+.in3-horas{display:flex;align-items:flex-end;gap:3px;height:110px;padding:12px 14px 4px}
+.in3-horas div{flex:1;background:rgba(239,106,36,.75);border-radius:3px 3px 0 0;min-height:2px}
+.in3-horas div.now{background:#ef6a24}
+.in3-hlab{display:flex;justify-content:space-between;padding:0 14px 10px;font-size:10px;color:var(--text3);font-weight:700}
+.in3-li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer}
+.in3-li:last-child{border-bottom:0}.in3-li b{font-weight:800}.in3-li span{color:var(--text3);font-size:12px;white-space:nowrap}
+.in3-li .nm{color:var(--text);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.in3-al{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px}
+.in3-al button{border:1px solid var(--border);background:var(--bg3);color:var(--text);border-radius:10px;padding:8px 10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.in3-al button b{color:var(--red)}.in3-al button.warn b{color:var(--amber,#f59e0b)}
+.in3-acc{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.in3-acc button{border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:12px;padding:10px 4px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+.in3-acc button i{font-style:normal;font-size:20px}
+.in3-vacio{padding:14px;color:var(--text3);font-size:12px}
+@media (max-width:900px){
+  .in3-kpis{grid-template-columns:1fr 1fr}.in3-grid{grid-template-columns:1fr}.in3-acc{grid-template-columns:repeat(3,1fr)}
+  .in3-k b{font-size:18px}
+}
+</style>
+<script id="bg-inicio-v2-js">
+/* Inicio: lo del día (caja, ventas, horas, más vendidos, alertas de stock) + accesos */
+(function(){
+  var e=function(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var gs_=function(n){return typeof fmtGs==='function'?fmtGs(n):'Gs. '+Math.round(n||0).toLocaleString('es-PY');};
+  var hoyPY=function(){return typeof fechaHoyPY==='function'?fechaHoyPY():new Date().toISOString().slice(0,10);};
+  var masDias=function(f,d){var t=new Date(f+'T12:00:00');t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
+  var horaPY=function(iso){try{return Number(new Date(iso).toLocaleString('en-US',{timeZone:'America/Asuncion',hour:'numeric',hour12:false}))%24;}catch(_){return new Date(iso).getHours();}};
+  var hhmm=function(iso){try{return new Date(iso).toLocaleTimeString('es-PY',{timeZone:'America/Asuncion',hour:'2-digit',minute:'2-digit'});}catch(_){return '';}};
+  window.renderInicio=async function(){
+    var cont=document.getElementById('content'); if(!cont) return;
+    cont.className='';
+    var nombre=(window.usuarioActual&&usuarioActual.nombre)||'';
+    var fecha=new Date().toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});fecha=fecha.charAt(0).toUpperCase()+fecha.slice(1);
+    var acc=function(pg,ico,t){return '<button onclick="goTo(\''+pg+'\')"><i>'+ico+'</i>'+t+'</button>';};
+    cont.innerHTML='<div class="in3">'+
+      '<div class="in3-top"><div class="in3-hola">Hola'+(nombre?', '+e(nombre):'')+' 👋<small>'+e(fecha)+'</small></div>'+
+        '<div class="in3-caja" id="in3-caja" onclick="goTo(\'caja\')"><i></i>Caja…</div></div>'+
+      '<button class="in3-vender" onclick="goTo(\'ventas\')">🛒 Nueva venta</button>'+
+      '<div class="in3-kpis" id="in3-kpis">'+['Ventas de hoy','Cantidad','Ticket promedio','Fiado pendiente'].map(function(t){return '<div class="in3-k"><span>'+t+'</span><b>…</b><small>&nbsp;</small></div>';}).join('')+'</div>'+
+      '<div class="in3-grid">'+
+        '<div class="in3-card"><h3>Ventas por hora (hoy)</h3><div id="in3-horas"><div class="in3-vacio">Cargando…</div></div></div>'+
+        '<div class="in3-card"><h3>Más vendidos hoy</h3><div id="in3-top"><div class="in3-vacio">Cargando…</div></div></div>'+
+        '<div class="in3-card"><h3>Stock para revisar <a onclick="goTo(\'productos\')">Ver productos ›</a></h3><div id="in3-al" class="in3-al"></div></div>'+
+        '<div class="in3-card"><h3>Últimas ventas <a onclick="goTo(\'historial-ventas\')">Historial ›</a></h3><div id="in3-ult"><div class="in3-vacio">Cargando…</div></div></div>'+
+      '</div>'+
+      '<div class="in3-acc">'+acc('compras','📦','Compra')+acc('inventario','📋','Inventario')+acc('productos','🏷️','Productos')+acc('clientes','👥','Clientes')+acc('caja','💰','Caja')+acc('reportes','📈','Reportes')+'</div>'+
+    '</div>';
+
+    // Alertas de stock (de la memoria, sin consultas)
+    try{
+      var act=(prodCache||[]).filter(function(p){return p.activo!==false;});
+      var neg=act.filter(function(p){return Number(p.stock)<0;}).length;
+      var cero=act.filter(function(p){return Number(p.stock)===0;}).length;
+      var bajo=act.filter(function(p){var s=Number(p.stock),m=Number(p.stock_minimo)||0;return s>0&&m>0&&s<=m;}).length;
+      var go=function(f){return 'goTo(\'productos\');setTimeout(function(){try{bgSetProdFilter(\''+f+'\')}catch(_){}},150)';};
+      document.getElementById('in3-al').innerHTML=(neg||cero||bajo)?
+        (neg?'<button onclick="'+go('sin_stock')+'"><b>'+neg+'</b> con stock negativo</button>':'')+
+        (cero?'<button onclick="'+go('sin_stock')+'"><b>'+cero+'</b> sin stock</button>':'')+
+        (bajo?'<button class="warn" onclick="'+go('stock_bajo')+'"><b>'+bajo+'</b> bajo el mínimo</button>':''):
+        '<span class="in3-vacio" style="padding:0">Todo en orden ✅</span>';
+    }catch(_){}
+
+    if(!sb) return;
+    var hoy=hoyPY(), semPas=masDias(hoy,-7), ahora=new Date(), haceSem=new Date(ahora.getTime()-7*864e5).toISOString();
+    var r=await Promise.all([
+      sb.from('bodega_caja').select('id,opened_at,usuario_apertura').is('closed_at',null).order('opened_at',{ascending:false}).limit(1),
+      sb.from('bodega_ventas').select('id,numero_venta,total_final,metodo_pago,cliente_nombre,created_at').eq('fecha',hoy).order('created_at',{ascending:false}).limit(1000),
+      sb.from('bodega_ventas').select('total_final').eq('fecha',semPas).lte('created_at',haceSem).limit(1000),
+      sb.from('bodega_fiados').select('saldo').gt('saldo',0).limit(5000)
+    ]).catch(function(){return null;});
+    if(!r||!document.getElementById('in3-kpis')) return;
+    var caja=(r[0].data||[])[0], ventas=r[1].data||[], prev=r[2].data||[], fiados=r[3].data||[];
+    var cj=document.getElementById('in3-caja');
+    if(cj){ cj.className='in3-caja'+(caja?' on':''); cj.innerHTML='<i></i>'+(caja?'Caja abierta desde '+hhmm(caja.opened_at)+(caja.usuario_apertura?' · '+e(caja.usuario_apertura):''):'Caja cerrada · tocá para abrir'); }
+    var tot=ventas.reduce(function(a,v){return a+Number(v.total_final||0);},0), totPrev=prev.reduce(function(a,v){return a+Number(v.total_final||0);},0);
+    var deuda=fiados.reduce(function(a,f){return a+Number(f.saldo||0);},0);
+    var cmp='&nbsp;',cls='';
+    if(totPrev>0){var d=Math.round((tot-totPrev)/totPrev*100);cmp=(d>=0?'▲ ':'▼ ')+Math.abs(d)+'% vs. '+new Date(semPas+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long'})+' pasado';cls=d>=0?'up':'down';}
+    var k=function(t,v,sm,c){return '<div class="in3-k"><span>'+t+'</span><b>'+v+'</b><small class="'+(c||'')+'">'+sm+'</small></div>';};
+    document.getElementById('in3-kpis').innerHTML=
+      k('Ventas de hoy',gs_(tot),cmp,cls)+
+      k('Cantidad',ventas.length,ventas.length===1?'venta':'ventas')+
+      k('Ticket promedio',gs_(ventas.length?tot/ventas.length:0),'&nbsp;')+
+      k('Fiado pendiente',gs_(deuda),fiados.length+' deuda'+(fiados.length===1?'':'s'),'');
+    // Ventas por hora (0 a 23 h)
+    var hs=[];for(var h=0;h<24;h++)hs.push(0);
+    ventas.forEach(function(v){hs[horaPY(v.created_at)]+=Number(v.total_final||0);});
+    var mx=Math.max.apply(null,hs)||1, hNow=horaPY(ahora.toISOString());
+    document.getElementById('in3-horas').innerHTML=ventas.length?
+      '<div class="in3-horas">'+hs.map(function(x,i){return '<div class="'+(i===hNow?'now':'')+'" style="height:'+Math.max(2,Math.round(x/mx*100))+'%" title="'+i+' h · '+gs_(x)+'"></div>';}).join('')+'</div><div class="in3-hlab"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>':
+      '<div class="in3-vacio">Todavía no hay ventas hoy.</div>';
+    // Últimas ventas
+    document.getElementById('in3-ult').innerHTML=ventas.length?ventas.slice(0,6).map(function(v){
+      return '<div class="in3-li" onclick="goTo(\'historial-ventas\')"><span>'+hhmm(v.created_at)+' · N° '+(v.numero_venta||'-')+'</span><span class="nm">'+e(v.cliente_nombre||v.metodo_pago||'')+'</span><b>'+gs_(v.total_final)+'</b></div>';
+    }).join(''):'<div class="in3-vacio">Sin ventas todavía.</div>';
+    // Más vendidos hoy
+    var ids=ventas.map(function(v){return v.id;}), top=document.getElementById('in3-top');
+    if(!ids.length){top.innerHTML='<div class="in3-vacio">Sin ventas todavía.</div>';return;}
+    var det=[];
+    for(var i=0;i<ids.length;i+=150){var q=await sb.from('bodega_ventas_detalle').select('producto_id,cantidad,precio_unitario').in('venta_id',ids.slice(i,i+150));det=det.concat(q.data||[]);}
+    var ag={};det.forEach(function(d){var a=ag[d.producto_id]||(ag[d.producto_id]={c:0,t:0});a.c+=Number(d.cantidad||0);a.t+=Number(d.cantidad||0)*Number(d.precio_unitario||0);});
+    var lista=Object.keys(ag).map(function(id){var p=(prodCache||[]).find(function(x){return String(x.id)===String(id);});return {n:p?p.nombre:'Producto',c:ag[id].c,t:ag[id].t};}).filter(function(x){return !/^delivery$/i.test(x.n);}).sort(function(a,b){return b.c-a.c;}).slice(0,6);
+    if(document.getElementById('in3-top')) top.innerHTML=lista.length?lista.map(function(x){return '<div class="in3-li"><span class="nm">'+e(x.n)+'</span><span>'+x.c+' uds · '+gs_(x.t)+'</span></div>';}).join(''):'<div class="in3-vacio">Sin datos.</div>';
+  };
+  try{ pages.inicio=window.renderInicio; pages.dashboard=window.renderInicio; }catch(_){}
 })();
 </script>
 <link rel="stylesheet" href="pedidos-admin.css">
