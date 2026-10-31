@@ -1,5 +1,5 @@
 /* ── Service Worker — Bodega Guaripola v2 ── */
-const CACHE_NAME = 'guaripola-v7';
+const CACHE_NAME = 'guaripola-v8';
 const DB_NAME = 'guaripola-offline';
 const DB_VERSION = 1;
 const SYNC_STORE = 'sync_queue';
