@@ -61,7 +61,10 @@
     if(p.estado==='aceptado') acts+=btn('🔥 Preparando',"pedEstado('"+p.id+"','preparando')",'btn-primary');
     if((p.estado==='aceptado'||p.estado==='preparando')&&p.entrega==='delivery') acts+=btn('🛵 En camino',"pedEstado('"+p.id+"','en_camino')",'btn-primary');
     if(['aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn('🎉 Entregado',"pedEstado('"+p.id+"','entregado')",'btn-primary');
-    if(bod.length&&p.estado!=='cancelado') acts+=btn(p.bodega_cargado?'🛒 Venta bodega ✓ (recargar)':'🛒 Cobrar bodega en caja',"pedCargarBodega('"+p.id+"')",p.bodega_cargado?'btn-secondary':'btn-primary');
+    // Al entregar, la venta de bodega (+ delivery) se registra sola; el cobro manual queda solo como respaldo
+    if(p.venta_bodega_num){}
+    else if(p.estado==='entregado'&&!p.bodega_cargado&&(bod.length||Number(p.costo_delivery)>0)) acts+=btn('↻ Registrar venta bodega',"pedVentaBodega('"+p.id+"')",'btn-primary');
+    else if(bod.length&&p.estado!=='cancelado'&&p.estado!=='entregado') acts+=btn(p.bodega_cargado?'🛒 Venta bodega ✓ (recargar)':'🛒 Cobrar bodega en caja',"pedCargarBodega('"+p.id+"')",'btn-secondary');
     if(p.entrega==='delivery'&&['pendiente','aceptado','preparando','en_camino'].indexOf(p.estado)>=0) acts+=btn(p.repartidor?'🛵 Reenviar a '+h(p.repartidor):'🛵 Enviar al delivery',"pedRepartidor('"+p.id+"')",p.repartidor?'btn-secondary':'btn-primary');
     acts+=btn('💬 WhatsApp',"pedWa('"+p.id+"')");
     if(['pendiente','aceptado','preparando'].indexOf(p.estado)>=0) acts+=btn('Cancelar',"pedEstado('"+p.id+"','cancelado')");
@@ -73,6 +76,9 @@
       '<div class="ped-meta">💳 '+h(PAGO_LBL[p.metodo_pago]||p.metodo_pago)+vuelto+'</div>'+
       (p.repartidor?'<div class="ped-meta">🛵 <b>'+h(p.repartidor)+'</b>'+(p.salio_at?' · salió '+hora(p.salio_at):' · todavía no salió')+(p.entregado_at?' · entregado '+hora(p.entregado_at):'')+'</div>':'')+
       (p.eta_at&&['aceptado','preparando','en_camino'].indexOf(p.estado)>=0?'<div class="ped-meta">🕐 '+(p.entrega==='delivery'?'Llega':'Listo')+' aprox. '+hora(p.eta_at)+'</div>':'')+
+      (p.venta_bodega_num?'<div class="ped-meta" style="color:var(--green);font-weight:700">🛒 Venta bodega #'+p.venta_bodega_num+' ✓ registrada al entregar</div>':'')+
+      (p.venta_bodega_aviso?'<div class="ped-meta" style="color:var(--amber,#b7791f);font-weight:600">⚠️ '+h(p.venta_bodega_aviso)+'</div>':'')+
+      (p.estado==='entregado'&&Number(p.total_asadito)>0?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px">🔥 Asadito: <b>'+fmtGs(p.total_asadito)+'</b> → pasar a la caja del asadito</div>':'')+
       (p.calificacion?'<div style="font-size:13px"><span style="color:#f5a623">'+'★'.repeat(p.calificacion)+'</span><span style="color:var(--border)">'+'★'.repeat(5-p.calificacion)+'</span>'+(p.calificacion_txt?' · '+h(p.calificacion_txt):'')+'</div>':'')+
       (p.alerta?'<div style="background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:6px 8px;font-size:13px">⚠️ '+h(p.alerta)+(p.promo==='delivery_gratis_primera'?' · se le aplicó delivery gratis de 1ª compra':'')+'</div>':'')+
       (p.mayor_18?'<div class="ped-meta" style="color:var(--red);font-weight:700">🔞 +18: verificar cédula al entregar</div>':'')+
@@ -95,6 +101,7 @@
     var r=await sb.from('pedidos_online').update({estado:est,updated_at:new Date().toISOString()}).eq('id',id);
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast('Pedido: '+EST[est]);
+    if(est==='entregado'){var pe=await getPed(id);if(pe&&pe.venta_bodega_num)toast('🛒 Venta bodega #'+pe.venta_bodega_num+' registrada: '+fmtGs(Number(pe.total_bodega)+Number(pe.costo_delivery||0)));else if(pe&&pe.venta_bodega_aviso)toast('⚠️ '+pe.venta_bodega_aviso,'err');}
     if(est==='aceptado'||est==='en_camino'){var p=await getPed(id);if(p)pedWaMsg(p,est);}
     pedRenderLista(); pedPoll();
   };
@@ -111,6 +118,11 @@
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast('Pedido aceptado');var p=await getPed(id);if(p)pedWaMsg(p,'aceptado');
     pedRenderLista(); pedPoll();
+  };
+  window.pedVentaBodega=async function(id){
+    var r=await sb.rpc('pedidos_venta_bodega',{p_id:id});
+    if(r.error||!r.data||!r.data.ok){toast('Error: '+((r.error&&r.error.message)||(r.data&&r.data.error)||'no se pudo registrar'),'err');return;}
+    toast(r.data.numero_venta?'Venta bodega #'+r.data.numero_venta+' registrada':'No había nada para registrar');pedRenderLista();
   };
   window.pedEliminar=async function(id){
     if(!(await bgConfirm('¿Eliminar este pedido cancelado? No se puede deshacer.',{title:'Eliminar pedido',confirmText:'Eliminar',variant:'warning'})))return;
