@@ -18,6 +18,14 @@
 .ped-meta a{color:var(--accent)}
 .ped-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer}
 .ped-row input{width:18px;height:18px}
+/* Catálogo online · bodega: nombre arriba a lo ancho; envase y ⭐ abajo */
+.ped-brow{border-bottom:1px solid var(--border)}
+.ped-brow .ped-row{border-bottom:0;padding-bottom:4px}
+.ped-bctl{display:flex;align-items:center;gap:8px;padding:0 12px 10px 40px}
+.ped-bctl select{flex:1;min-width:0;max-width:none!important}
+.ped-bctl .btn{margin:0!important}
+.ped-arow{display:flex;align-items:center;padding-left:4px}
+.ped-arow .ped-bctl{padding-left:40px}
 .ped-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
 .ped-sum div{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px}
 .ped-sum b{display:block;font-size:18px}
