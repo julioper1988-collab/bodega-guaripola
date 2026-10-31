@@ -232,7 +232,7 @@
     var ra=await sb.rpc('pedidos_asadito_admin'); if(!ra.error) ra.data=(ra.data||[]).filter(function(p){return p.activo;});
     var CATS_A=['ASADITO','EMBUTIDO','BEBIDA','OTROS'];
     var catSel=function(p){return '<select style="width:auto;padding:4px;font-size:12px" onclick="event.stopPropagation()" onchange="pedAsaditoCat(\''+p.id+'\',this.value)">'+CATS_A.map(function(c){return '<option'+(p.categoria===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>';};
-    var t=bodQ, qb=sb.from('bodega_productos').select('id,nombre,precio_venta,stock,vender_online,envase_id').eq('activo',true).order('nombre').limit(200);
+    var t=bodQ, qb=sb.from('bodega_productos').select('id,nombre,precio_venta,stock,vender_online,envase_id,destacado_online').eq('activo',true).order('nombre').limit(200);
     qb=t?qb.ilike('nombre','%'+t.replace(/[%_,()]/g,' ')+'%'):qb.eq('vender_online',true);
     var rb=await qb, lista=rb.data||[];
     // productos de envase (categoría ENVASES) para vincular a retornables
@@ -241,11 +241,11 @@
     var envases=re.data||[];
     var envSel=function(p){return envases.length?'<select title="Envase retornable" style="width:auto;max-width:170px;padding:4px;font-size:12px" onclick="event.stopPropagation()" onchange="pedEnvase(\''+p.id+'\',this.value)"><option value="">♻️ No retornable</option>'+envases.map(function(e){return '<option value="'+e.id+'"'+(p.envase_id===e.id?' selected':'')+'>♻️ '+h(e.nombre.replace(/^ENVASE /,''))+' · '+fmtGs(e.precio_venta)+'</option>';}).join('')+'</select>':'';};
     var row=function(origen,p,precio,sub){return '<label class="ped-row"><input type="checkbox" '+(p.vender_online?'checked':'')+' onchange="pedToggle(\''+origen+'\',\''+p.id+'\',this.checked)"><span style="flex:1">'+h(p.nombre)+(sub?' <span class="ped-meta">· '+h(sub)+'</span>':'')+'</span><span class="ped-meta">'+fmtGs(precio)+'</span></label>';};
-    b.innerHTML='<div class="alert" style="margin-bottom:12px">Marcá lo que tus clientes pueden pedir en <a href="'+h(URL_PUBLICA)+'" target="_blank" rel="noopener">'+h(URL_PUBLICA)+'</a>. Los precios son los mismos del sistema.</div>'+
+    b.innerHTML='<div class="alert" style="margin-bottom:12px">Marcá lo que tus clientes pueden pedir en <a href="'+h(URL_PUBLICA)+'" target="_blank" rel="noopener">'+h(URL_PUBLICA)+'</a>. Los precios son los mismos del sistema. Tocá ⭐ para mostrar un producto en «Destacados» (hasta 8).</div>'+
       '<div class="ped-grid">'+
       '<div class="card"><div class="card-header"><h3>🔥 Asadito</h3></div>'+'<div class="ped-meta" style="padding:8px 12px">Productos y precios de tu sistema de control de asaditos.</div>'+(ra.error?'<div class="alert alert-error">'+h(ra.error.message)+'</div>':(ra.data||[]).map(function(p){return '<div style="display:flex;align-items:center">'+row('asadito',p,p.precio,'').replace('class="ped-row"','class="ped-row" style="flex:1"')+catSel(p)+'</div>';}).join(''))+'</div>'+
       '<div class="card"><div class="card-header"><h3>🛒 Bodega</h3></div><div style="padding:10px"><input id="ped-bodq" placeholder="Buscar producto para agregar…" value="'+h(bodQ)+'" oninput="pedBodQ(this.value)" style="width:100%"></div>'+
-      (lista.length?lista.map(function(p){return '<div style="display:flex;align-items:center">'+row('bodega',p,p.precio_venta,(Number(p.stock)||0)+' en stock').replace('class="ped-row"','class="ped-row" style="flex:1"')+envSel(p)+'</div>';}).join(''):'<div class="ped-meta" style="padding:12px">'+(t?'Sin resultados':'Todavía no hay productos de bodega online. Buscá arriba para agregar.')+'</div>')+'</div>'+
+      (lista.length?lista.map(function(p){return '<div style="display:flex;align-items:center">'+row('bodega',p,p.precio_venta,(Number(p.stock)||0)+' en stock').replace('class="ped-row"','class="ped-row" style="flex:1"')+envSel(p)+(p.vender_online?'<button type="button" class="btn btn-secondary btn-sm" title="Destacar en la página" style="margin:0 8px 0 6px;flex:0 0 auto;'+(p.destacado_online?'color:#f59e0b;border-color:#f59e0b':'opacity:.45')+'" onclick="pedDestacar(\''+p.id+'\','+(!p.destacado_online)+')">⭐</button>':'')+'</div>';}).join(''):'<div class="ped-meta" style="padding:12px">'+(t?'Sin resultados':'Todavía no hay productos de bodega online. Buscá arriba para agregar.')+'</div>')+'</div>'+
       '</div>';
     var inp=g('ped-bodq'); if(inp&&bodQ){inp.focus();inp.setSelectionRange(bodQ.length,bodQ.length);}
   }
@@ -259,6 +259,11 @@
     var r=await sb.from('bodega_productos').update({envase_id:envId||null}).eq('id',id);
     if(r.error){toast('Error: '+r.error.message,'err');return;}
     toast(envId?'Marcado como retornable':'Ya no es retornable');
+  };
+  window.pedDestacar=async function(id,on){
+    var r=await sb.from('bodega_productos').update({destacado_online:on}).eq('id',id);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast(on?'⭐ Destacado en la página':'Quitado de destacados');pedRenderCatalogo();
   };
   window.pedToggle=async function(origen,id,on){
     var r=origen==='asadito'

@@ -392,8 +392,11 @@ function seccionHtml(o,items,conNav){
 function destacadosHtml(){
   const out=[];
   for(const [o,nc,np] of [['asadito',2,2],['bodega',2,1]]){if(!abierto(o))continue;const vistos={};
+    // bodega: si marcaste ⭐ productos en Catálogo online, se muestran esos (hasta 8)
+    const elegidos=(cat[o]||[]).filter(p=>p.destacado&&p.disponible!==false);
+    if(elegidos.length){elegidos.slice(0,8).forEach(p=>out.push([o,p]));continue;}
     for(const p of cat[o]||[]){if(p.disponible===false)continue;const c=p.categoria;if(!(c in vistos)){if(Object.keys(vistos).length>=nc)continue;vistos[c]=0;}if(vistos[c]>=np)continue;vistos[c]++;out.push([o,p]);}}
-  return out.length?'<div class="sectionhead"><h3>⭐ Destacados</h3><span>Los más pedidos</span></div><div class="products">'+out.map(([o,p])=>cardHtml(o,p)).join('')+'</div>':'';
+  return out.length?'<div class="sectionhead"><h3>⭐ Destacados</h3><span>'+(out.some(([o,p])=>p.destacado)?'Recomendados':'Los más pedidos')+'</span></div><div class="products">'+out.map(([o,p])=>cardHtml(o,p)).join('')+'</div>':'';
 }
 function render(){
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
