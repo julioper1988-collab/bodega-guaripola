@@ -71,6 +71,7 @@ button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .item .row,.pack{display:flex;align-items:center;gap:12px}
 .pic{position:relative;width:64px;height:64px;flex:none;border-radius:16px;background:#fff1e7;display:grid;place-items:center;font-size:30px;overflow:hidden}
 .pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;background:#fff}
+.pic .mos{position:absolute;inset:0;display:grid;gap:2px;background:#fff1e7}.pic .mos img{position:static;padding:2px}.pic .mos.n2{grid-template-columns:1fr 1fr}.pic .mos.n3,.pic .mos.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}.pic .mos.n3 img:first-child{grid-row:span 2}
 .item .info,.pack .info{flex:1;min-width:0}
 .item .nom{font-weight:700;font-size:15px;line-height:1.25;overflow-wrap:anywhere}
 .item .pr{color:var(--text2);font-size:13px;margin-top:2px}
@@ -366,10 +367,15 @@ function cardHtml(o,p){
     '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado':precioHtml(p.precio,pc))+'</div>'+tags+'</div>'+
     (off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
 }
+// Imagen del combo: mosaico con las fotos de sus productos (hasta 4)
+function comboFotos(pr){
+  const us=[...new Set((pr.componentes||[]).map(c=>{const p=(cat[c.origen]||[]).find(x=>String(x.id)===String(c.id));return p&&p.imagen_url;}).filter(Boolean))].slice(0,4);
+  return us.length?'<div class="mos n'+us.length+'">'+us.map(u=>'<img loading="lazy" src="'+esc(u)+'" alt="" onerror="this.remove()">').join('')+'</div>':'';
+}
 function combosHtml(combos){
   if(!combos.length)return '';
   return '<div class="sectionhead"><h3>🎁 Combos</h3><span>'+combos.length+'</span></div><div class="products">'+combos.map(pr=>{const ci=comboInfo(pr),k='combo:'+pr.id;
-    return '<div class="item combo'+(ci.disp?'':' off')+'"><div class="row"><div class="pic"><span aria-hidden="true">🎁</span></div><div class="info"><div class="nom">'+esc(pr.nombre)+'</div><div class="pr">'+esc(ci.txt)+'</div>'+
+    return '<div class="item combo'+(ci.disp?'':' off')+'"><div class="row"><div class="pic"><span aria-hidden="true">🎁</span>'+comboFotos(pr)+'</div><div class="info"><div class="nom">'+esc(pr.nombre)+'</div><div class="pr">'+esc(ci.txt)+'</div>'+
       '<div class="pr"><span class="price">'+gs(pr.precio)+'</span>'+(ci.normal>pr.precio?' <s>'+gs(ci.normal)+'</s> <span class="save">ahorrás '+gs(ci.normal-pr.precio)+'</span>':'')+(pr.hora_hasta?' · hasta las '+esc(hhmm(pr.hora_hasta)):'')+'</div></div>'+
       (ci.disp?'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>':'<div class="small">No disponible</div>')+'</div></div>';}).join('')+'</div>';
 }
