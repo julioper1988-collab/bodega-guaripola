@@ -16169,33 +16169,54 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 
     if(!sb) return;
     var hoy=hoyPY(), semPas=masDias(hoy,-7), ahora=new Date(), haceSem=new Date(ahora.getTime()-7*864e5).toISOString();
-    var r=await Promise.all([
-      sb.from('bodega_caja').select('id,opened_at,usuario_apertura').is('closed_at',null).order('opened_at',{ascending:false}).limit(1),
-      sb.from('bodega_ventas').select('id,numero_venta,total_final,metodo_pago,cliente_nombre,created_at').eq('fecha',hoy).order('created_at',{ascending:false}).limit(1000),
+    var cols='id,numero_venta,total_final,metodo_pago,monto_efectivo,cliente_nombre,created_at';
+    var rc=await sb.from('bodega_caja').select('id,opened_at,usuario_apertura,apertura_efectivo').is('closed_at',null).order('opened_at',{ascending:false}).limit(1);
+    var caja=(rc.data||[])[0];
+    var r=await Promise.all(caja?[
+      sb.from('bodega_ventas').select(cols).eq('caja_id',caja.id).order('created_at',{ascending:false}).limit(2000),
+      sb.from('bodega_caja_gastos').select('monto,tipo').eq('caja_id',caja.id),
+      sb.from('bodega_pagos_fiado').select('monto,metodo_pago').eq('caja_id',caja.id),
+      sb.from('bodega_fiados').select('saldo').gt('saldo',0).limit(5000)
+    ]:[
+      sb.from('bodega_ventas').select(cols).eq('fecha',hoy).order('created_at',{ascending:false}).limit(2000),
       sb.from('bodega_ventas').select('total_final').eq('fecha',semPas).lte('created_at',haceSem).limit(1000),
+      Promise.resolve({data:[]}),
       sb.from('bodega_fiados').select('saldo').gt('saldo',0).limit(5000)
     ]).catch(function(){return null;});
     if(!r||!document.getElementById('in3-kpis')) return;
-    var caja=(r[0].data||[])[0], ventas=r[1].data||[], prev=r[2].data||[], fiados=r[3].data||[];
+    var ventas=(r[0].data||[]).filter(function(v){return String(v.metodo_pago||'').toLowerCase()!=='retiro';}), fiados=r[3].data||[];
     var cj=document.getElementById('in3-caja');
     if(cj){ cj.className='in3-caja'+(caja?' on':''); cj.innerHTML='<i></i>'+(caja?'Caja abierta desde '+hhmm(caja.opened_at)+(caja.usuario_apertura?' · '+e(caja.usuario_apertura):''):'Caja cerrada · tocá para abrir'); }
-    var tot=ventas.reduce(function(a,v){return a+Number(v.total_final||0);},0), totPrev=prev.reduce(function(a,v){return a+Number(v.total_final||0);},0);
+    var tot=ventas.reduce(function(a,v){return a+Number(v.total_final||0);},0);
     var deuda=fiados.reduce(function(a,f){return a+Number(f.saldo||0);},0);
-    var cmp='&nbsp;',cls='';
-    if(totPrev>0){var d=Math.round((tot-totPrev)/totPrev*100);cmp=(d>=0?'▲ ':'▼ ')+Math.abs(d)+'% vs. '+new Date(semPas+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long'})+' pasado';cls=d>=0?'up':'down';}
     var k=function(t,v,sm,c){return '<div class="in3-k"><span>'+t+'</span><b>'+v+'</b><small class="'+(c||'')+'">'+sm+'</small></div>';};
-    document.getElementById('in3-kpis').innerHTML=
-      k('Ventas de hoy',gs_(tot),cmp,cls)+
-      k('Cantidad',ventas.length,ventas.length===1?'venta':'ventas')+
-      k('Ticket promedio',gs_(ventas.length?tot/ventas.length:0),'&nbsp;')+
-      k('Fiado pendiente',gs_(deuda),fiados.length+' deuda'+(fiados.length===1?'':'s'),'');
-    // Ventas por hora (0 a 23 h)
-    var hs=[];for(var h=0;h<24;h++)hs.push(0);
-    ventas.forEach(function(v){hs[horaPY(v.created_at)]+=Number(v.total_final||0);});
-    var mx=Math.max.apply(null,hs)||1, hNow=horaPY(ahora.toISOString());
+    var cant=k('Cantidad',ventas.length,(ventas.length===1?'venta':'ventas')+' · ticket '+gs_(ventas.length?tot/ventas.length:0));
+    var fia=k('Fiado pendiente',gs_(deuda),fiados.length+' deuda'+(fiados.length===1?'':'s'));
+    var t1=document.querySelector('#in3-horas')&&document.querySelector('#in3-horas').previousElementSibling, t2=document.querySelector('#in3-top')&&document.querySelector('#in3-top').previousElementSibling;
+    if(caja){
+      // Efectivo esperado, igual que el arqueo: apertura + efectivo de ventas + cobros de fiado en efectivo − gastos + ingresos
+      var ef=0;ventas.forEach(function(v){var m=String(v.metodo_pago||'').toLowerCase(),t=Number(v.total_final||0);if(m==='efectivo')ef+=t;else if(m==='mixto'||m==='parcial')ef+=Number(v.monto_efectivo||0);});
+      var gas=0,ing=0;(r[1].data||[]).forEach(function(g){if(g.tipo==='gasto_vario')gas+=Number(g.monto||0);else if(g.tipo==='ingreso_vario')ing+=Number(g.monto||0);});
+      var cob=0;(r[2].data||[]).forEach(function(pf){var m=String(pf.metodo_pago||'efectivo').toLowerCase();if(['transferencia','qr','debito','credito'].indexOf(m)<0)cob+=Number(pf.monto||0);});
+      var esp=Number(caja.apertura_efectivo||0)+ef+cob-gas+ing;
+      document.getElementById('in3-kpis').innerHTML=
+        k('Ventas del turno',gs_(tot),'desde las '+hhmm(caja.opened_at))+cant+
+        k('Efectivo en caja',gs_(esp),'apertura '+gs_(caja.apertura_efectivo)+(gas?' · gastos '+gs_(gas):''))+fia;
+      if(t1)t1.textContent='Ventas por hora (turno)'; if(t2)t2.textContent='Más vendidos del turno';
+    }else{
+      var totPrev=(r[1].data||[]).reduce(function(a,v){return a+Number(v.total_final||0);},0), cmp='&nbsp;', cls='';
+      if(totPrev>0){var d=Math.round((tot-totPrev)/totPrev*100);cmp=(d>=0?'▲ ':'▼ ')+Math.abs(d)+'% vs. '+new Date(semPas+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long'})+' pasado';cls=d>=0?'up':'down';}
+      document.getElementById('in3-kpis').innerHTML=k('Ventas de hoy',gs_(tot),cmp,cls)+cant+k('Ticket promedio',gs_(ventas.length?tot/ventas.length:0),'&nbsp;')+fia;
+    }
+    // Ventas por hora: desde la apertura del turno (o 0 h) hasta ahora
+    var h0=caja?horaPY(caja.opened_at):0, hNow=horaPY(ahora.toISOString()), n=caja?((hNow-h0+24)%24)+1:24;
+    if(caja&&caja.opened_at&&ahora-new Date(caja.opened_at)>=864e5)n=24;
+    var hs=[];for(var x=0;x<n;x++)hs.push(0);
+    ventas.forEach(function(v){var ix=(horaPY(v.created_at)-h0+24)%24;if(ix<n)hs[ix]+=Number(v.total_final||0);});
+    var mx=Math.max.apply(null,hs)||1, lab=function(ix){return ((h0+ix)%24)+' h';};
     document.getElementById('in3-horas').innerHTML=ventas.length?
-      '<div class="in3-horas">'+hs.map(function(x,i){return '<div class="'+(i===hNow?'now':'')+'" style="height:'+Math.max(2,Math.round(x/mx*100))+'%" title="'+i+' h · '+gs_(x)+'"></div>';}).join('')+'</div><div class="in3-hlab"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>':
-      '<div class="in3-vacio">Todavía no hay ventas hoy.</div>';
+      '<div class="in3-horas">'+hs.map(function(x,ix){return '<div class="'+((h0+ix)%24===hNow?'now':'')+'" style="height:'+Math.max(2,Math.round(x/mx*100))+'%" title="'+lab(ix)+' · '+gs_(x)+'"></div>';}).join('')+'</div><div class="in3-hlab"><span>'+lab(0)+'</span>'+(n>2?'<span>'+lab(Math.floor((n-1)/2))+'</span>':'')+'<span>'+lab(n-1)+'</span></div>':
+      '<div class="in3-vacio">Todavía no hay ventas'+(caja?' en este turno':' hoy')+'.</div>';
     // Últimas ventas
     document.getElementById('in3-ult').innerHTML=ventas.length?ventas.slice(0,6).map(function(v){
       return '<div class="in3-li" onclick="goTo(\'historial-ventas\')"><span>'+hhmm(v.created_at)+' · N° '+(v.numero_venta||'-')+'</span><span class="nm">'+e(v.cliente_nombre||v.metodo_pago||'')+'</span><b>'+gs_(v.total_final)+'</b></div>';
