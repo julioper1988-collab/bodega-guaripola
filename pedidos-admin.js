@@ -335,7 +335,7 @@
     b.innerHTML='<div class="ped-tabs"><button class="btn btn-primary btn-sm" onclick="pedPromoEditar()">+ Nueva promoción</button></div>'+
       (L.length?'<div class="ped-grid">'+L.map(function(x){
         return '<div class="ped-card"><div class="ped-head"><b>'+h(x.nombre)+'</b><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" style="width:auto" '+(x.activa?'checked':'')+' onchange="pedPromoActiva(\''+x.id+'\',this.checked)"> Activa</label></div>'+
-          '<div class="ped-meta">'+h(TIPOS_P[x.tipo]||x.tipo)+'</div><div>'+h(detallePromo(x))+'</div><div class="ped-meta">🕐 '+h(horarioPromo(x))+'</div>'+
+          '<div class="ped-meta">'+h(TIPOS_P[x.tipo]||x.tipo)+'</div><div>'+h(detallePromo(x))+'</div>'+(x.imagenes&&x.imagenes.length?'<div style="display:flex;gap:4px">'+x.imagenes.map(function(u){return '<img src="'+h(u)+'" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid var(--border)">';}).join('')+'</div>':'')+'<div class="ped-meta">🕐 '+h(horarioPromo(x))+'</div>'+
           (x.mensaje?'<div class="ped-meta">💬 '+h(x.mensaje)+'</div>':'')+
           '<div class="ped-acts"><button class="btn btn-secondary btn-sm" onclick="pedPromoEditar(\''+x.id+'\')">Editar</button><button class="btn btn-secondary btn-sm" onclick="pedPromoBorrar(\''+x.id+'\')">🗑 Eliminar</button></div></div>';
       }).join('')+'</div>':'<div class="alert">Todavía no hay promociones. Creá la primera con “+ Nueva promoción”.</div>');
@@ -349,8 +349,8 @@
   var promoEd=null;
   window.pedPromoEditar=async function(id){
     var P=await cargarProdsPromo();
-    promoEd={id:id||null,tipo:'delivery_gratis',nombre:'',activa:true,dias:[],hora_desde:'',hora_hasta:'',local:'',monto_minimo:0,porcentaje:10,categorias:[],combo:[],precio:0,cada_n:5,mensaje:'',orden:0};
-    if(id){var r=await sb.from('pedidos_promos').select('*').eq('id',id).single();if(r.data)Object.assign(promoEd,r.data,{dias:r.data.dias||[],categorias:r.data.categorias||[],combo:r.data.combo||[],local:r.data.local||'',hora_desde:r.data.hora_desde||'',hora_hasta:r.data.hora_hasta||'',mensaje:r.data.mensaje||''});}
+    promoEd={id:id||null,tipo:'delivery_gratis',nombre:'',activa:true,dias:[],hora_desde:'',hora_hasta:'',local:'',monto_minimo:0,porcentaje:10,categorias:[],combo:[],precio:0,cada_n:5,mensaje:'',orden:0,imagenes:[]};
+    if(id){var r=await sb.from('pedidos_promos').select('*').eq('id',id).single();if(r.data)Object.assign(promoEd,r.data,{dias:r.data.dias||[],categorias:r.data.categorias||[],combo:r.data.combo||[],imagenes:r.data.imagenes||[],local:r.data.local||'',hora_desde:r.data.hora_desde||'',hora_hasta:r.data.hora_hasta||'',mensaje:r.data.mensaje||''});}
     openModal(id?'Editar promoción':'Nueva promoción','<div id="promo-form"></div>',pedPromoGuardar,'Guardar');
     pedPromoForm();
   };
@@ -374,6 +374,18 @@
   function nombreProd(c){var P=promoProds;var x=c.origen==='asadito'?P.a.find(function(z){return z.id===c.id;}):P.b.find(function(z){return z.id===c.id;});return x?x.nombre:'(no disponible)';}
   window.pedComboAdd=function(){promoLeer();var v=g('pp-prod').value;if(!v)return;var o=v.split('|');var q=Math.max(1,Number(g('pp-cant').value)||1);
     var ex=promoEd.combo.find(function(c){return c.origen===o[0]&&c.id===o[1];});if(ex)ex.cantidad+=q;else promoEd.combo.push({origen:o[0],id:o[1],cantidad:q});pedPromoForm();};
+  window.pedComboFoto=async function(inp){
+    var f=inp.files&&inp.files[0];inp.value='';if(!f)return;promoLeer();
+    if((promoEd.imagenes||[]).length>=3){toast('Máximo 3 fotos','err');return;}
+    try{toast('Subiendo foto…');
+      var blob=await fotoWebp(f),path='combos/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.webp';
+      var up=await sb.storage.from('productos').upload(path,blob,{contentType:'image/webp',cacheControl:'31536000',upsert:false});
+      if(up.error) throw up.error;
+      promoEd.imagenes=(promoEd.imagenes||[]).concat(sb.storage.from('productos').getPublicUrl(path).data.publicUrl);
+      toast('📷 Foto lista · tocá Guardar');pedPromoForm();
+    }catch(e){toast('No se pudo subir la foto: '+(e.message||e),'err');}
+  };
+  window.pedComboFotoQuitar=function(i){promoLeer();promoEd.imagenes.splice(i,1);pedPromoForm();};
   window.pedComboQuitar=function(i){promoLeer();promoEd.combo.splice(i,1);pedPromoForm();};
   function pedPromoForm(){
     var e=promoEd,P=promoProds,box=g('promo-form');if(!box)return;
@@ -393,7 +405,11 @@
       '<div style="display:flex;gap:6px;margin-top:8px"><select id="pp-prod" style="flex:1"><option value="">Elegí un producto…</option><optgroup label="🔥 Asadito">'+P.a.map(function(x){return '<option value="asadito|'+x.id+'">'+h(x.nombre)+' · '+fmtGs(x.precio)+'</option>';}).join('')+'</optgroup><optgroup label="🛒 Bodega (sin retornables)">'+P.b.map(function(x){return '<option value="bodega|'+x.id+'">'+h(x.nombre)+' · '+fmtGs(x.precio_venta)+'</option>';}).join('')+'</optgroup></select>'+
       '<input id="pp-cant" type="number" min="1" value="1" style="width:70px"><button class="btn btn-secondary btn-sm" onclick="pedComboAdd()">Agregar</button></div>'+
       '<div class="ped-meta" style="margin-top:6px">Precio normal: <b>'+fmtGs(normal)+'</b></div></div>'+
-      '<div class="form-group"><label>Precio del combo (Gs.)</label><input id="pp-precio" inputmode="numeric" value="'+(e.precio||'')+'"></div>';
+      '<div class="form-group"><label>Precio del combo (Gs.)</label><input id="pp-precio" inputmode="numeric" value="'+(e.precio||'')+'"></div>'+
+      '<div class="form-group" style="grid-column:1/-1"><label>Fotos del combo (hasta 3; si no cargás, se usan las de los productos)</label><div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      (e.imagenes||[]).map(function(u,i){return '<div style="position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"><img src="'+h(u)+'" alt="" style="width:100%;height:100%;object-fit:cover"><button type="button" title="Quitar" onclick="pedComboFotoQuitar('+i+')" style="position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;line-height:1">✕</button></div>';}).join('')+
+      ((e.imagenes||[]).length<3?'<label style="width:76px;height:76px;border-radius:12px;border:1px dashed var(--border2,#ccc);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:24px;margin:0">📷<span style="font-size:11px">Agregar</span><input type="file" accept="image/*" hidden onchange="pedComboFoto(this)"></label>':'')+
+      '</div></div>';
     if(e.tipo==='fidelidad') html+='<div class="form-group"><label>Cada cuántos pedidos</label><input id="pp-n" type="number" min="2" value="'+(e.cada_n||5)+'"></div><div class="form-group ped-meta" style="align-self:end">El pedido siguiente lleva delivery gratis (ej: cada 5, el 6º).</div>';
     html+='<div class="form-group" style="grid-column:1/-1"><label>Días (si no marcás ninguno, todos los días)</label><div style="display:flex;flex-wrap:wrap;gap:6px 14px">'+DIAS_C.map(function(d){return '<label style="display:flex;gap:5px;align-items:center;margin:0;cursor:pointer"><input type="checkbox" class="pp-dia" value="'+d[0]+'" style="width:auto" '+(e.dias.indexOf(d[0])>=0?'checked':'')+'> '+d[1]+'</label>';}).join('')+'</div></div>'+
       '<div class="form-group"><label>Desde (opcional)</label><input id="pp-desde" type="time" value="'+h(e.hora_desde)+'"></div><div class="form-group"><label>Hasta (opcional)</label><input id="pp-hasta" type="time" value="'+h(e.hora_hasta==='24:00'?'00:00':e.hora_hasta)+'"></div>'+
@@ -413,7 +429,7 @@
       local:(e.tipo==='delivery_gratis'||e.tipo==='descuento')&&e.local?e.local:null,
       monto_minimo:(e.tipo==='delivery_gratis'||e.tipo==='descuento')?e.monto_minimo:0,
       porcentaje:e.tipo==='descuento'?e.porcentaje:null,categorias:e.tipo==='descuento'&&e.categorias.length?e.categorias:null,
-      combo:e.tipo==='combo'?e.combo:null,precio:e.tipo==='combo'?e.precio:null,cada_n:e.tipo==='fidelidad'?e.cada_n:null,
+      combo:e.tipo==='combo'?e.combo:null,imagenes:e.tipo==='combo'&&(e.imagenes||[]).length?e.imagenes.slice(0,3):null,precio:e.tipo==='combo'?e.precio:null,cada_n:e.tipo==='fidelidad'?e.cada_n:null,
       mensaje:e.mensaje||null,orden:e.orden||0,updated_at:new Date().toISOString()};
     var r=e.id?await sb.from('pedidos_promos').update(obj).eq('id',e.id):await sb.from('pedidos_promos').insert(obj);
     if(r.error){toast('Error: '+r.error.message,'err');return;}

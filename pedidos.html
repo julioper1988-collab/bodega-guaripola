@@ -367,9 +367,10 @@ function cardHtml(o,p){
     '<div class="info"><div class="nom">'+esc(p.nombre)+'</div><div class="pr">'+(off?'Agotado':precioHtml(p.precio,pc))+'</div>'+tags+'</div>'+
     (off?'':'<div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k]||0)+'</div>')+'</div></div>';
 }
-// Imagen del combo: mosaico con las fotos de sus productos (hasta 4)
+// Imagen del combo: mosaico con sus fotos
 function comboFotos(pr){
-  const us=[...new Set((pr.componentes||[]).map(c=>{const p=(cat[c.origen]||[]).find(x=>String(x.id)===String(c.id));return p&&p.imagen_url;}).filter(Boolean))].slice(0,4);
+  // fotos cargadas en el combo (hasta 3); si no hay, las de sus productos
+  const us=(pr.imagenes&&pr.imagenes.length?pr.imagenes.filter(Boolean):[...new Set((pr.componentes||[]).map(c=>{const p=(cat[c.origen]||[]).find(x=>String(x.id)===String(c.id));return p&&p.imagen_url;}).filter(Boolean))]).slice(0,4);
   return us.length?'<div class="mos n'+us.length+'">'+us.map(u=>'<img loading="lazy" src="'+esc(u)+'" alt="" onerror="this.remove()">').join('')+'</div>':'';
 }
 function combosHtml(combos){
