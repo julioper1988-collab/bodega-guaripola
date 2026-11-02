@@ -177,6 +177,7 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 5px;font-wei
 .estado{display:inline-block;margin-top:8px;padding:7px 15px;border-radius:999px;background:#fff;font-weight:700;box-shadow:var(--sh)}
 .hide{display:none!important}
 body.compacto .hero,body.compacto .top .muted{display:none}body.compacto .top{padding-top:4px}
+.tabs.t5{grid-template-columns:repeat(5,1fr)}
 @media (max-width:420px){.top h1{font-size:23px}.hero{padding:20px}.hero h2{font-size:20px}.hero .sym{font-size:44px}.tabs{gap:7px}.tab{font-size:12px;padding:10px 2px 8px}.tab b{font-size:22px}}
 @media (min-width:760px){.top h1{font-size:30px}.hero{padding:31px}.hero h2{font-size:28px}.hero .sym{font-size:80px}}
 </style>
@@ -192,7 +193,7 @@ body.compacto .hero,body.compacto .top .muted{display:none}body.compacto .top{pa
 </header>
 <section class="hero">
   <div><small>PEDÍ MÁS RÁPIDO</small><h2>Tus favoritos, a un toque.</h2><p>Delivery o retiro en el local.</p>
-  <div class="estados"><span id="hs-asadito">🔥 Asadito</span><span id="hs-bodega">🛒 Bodega</span></div></div>
+  <div class="estados"><span id="hs-asadito">🔥 Asadito</span><span id="hs-bodega">🛒 Bodega</span><span id="hs-polleria" class="hide">🍗 Pollería</span></div></div>
   <div class="sym" aria-hidden="true">⚡</div>
 </section>
 <div id="msg"></div>
@@ -200,6 +201,7 @@ body.compacto .hero,body.compacto .top .muted{display:none}body.compacto .top{pa
 <nav class="tabs" id="cats">
   <button class="tab on" data-t="todos"><b>🛍️</b>Todos</button>
   <button class="tab" data-t="asadito"><b>🔥</b>Asaditos<small id="st-asadito"></small></button>
+  <button class="tab hide" data-t="polleria" id="tab-polleria"><b>🍗</b>Pollería<small id="st-polleria"></small></button>
   <button class="tab" data-t="bodega"><b>🥤</b>Bodega<small id="st-bodega"></small></button>
   <button class="tab" data-t="promos"><b>🎁</b>Promos</button>
 </nav>
@@ -226,7 +228,7 @@ const SRC=(()=>{try{let s=new URLSearchParams(location.search).get('src');
 function track(ev){try{if(!DEV)return;rpc('pedidos_registrar_visita',{p_evento:ev,p_dev:DEV,p_src:SRC,p_movil:/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent||'')}).catch(()=>{});}catch(e){}}
 setTimeout(()=>track('visita'),1200);
 function aviso(t){let e=$('aviso');if(!e){e=document.createElement('div');e.id='aviso';document.body.appendChild(e);}e.textContent=t;e.classList.remove('on');void e.offsetWidth;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600);}
-let cat={config:{},asadito:[],bodega:[]}, tab='todos', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
+let cat={config:{},asadito:[],bodega:[],polleria:[]}, tab='todos', q='', cart=lsGet(LS_CART,{}), ent='retiro', pago='efectivo';
 
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
@@ -240,7 +242,10 @@ async function rpc(fn,body){
   if(!r.ok) throw new Error('Error de conexión ('+r.status+')');
   return r.json();
 }
-// Clave de carrito: "asadito:ID", "bodega:ID" o "bodega:ID|PACK_ID"
+// Locales: asadito, pollería y bodega (cada uno con su horario; asadito y pollería con su propia caja)
+const LOC={asadito:{ico:'🔥',nom:'Asadito',sec:'Asaditos',art:'El asadito'},polleria:{ico:'🍗',nom:'Pollería',sec:'Pollería',art:'La pollería'},bodega:{ico:'🛒',nom:'Bodega',sec:'Bodega',art:'La bodega'}};
+const LOCS=()=>['asadito','polleria','bodega'].filter(o=>o!=='polleria'||(cat.polleria||[]).length);
+// Clave de carrito: "asadito:ID", "polleria:ID", "bodega:ID" o "bodega:ID|PACK_ID"
 const key=(o,id,pk)=>o+':'+id+(pk?'|'+pk:'');
 // Promociones vigentes (vienen del servidor; la base vuelve a calcular todo al confirmar)
 const PROMOS=()=>cat.promos||[];
@@ -322,8 +327,9 @@ function horarioTxt(l){
   return g.filter(x=>x.r).map(x=>(x.ini===x.fin?DC[x.ini]:DC[x.ini]+' a '+DC[x.fin])+' '+hhmm(x.r[0])+'–'+hhmm(x.r[1])).join(' · ');
 }
 function estadoTabs(){
-  for(const l of ['asadito','bodega']){const e=$('st-'+l);if(!e)continue;const ab=abierto(l);e.textContent=ab?'Abierto':'Cerrado';e.classList.toggle('cl',!ab);
-    const hs=$('hs-'+l);if(hs){hs.textContent=(l==='asadito'?'🔥 Asadito':'🛒 Bodega')+(ab?' abierto':' cerrado'+(proxima(l)?' · abre '+proxima(l):''));hs.classList.toggle('cl',!ab);}}
+  const conP=!!(cat.polleria||[]).length;const sub=document.querySelector('.top .muted');if(sub)sub.textContent=conP?'Asaditos, pollería y bodega en un solo lugar':'Asaditos + bodega en un solo lugar';['tab-polleria','hs-polleria'].forEach(i=>{const e=$(i);if(e)e.classList.toggle('hide',!conP);});$('cats').classList.toggle('t5',conP);
+  for(const l of LOCS()){const e=$('st-'+l);if(!e)continue;const ab=abierto(l);e.textContent=ab?'Abierto':'Cerrado';e.classList.toggle('cl',!ab);
+    const hs=$('hs-'+l);if(hs){hs.textContent=LOC[l].ico+' '+LOC[l].nom+(ab?' abierto':' cerrado'+(proxima(l)?' · abre '+proxima(l):''));hs.classList.toggle('cl',!ab);}}
 }
 
 function qtyHtml(k,n){
@@ -333,7 +339,7 @@ function qtyHtml(k,n){
 }
 // ─── Vista Quick Order (solo presentación) ───
 const ICON_CAT={CERVEZA:'🍺',GASEOSA:'🥤',HIELO:'🧊',CARBON:'🔥',DESTILADO:'🥃',VINO:'🍷',AGUA:'💧',JUGO:'🧃',ENERG:'⚡',SNACK:'🍿',GOLOSINA:'🍬',CIGARR:'🚬',EMBUTIDO:'🌭',ASADITO:'🍢'};
-function icono(o,p){const c=String(p.categoria||'').toUpperCase();for(const k in ICON_CAT)if(c.includes(k))return ICON_CAT[k];return o==='asadito'?'🔥':'🛒';}
+function icono(o,p){const c=String(p.categoria||'').toUpperCase();for(const k in ICON_CAT)if(c.includes(k))return ICON_CAT[k];return o==='polleria'?'🍗':o==='asadito'?'🔥':'🛒';}
 // % de descuento vigente para el producto (misma regla que descPreview, sin el mínimo de compra)
 // Descuento % vigente para el producto (misma regla que la base; el mínimo de compra se avisa aparte)
 function descInfo(o,p){let b=0,min=0;for(const pr of PROMOS()){if(pr.tipo!=='descuento')continue;if(pr.local&&pr.local!==o)continue;
@@ -383,8 +389,8 @@ function combosHtml(combos){
 }
 function seccionHtml(o,items,conNav){
   const ab=abierto(o),ht=horarioTxt(o);
-  let h='<section class="'+(ab?'':'cerrado')+'"><div class="sectionhead"><h3>'+(o==='asadito'?'🔥 Asaditos':'🛒 Bodega')+'</h3><span class="st'+(ab?'':' cl')+'">'+(ab?'Abierto':'Cerrado')+'</span></div>'+
-    (!ab?'<div class="banner closed">🔒 '+(o==='asadito'?'El asadito':'La bodega')+' está cerrado ahora.'+(proxima(o)?' Abre '+proxima(o)+'.':'')+'</div>':'')+(ht?'<div class="hor">🕐 '+esc(ht)+'</div>':'');
+  let h='<section class="'+(ab?'':'cerrado')+'"><div class="sectionhead"><h3>'+LOC[o].ico+' '+LOC[o].sec+'</h3><span class="st'+(ab?'':' cl')+'">'+(ab?'Abierto':'Cerrado')+'</span></div>'+
+    (!ab?'<div class="banner closed">🔒 '+LOC[o].art+' está cerrad'+(o==='asadito'?'o':'a')+' ahora.'+(proxima(o)?' Abre '+proxima(o)+'.':'')+'</div>':'')+(ht?'<div class="hor">🕐 '+esc(ht)+'</div>':'');
   if(!items.length)return h+'<div class="empty">'+(q?'Sin resultados':'Pronto vas a encontrar productos acá')+'</div></section>';
   // orden por marca dentro de cada categoría (sin «CERVEZA», «WHISKY»… al inicio): Corona y todos sus tamaños juntos
   const catOrd=[...new Set(items.map(p=>p.categoria))];
@@ -400,7 +406,7 @@ function seccionHtml(o,items,conNav){
 // Destacados: los más vendidos de cada categoría (el catálogo ya viene ordenado por ventas), solo de locales abiertos
 function destacadosHtml(){
   const out=[];
-  for(const [o,nc,np] of [['asadito',2,2],['bodega',2,1]]){if(!abierto(o))continue;const vistos={};
+  for(const [o,nc,np] of [['polleria',1,2],['asadito',2,2],['bodega',2,1]]){if(!abierto(o))continue;const vistos={};
     // bodega: si marcaste ⭐ productos en Catálogo online, se muestran esos (hasta 8)
     const elegidos=(cat[o]||[]).filter(p=>p.destacado&&p.disponible!==false);
     if(elegidos.length){elegidos.slice(0,8).forEach(p=>out.push([o,p]));continue;}
@@ -412,7 +418,8 @@ function render(){
   estadoTabs();
   const L=$('list'),t=q.toLowerCase();
   const filt=o=>(cat[o]||[]).filter(p=>!t||p.nombre.toLowerCase().includes(t)||String(p.categoria).toLowerCase().includes(t));
-  const combos=PROMOS().filter(x=>x.tipo==='combo'&&(!t||x.nombre.toLowerCase().includes(t)||comboInfo(x).txt.toLowerCase().includes(t)));
+  const combos=PROMOS().filter(x=>x.tipo==='combo'&&(!t||x.nombre.toLowerCase().includes(t)||comboInfo(x).txt.toLowerCase().includes(t))
+    &&(!LOC[tab]||(x.componentes||[]).some(c=>c.origen===tab))); // en la pestaña de un local, solo sus combos
   let h='';
   if(tab==='promos'){
     // promos activas (las mismas que el servidor manda vigentes ahora)
@@ -421,7 +428,7 @@ function render(){
     if(!t&&act.length)h+='<div class="sectionhead"><h3>🔥 Promos de hoy</h3><span>'+act.length+'</span></div><div class="products">'+act.map(x=>'<div class="item promoc"><div class="nom">'+esc(x.nombre)+'</div>'+(x.det?'<div class="pr">'+esc(x.det)+'</div>':'')+'</div>').join('')+'</div>';
     h+=combosHtml(combos);
     const con=[];
-    for(const o of ['asadito','bodega'])for(const p of filt(o)){if(p.disponible===false&&!(p.packs||[]).some(x=>x.disponible!==false))continue;if(descPct(o,p))con.push([o,p]);}
+    for(const o of LOCS())for(const p of filt(o)){if(p.disponible===false&&!(p.packs||[]).some(x=>x.disponible!==false))continue;if(descPct(o,p))con.push([o,p]);}
     if(con.length)h+='<div class="sectionhead"><h3>🏷️ Con descuento</h3><span>'+con.length+'</span></div><div class="products">'+con.map(([o,p])=>cardHtml(o,p)).join('')+'</div>';
     if(!h)h='<div class="empty">'+(t?'Sin resultados':'Hoy no hay promos activas. ¡Volvé pronto!')+'</div>';
   }else{
@@ -429,7 +436,7 @@ function render(){
     if(COMPACTO){h+=combosHtml(combos);if(tab==='todos'&&!t)h+=destacadosHtml();}
     else{if(tab==='todos'&&!t)h+=destacadosHtml();h+=combosHtml(combos);}
     // en "Todos", primero el local abierto
-    const ls=tab==='todos'?['asadito','bodega'].sort((a,b)=>abierto(b)-abierto(a)):[tab];
+    const ls=tab==='todos'?LOCS().sort((a,b)=>abierto(b)-abierto(a)):[tab];
     for(const o of ls){const it=filt(o);if(tab==='todos'&&t&&!it.length)continue;h+=seccionHtml(o,it,tab!=='todos');}
     if(!h)h='<div class="empty">Sin resultados para “'+esc(q)+'”</div>';
   }
@@ -437,11 +444,11 @@ function render(){
   renderBar();
 }
 function totals(){
-  let a=0,b=0,n=0;
+  let a=0,b=0,pp=0,n=0;
   for(const [k,c] of Object.entries(cart)){const l=line(k);if(!l)continue;n+=c;
     if(l.o==='combo'){a+=l.precio*c*l.combo.fa;b+=l.precio*c*(1-l.combo.fa);}
-    else if(l.o==='asadito')a+=l.precio*c;else b+=l.precio*c+envCosto(k);}
-  return {a,b,n,sub:a+b};
+    else if(l.o==='asadito')a+=l.precio*c;else if(l.o==='polleria')pp+=l.precio*c;else b+=l.precio*c+envCosto(k);}
+  return {a,b,p:pp,n,sub:a+b+pp};
 }
 function bump(el){if(!el)return;el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');}
 function renderBar(anim){
@@ -474,11 +481,11 @@ function setQty(k,v,abs){
 
 function linesHtml(){
   let h='';
-  for(const o of ['combo','asadito','bodega']){
+  for(const o of ['combo','asadito','polleria','bodega']){
     const ks=Object.keys(cart).filter(k=>k.startsWith(o+':')&&line(k));
     if(!ks.length)continue;
     if(o==='combo'){h+='<div class="sub">🎁 Combos</div>';for(const k of ks){const l=line(k);h+='<div class="item"><div class="row"><div class="info"><div class="nom">'+esc(l.p.nombre)+'</div><div class="pr" style="font-size:12px">'+esc(l.combo.txt)+'</div><div class="pr" data-st="'+esc(k)+'">'+gs(l.precio*cart[k])+'</div></div><div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k])+'</div></div></div>';}continue;}
-    h+='<div class="sub">'+(o==='asadito'?'🔥 Asadito':'🛒 Bodega')+(abierto(o)?'':' · <span style="color:var(--err)">cerrado ahora'+(proxima(o)?', abre '+proxima(o):'')+'</span>')+'</div>';
+    h+='<div class="sub">'+LOC[o].ico+' '+LOC[o].nom+(abierto(o)?'':' · <span style="color:var(--err)">cerrado ahora'+(proxima(o)?', abre '+proxima(o):'')+'</span>')+'</div>';
     for(const k of ks){const l=line(k);h+='<div class="item"><div class="row"><div class="info"><div class="nom">'+esc(l.nombre)+'</div><div class="pr" data-st="'+esc(k)+'">'+gs(l.precio*cart[k])+'</div></div><div class="qty" data-q="'+esc(k)+'">'+qtyHtml(k,cart[k])+'</div></div>'+envHtml(k)+'</div>';}
   }
   return h;
@@ -499,7 +506,7 @@ async function chkNuevo(){
 function descPreview(){
   const ps=PROMOS().filter(x=>x.tipo==='descuento');if(!ps.length)return {d:0,da:0};
   let bruto=0;for(const [k,c] of Object.entries(cart)){const l=line(k);if(!l)continue;bruto+=(l.o==='combo'?l.combo.normal:l.precio)*c+envCosto(k);}
-  let d=0,da=0;
+  let d=0,da=0,dpp=0;
   for(const [k,c] of Object.entries(cart)){const l=line(k);if(!l||l.o==='combo')continue;
     let best=0;for(const pr of ps){
       if(pr.local&&pr.local!==l.o)continue;
@@ -507,8 +514,8 @@ function descPreview(){
       if(pr.productos&&pr.productos.length&&!pr.productos.includes(String(l.id)))continue;
       if(bruto<(Number(pr.monto_minimo)||0))continue;
       best=Math.max(best,Number(pr.porcentaje)||0);}
-    const x=Math.round(l.precio*c*best/100);d+=x;if(l.o==='asadito')da+=x;}
-  return {d,da};
+    const x=Math.round(l.precio*c*best/100);d+=x;if(l.o==='asadito')da+=x;else if(l.o==='polleria')dpp+=x;}
+  return {d,da,dp:dpp};
 }
 // Cobertura: zonas por distancia en línea recta desde el local (la base vuelve a calcularlo)
 function zonas(){const c=cat.config||{};return c.local_lat!=null&&c.local_lng!=null&&Array.isArray(c.zonas_delivery)&&c.zonas_delivery.length?c.zonas_delivery.slice().sort((a,b)=>a.km-b.km):null;}
@@ -559,7 +566,7 @@ function deliveryBase(neto,na,nb,zp){
   return {dl0,dl:dl0,falta:dg!=null&&dg>neto?dg-neto:0};
 }
 function totHtml(){
-  const c=cat.config||{},t=totals(),dp=descPreview(),neto=t.sub-dp.d,di=deliveryInfo(neto,t.a-dp.da,t.b-(dp.d-dp.da));
+  const c=cat.config||{},t=totals(),dp=descPreview(),neto=t.sub-dp.d,di=deliveryInfo(neto,t.a-dp.da,t.b-(dp.d-dp.da-(dp.dp||0)));
   const envT=Object.keys(cart).reduce((a,k)=>a+envCosto(k),0);
   return (envT?'<div class="line"><span>♻️ Envases</span><span>'+gs(envT)+'</span></div>':'')+'<div class="line"><span>Subtotal</span><span>'+gs(t.sub)+'</span></div>'+
     (dp.d?'<div class="line promo"><span>🏷️ Descuentos</span><span>−'+gs(dp.d)+'</span></div>':'')+
@@ -690,8 +697,8 @@ async function enviar(){
   if(sinEnv){const e=document.querySelector('[data-envq="'+CSS.escape(sinEnv)+'"]');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}
     const e2=$('f-err');e2.textContent='Indicá si tenés envases para '+line(sinEnv).nombre+'.';bump(e2);return;}
   const err=m=>{const e=$('f-err');e.textContent=m;bump(e);};
-  const cer=['asadito','bodega'].filter(l=>!abierto(l)&&body.items.some(i=>i.origen===l));
-  if(cer.length){err((cer[0]==='asadito'?'El asadito':'La bodega')+' está cerrado ahora. Quitá esos productos'+(proxima(cer[0])?' o pedí '+proxima(cer[0]):'')+'.');return;}
+  const cer=['asadito','polleria','bodega'].filter(l=>!abierto(l)&&body.items.some(i=>i.origen===l));
+  if(cer.length){err(LOC[cer[0]].art+' está cerrad'+(cer[0]==='asadito'?'o':'a')+' ahora. Quitá esos productos'+(proxima(cer[0])?' o pedí '+proxima(cer[0]):'')+'.');return;}
   if(body.nombre.length<2){err('Ingresá tu nombre.');return;}
   if(has18()&&!body.mayor_edad){const e=$('sh-18');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});bump(e);}err('Para pedir bebidas alcohólicas o cigarrillos tenés que confirmar que sos mayor de 18 años.');return;}
   if(body.factura&&!/^[0-9A-Za-z.]{3,15}(-[0-9])?$/.test(body.factura.ruc.replace(/\s/g,''))){err('Revisá el RUC para la factura (ej: 1234567-8).');return;}
@@ -852,7 +859,7 @@ document.addEventListener('focusin',e=>{const i=e.target;if(i.matches&&i.matches
 misBtn();load().then(resumeLast);
 setInterval(()=>{if(!$('sheet').classList.contains('on'))load();},5*60e3);
 // abrir/cerrar a la hora justa sin recargar
-let ultimo='';setInterval(()=>{if(!cat.config)return;const k=abierto('asadito')+'|'+abierto('bodega');if(ultimo&&k!==ultimo&&!$('sheet').classList.contains('on'))render();ultimo=k;estadoTabs();},30e3);
+let ultimo='';setInterval(()=>{if(!cat.config)return;const k=LOCS().map(l=>abierto(l)).join('|');if(ultimo&&k!==ultimo&&!$('sheet').classList.contains('on'))render();ultimo=k;estadoTabs();},30e3);
 </script>
 </body>
 </html>

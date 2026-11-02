@@ -65,12 +65,13 @@
     if(filtro==='activos') q=q.in('estado',['pendiente','aceptado','preparando','en_camino']);
     else if(filtro==='hoy') q=q.gte('created_at',hoyISO());
     else if(filtro==='cancelados') q=q.eq('estado','cancelado');
-    var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,costo_delivery,estado,repartidor,metodo_pago,total').gte('created_at',hoyISO());
+    var r=await q, rh=await sb.from('pedidos_online').select('total_asadito,total_bodega,total_polleria,costo_delivery,estado,repartidor,metodo_pago,total').gte('created_at',hoyISO());
     if(r.error){b.innerHTML='<div class="alert alert-error">Error: '+h(r.error.message)+'</div>';return;}
     var ent=(rh.data||[]).filter(function(p){return p.estado==='entregado';});
     var sum=function(k){return ent.reduce(function(a,p){return a+Number(p[k]||0);},0);};
     var html='<div class="ped-sum"><div><span class="ped-meta">Entregados hoy</span><b>'+ent.length+'</b></div>'+
       '<div><span class="ped-meta">🔥 Asadito (su caja)</span><b>'+fmtGs(sum('total_asadito'))+'</b></div>'+
+      (sum('total_polleria')?'<div><span class="ped-meta">🍗 Pollería (su caja)</span><b>'+fmtGs(sum('total_polleria'))+'</b></div>':'')+
       '<div><span class="ped-meta">🛒 Bodega</span><b>'+fmtGs(sum('total_bodega'))+'</b></div>'+
       '<div><span class="ped-meta">🛵 Delivery cobrado</span><b>'+fmtGs(sum('costo_delivery'))+'</b></div></div>'+
       (function(){var R={};ent.forEach(function(p){if(!p.repartidor)return;var x=R[p.repartidor]=R[p.repartidor]||{n:0,ef:0};x.n++;if(p.metodo_pago==='efectivo')x.ef+=Number(p.total)||0;});
@@ -84,7 +85,7 @@
   window.pedRenderLista=pedRenderLista;
 
   function cardHtml(p){
-    var its=p.items||[], asd=its.filter(function(i){return i.origen==='asadito';}), bod=its.filter(function(i){return i.origen==='bodega';});
+    var its=p.items||[], asd=its.filter(function(i){return i.origen==='asadito';}), pol=its.filter(function(i){return i.origen==='polleria';}), bod=its.filter(function(i){return i.origen==='bodega';});
     var li=function(i){return '<div class="ped-it"><span>'+i.cantidad+'× '+h(i.nombre)+(i.combo?' <span class="ped-meta">· 🎁 '+h(i.combo)+'</span>':'')+(i.desc_pct?' <span class="ped-meta">· −'+i.desc_pct+'%</span>':'')+(i.envase==='tengo'?' <b style="color:var(--green)">· ♻️ trae '+i.envases+' envase'+(i.envases>1?'s':'')+'</b>':'')+'</span><span>'+fmtGs(i.subtotal)+'</span></div>';};
     var vuelto=p.metodo_pago==='efectivo'&&Number(p.paga_con)>Number(p.total)?' · paga con '+fmtGs(p.paga_con)+' → vuelto '+fmtGs(p.paga_con-p.total):'';
     var acts='';
@@ -111,12 +112,14 @@
       (p.venta_bodega_num?'<div class="ped-meta" style="color:var(--green);font-weight:700">🛒 Venta bodega #'+p.venta_bodega_num+' ✓ registrada al entregar</div>':'')+
       (p.venta_bodega_aviso?'<div class="ped-meta" style="color:var(--amber,#b7791f);font-weight:600">⚠️ '+h(p.venta_bodega_aviso)+'</div>':'')+
       (p.estado==='entregado'&&Number(p.total_asadito)>0?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px">🔥 Asadito: <b>'+fmtGs(p.total_asadito)+'</b> → pasar a la caja del asadito</div>':'')+
+      (p.estado==='entregado'&&Number(p.total_polleria)>0?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px">🍗 Pollería: <b>'+fmtGs(p.total_polleria)+'</b> → pasar a la caja de la pollería</div>':'')+
       (p.calificacion?'<div style="font-size:13px"><span style="color:#f5a623">'+'★'.repeat(p.calificacion)+'</span><span style="color:var(--border)">'+'★'.repeat(5-p.calificacion)+'</span>'+(p.calificacion_txt?' · '+h(p.calificacion_txt):'')+'</div>':'')+
       (p.alerta?'<div style="background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:6px 8px;font-size:13px">⚠️ '+h(p.alerta)+(p.promo==='delivery_gratis_primera'?' · se le aplicó delivery gratis de 1ª compra':'')+'</div>':'')+
       (p.mayor_18?'<div class="ped-meta" style="color:var(--red);font-weight:700">🔞 +18: verificar cédula al entregar</div>':'')+
       (p.factura_ruc?'<div style="background:var(--accent-bg);border-radius:8px;padding:6px 8px;font-size:13px"><b>🧾 FACTURA</b> · RUC <b>'+h(p.factura_ruc)+'</b> · '+h(p.factura_razon||'')+'</div>':'')+
       (p.notas?'<div class="ped-meta">📝 '+h(p.notas)+'</div>':'')+
       (asd.length?'<div class="ped-sec">🔥 Asadito · '+fmtGs(p.total_asadito)+'</div>'+asd.map(li).join(''):'')+
+      (pol.length?'<div class="ped-sec">🍗 Pollería · '+fmtGs(p.total_polleria)+'</div>'+pol.map(li).join(''):'')+
       (bod.length?'<div class="ped-sec">🛒 Bodega · '+fmtGs(p.total_bodega)+'</div>'+bod.map(li).join(''):'')+
       (function(){var ag={};(p.promos||[]).forEach(function(x){if(x.tipo==='primera_compra')return;var k=x.tipo+'|'+x.nombre;ag[k]=(ag[k]||0)+Number(x.monto||0);});
         return Object.keys(ag).map(function(k){var t=k.split('|');var del=t[0]==='delivery_gratis'||t[0]==='fidelidad';
@@ -238,6 +241,12 @@
 '';};
     var fotoX=function(p){return p.imagen_url?'<button type="button" class="btn btn-secondary btn-sm" title="Quitar foto" onclick="pedAsaditoFoto(\''+p.id+'\',null,\''+h(p.imagen_url)+'\')">✕ Foto</button>':'';};
     var catSel=function(p){return '<select style="width:auto;padding:4px;font-size:12px" onclick="event.stopPropagation()" onchange="pedAsaditoCat(\''+p.id+'\',this.value)">'+CATS_A.map(function(c){return '<option'+(p.categoria===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>';};
+    var rpo=await sb.from('pedidos_polleria').select('*').eq('activo',true).order('orden').order('nombre'), pols=rpo.data||[];
+    var fotoP=function(x){return '<label title="'+(x.imagen_url?'Cambiar foto':'Agregar foto')+'" style="flex:0 0 auto;width:44px;height:44px;margin-left:8px;border-radius:10px;border:1px dashed var(--border2,#ccc);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:var(--bg3,#f3f4f6)">'+
+      (x.imagen_url?'<img src="'+h(x.imagen_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">':'📷')+'<input type="file" accept="image/*" hidden onchange="pedPolFoto(\''+x.id+'\',this,\''+h(x.imagen_url||'')+'\')"></label>';};
+    var polCard='<div class="card"><div class="card-header"><h3>🍗 Pollería</h3><button class="btn btn-primary btn-sm" onclick="pedPolEditar()">+ Producto</button></div><div class="ped-meta" style="padding:8px 12px">Caja aparte, como el asadito. Marcá «Agotado» cuando se terminen; el horario se carga en ⚙️ Configuración.</div>'+
+      (rpo.error?'<div class="alert alert-error">'+h(rpo.error.message)+'</div>':pols.length?pols.map(function(x){return '<div class="ped-brow ped-arow">'+fotoP(x)+'<div style="flex:1;min-width:0"><label class="ped-row"><input type="checkbox" '+(x.vender_online?'checked':'')+' onchange="pedPolSet(\''+x.id+'\',{vender_online:this.checked})"><span style="flex:1">'+h(x.nombre)+'</span><span class="ped-meta">'+fmtGs(x.precio)+'</span></label>'+
+        '<div class="ped-bctl"><button type="button" class="btn btn-secondary btn-sm" style="flex:1;'+(x.disponible?'color:var(--green)':'color:var(--red)')+'" onclick="pedPolSet(\''+x.id+'\',{disponible:'+(!x.disponible)+'})">'+(x.disponible?'✅ Hay':'⛔ Agotado')+'</button><button type="button" class="btn btn-secondary btn-sm" title="Editar" onclick="pedPolEditar(\''+x.id+'\')">✏️</button><button type="button" class="btn btn-secondary btn-sm" title="Quitar" onclick="pedPolBorrar(\''+x.id+'\')">🗑</button></div></div></div>';}).join(''):'<div class="ped-meta" style="padding:12px">Todavía no hay productos. Tocá «+ Producto» (ej: Pollo entero, Medio pollo).</div>')+'</div>';
     var t=bodQ, qb=sb.from('bodega_productos').select('id,nombre,precio_venta,stock,vender_online,envase_id,destacado_online').eq('activo',true).order('nombre').limit(200);
     qb=t?qb.ilike('nombre','%'+t.replace(/[%_,()]/g,' ')+'%'):qb.eq('vender_online',true);
     var rb=await qb, lista=rb.data||[];
@@ -250,6 +259,7 @@
     b.innerHTML='<div class="alert" style="margin-bottom:12px">Marcá lo que tus clientes pueden pedir en <a href="'+h(URL_PUBLICA)+'" target="_blank" rel="noopener">'+h(URL_PUBLICA)+'</a>. Los precios son los mismos del sistema. Tocá ⭐ para mostrar un producto en «Destacados» (hasta 8).</div>'+
       '<div class="ped-grid">'+
       '<div class="card"><div class="card-header"><h3>🔥 Asadito</h3></div>'+'<div class="ped-meta" style="padding:8px 12px">Productos y precios de tu sistema de control de asaditos.</div>'+(ra.error?'<div class="alert alert-error">'+h(ra.error.message)+'</div>':(ra.data||[]).map(function(p){return '<div class="ped-brow ped-arow">'+fotoA(p)+'<div style="flex:1;min-width:0">'+row('asadito',p,p.precio,'')+'<div class="ped-bctl">'+catSel(p)+fotoX(p)+'</div></div></div>';}).join(''))+'</div>'+
+      polCard+
       '<div class="card"><div class="card-header"><h3>🛒 Bodega</h3></div><div style="padding:10px"><input id="ped-bodq" placeholder="Buscar producto para agregar…" value="'+h(bodQ)+'" oninput="pedBodQ(this.value)" style="width:100%"></div>'+
       (lista.length?lista.map(function(p){return '<div class="ped-brow">'+row('bodega',p,p.precio_venta,(Number(p.stock)||0)+' en stock')+'<div class="ped-bctl">'+envSel(p)+(p.vender_online?'<button type="button" class="btn btn-secondary btn-sm" title="Destacar en la página" style="margin:0 8px 0 6px;flex:0 0 auto;'+(p.destacado_online?'color:#f59e0b;border-color:#f59e0b':'opacity:.45')+'" onclick="pedDestacar(\''+p.id+'\','+(!p.destacado_online)+')">⭐</button>':'')+'</div></div>';}).join(''):'<div class="ped-meta" style="padding:12px">'+(t?'Sin resultados':'Todavía no hay productos de bodega online. Buscá arriba para agregar.')+'</div>')+'</div>'+
       '</div>';
@@ -285,6 +295,44 @@
       if(r.error) throw r.error;
       var m=String(anterior||'').match(/\/object\/public\/productos\/(.+)$/); if(m) sb.storage.from('productos').remove([decodeURIComponent(m[1].split('?')[0])]).catch(function(){});
       toast(url?'📷 Foto guardada':'Foto quitada'); pedRenderCatalogo();
+    }catch(e){toast('No se pudo guardar la foto: '+(e.message||e),'err');}
+  };
+  // ─── Pollería (productos propios del pedido online) ───
+  window.pedPolSet=async function(id,obj){
+    obj.updated_at=new Date().toISOString();
+    var r=await sb.from('pedidos_polleria').update(obj).eq('id',id);
+    if(r.error){toast('Error: '+r.error.message,'err');return;}
+    toast(obj.disponible===false?'Marcado agotado':obj.disponible?'Disponible de nuevo':obj.vender_online===false?'Oculto online':'Guardado');pedRenderCatalogo();
+  };
+  window.pedPolEditar=async function(id){
+    var x={nombre:'',precio:''};
+    if(id){var r=await sb.from('pedidos_polleria').select('*').eq('id',id).single();if(r.data)x=r.data;}
+    openModal(id?'Editar producto de pollería':'Nuevo producto de pollería',
+      '<div class="form-grid"><div class="form-group" style="grid-column:1/-1"><label>Nombre</label><input id="pol-nom" value="'+h(x.nombre)+'" placeholder="Ej: POLLO ASADO ENTERO"></div>'+
+      '<div class="form-group"><label>Precio (Gs.)</label><input id="pol-pre" inputmode="numeric" value="'+(x.precio||'')+'"></div></div>',
+      async function(){
+        var nom=g('pol-nom').value.trim(), pre=Number(String(g('pol-pre').value).replace(/\D/g,''))||0;
+        if(nom.length<2){toast('Poné el nombre','err');return;} if(!(pre>0)){toast('Poné el precio','err');return;}
+        var obj={nombre:nom,precio:pre,updated_at:new Date().toISOString()};
+        var r=id?await sb.from('pedidos_polleria').update(obj).eq('id',id):await sb.from('pedidos_polleria').insert(obj);
+        if(r.error){toast('Error: '+r.error.message,'err');return;}
+        toast('Producto guardado');closeModal();pedRenderCatalogo();
+      },'Guardar');
+  };
+  window.pedPolBorrar=async function(id){
+    if(!(await bgConfirm('¿Quitar este producto de la pollería?',{title:'Quitar producto',confirmText:'Quitar',variant:'warning'})))return;
+    pedPolSet(id,{activo:false});
+  };
+  window.pedPolFoto=async function(id,inp,anterior){
+    var f=inp.files&&inp.files[0];inp.value='';if(!f)return;
+    try{toast('Subiendo foto…');
+      var blob=await fotoWebp(f), path='polleria/'+id+'/'+Date.now()+'.webp';
+      var up=await sb.storage.from('productos').upload(path,blob,{contentType:'image/webp',cacheControl:'31536000',upsert:false});
+      if(up.error) throw up.error;
+      var r=await sb.from('pedidos_polleria').update({imagen_url:sb.storage.from('productos').getPublicUrl(path).data.publicUrl,updated_at:new Date().toISOString()}).eq('id',id);
+      if(r.error) throw r.error;
+      var m=String(anterior||'').match(/\/object\/public\/productos\/(.+)$/); if(m) sb.storage.from('productos').remove([decodeURIComponent(m[1].split('?')[0])]).catch(function(){});
+      toast('📷 Foto guardada');pedRenderCatalogo();
     }catch(e){toast('No se pudo guardar la foto: '+(e.message||e),'err');}
   };
   window.pedEnvase=async function(id,envId){
@@ -520,7 +568,7 @@
   };
   var DIAS_H=[[1,'Lunes'],[2,'Martes'],[3,'Miércoles'],[4,'Jueves'],[5,'Viernes'],[6,'Sábado'],[0,'Domingo']];
   function horariosHtml(hs){
-    return '<div class="ped-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">'+[['asadito','🔥 Asadito'],['bodega','🛒 Bodega']].map(function(L){
+    return '<div class="ped-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">'+[['asadito','🔥 Asadito'],['polleria','🍗 Pollería'],['bodega','🛒 Bodega']].map(function(L){
       var h=hs[L[0]]||{};
       return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px"><b>'+L[1]+'</b>'+DIAS_H.map(function(d){
         var r=h[d[0]], on=!!r, a=r?r[0]:'18:00', c=r?(r[1]==='24:00'?'00:00':r[1]):'23:00';
@@ -530,7 +578,7 @@
     }).join('')+'</div>';
   }
   function leerHorarios(){
-    var out={asadito:{},bodega:{}};
+    var out={asadito:{},polleria:{},bodega:{}};
     document.querySelectorAll('.ph-on').forEach(function(cb){
       if(!cb.checked) return;
       var l=cb.dataset.l, d=cb.dataset.d, q=function(c){return document.querySelector('.'+c+'[data-l="'+l+'"][data-d="'+d+'"]').value;};
