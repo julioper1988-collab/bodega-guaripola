@@ -15,6 +15,6 @@ create index if not exists asaditos_v2_ventas_fecha on public.asaditos_v2_ventas
 alter table public.asaditos_v2_ventas enable row level security;
 revoke all on public.asaditos_v2_ventas from anon, authenticated;
 
--- ch = Chompi, mi = Mirna: consumen y no pagan en caja (se descuentan del efectivo esperado, como Pedidos Ya / Monchis).
+-- ch = Chompi, mi = Mirna, ju = Julio: consumen y no pagan en caja (se descuentan del efectivo esperado, como Pedidos Ya / Monchis).
 alter table public.asaditos_v2_ventas drop constraint if exists asaditos_v2_ventas_metodo_check;
-alter table public.asaditos_v2_ventas add constraint asaditos_v2_ventas_metodo_check check (metodo in ('ef','pos','tr','py','mo','ch','mi'));
+alter table public.asaditos_v2_ventas add constraint asaditos_v2_ventas_metodo_check check (metodo in ('ef','pos','tr','py','mo','ch','mi','ju'));
