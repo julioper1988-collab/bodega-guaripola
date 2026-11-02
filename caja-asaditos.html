@@ -109,7 +109,7 @@ details.card>summary{cursor:pointer;font-weight:700;list-style:none}details.card
 const API_URL='https://sdpysvowvwucjfnyosuf.supabase.co/functions/v1/asaditos-v2-api';
 const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
 const TOKEN_KEY='caja_asaditos_token';
-const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna'}; // ch/mi: consumo sin pago en caja
+const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna',ju:'Julio'}; // ch/mi/ju: consumo sin pago en caja
 const $=id=>document.getElementById(id);
 const DENOM=[100000,50000,20000,10000,5000,2000,1000,500,100,50];
 let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),conteo=null,billetes={},cobrando=false;
