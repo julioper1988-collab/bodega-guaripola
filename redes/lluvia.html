@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:#0b1220}
+body{width:var(--w);height:var(--h);overflow:hidden;font-family:"Inter Display","Inter",sans-serif;color:#fff}
+.c{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;padding:var(--pad) 70px var(--padb,var(--pad));
+  background:linear-gradient(180deg,#1c2a44 0%,#0f1a2e 45%,#0b1220 100%);overflow:hidden}
+.drop{position:absolute;top:-200px;width:3px;height:var(--dl,90px);border-radius:3px;background:linear-gradient(180deg,transparent,rgba(170,205,255,.75));
+  animation:fall linear infinite;z-index:0}
+.warm{position:absolute;left:50%;top:var(--wy);width:1000px;height:800px;margin-left:-500px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,150,40,.45),rgba(255,90,0,.12) 45%,transparent 70%);animation:pulse 2.2s ease-in-out infinite alternate}
+.z{position:relative;z-index:1}
+.cloud{font-family:"Noto Color Emoji";font-size:var(--cl);line-height:1;animation:drop .8s cubic-bezier(.2,1.4,.4,1) both,sway 3s 1s ease-in-out infinite alternate}
+.brand{margin-top:10px;font-size:38px;font-weight:700;letter-spacing:10px;color:#cfe0ff;animation:fade .6s .2s both}
+h1{margin-top:14px;text-align:center;font-weight:900;line-height:.9;font-size:var(--h1);animation:slam .8s .35s cubic-bezier(.2,1.5,.4,1) both}
+h1 .q{display:block;color:#9cc4ff;font-size:.62em;margin-bottom:10px}
+h1 .b{display:block;background:linear-gradient(180deg,#fff6c9,#ffc23a 45%,#ff6a00);-webkit-background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 0 #4a1503) drop-shadow(0 0 36px rgba(255,120,0,.45))}
+.sub{margin-top:18px;font-size:var(--sz);font-weight:700;color:#e7efff;text-align:center;animation:fade .6s 1s both}
+.sub b{color:#ffc23a}
+.moto{font-family:"Noto Color Emoji";font-size:var(--mo);line-height:1;margin-top:var(--mt);animation:ride 1s 1.1s cubic-bezier(.2,1.2,.4,1) both,bump .45s 2.1s ease-in-out infinite alternate}
+.locs{width:100%;margin-top:var(--lt);display:flex;flex-direction:column;gap:var(--gap)}
+.loc{display:flex;align-items:center;gap:22px;background:rgba(255,255,255,.08);border:2px solid rgba(160,200,255,.28);border-radius:24px;padding:var(--rp) 30px;backdrop-filter:blur(4px)}
+.loc:nth-child(1){animation:slide .55s 1.9s cubic-bezier(.2,1.3,.4,1) both}
+.loc:nth-child(2){animation:slide .55s 2.3s cubic-bezier(.2,1.3,.4,1) both}
+.loc:nth-child(3){animation:slide .55s 2.7s cubic-bezier(.2,1.3,.4,1) both}
+.loc .e{font-family:"Noto Color Emoji";font-size:calc(var(--rn)*1.25)}
+.loc b{flex:1;font-size:var(--rn);font-weight:800;line-height:1.1}
+.loc b i{display:block;font-style:normal;font-weight:600;font-size:.6em;color:#ffcf8a}
+.loc .hr{font-size:calc(var(--rn)*.92);font-weight:800;color:#ffc23a;white-space:nowrap}
+.gift{margin-top:var(--gt);width:100%;text-align:center;background:linear-gradient(90deg,#ff7a00,#ff3d00);border-radius:24px;padding:var(--rp) 24px;
+  font-size:calc(var(--rn)*.95);font-weight:900;box-shadow:0 10px 40px rgba(255,90,0,.45);animation:stamp .55s 3.2s cubic-bezier(.2,1.6,.4,1) both}
+.gift small{display:block;font-size:.6em;font-weight:700;opacity:.95;margin-top:4px}
+.info{margin-top:auto;padding-top:20px;width:100%;text-align:center}
+.cta{display:inline-block;line-height:1.15;background:#fff;color:#0f1a2e;border-radius:24px;padding:20px 40px;font-weight:900;font-size:var(--hz);
+  box-shadow:0 0 0 6px rgba(156,196,255,.35);animation:up .6s 3.7s both,beat 1s 4.6s ease-in-out infinite}
+.cta small{display:block;font-size:.62em;font-weight:700;color:#3a5a8a;margin-top:4px}
+.wa{margin-top:16px;font-size:calc(var(--hz)*.85);font-weight:700;color:#cfe0ff;animation:fade .6s 4.1s both}
+@keyframes fall{to{transform:translate(-120px,2400px)}}
+@keyframes drop{from{transform:translateY(-200px);opacity:0}}
+@keyframes sway{to{transform:translateX(18px)}}
+@keyframes fade{from{opacity:0}}
+@keyframes slam{from{transform:scale(2.2);opacity:0}}
+@keyframes ride{from{transform:translateX(-900px)}}
+@keyframes bump{to{transform:translateY(-8px) rotate(-2deg)}}
+@keyframes slide{from{transform:translateX(120%);opacity:0}}
+@keyframes stamp{from{transform:scale(2.5) rotate(-6deg);opacity:0}}
+@keyframes up{from{transform:translateY(80px);opacity:0}}
+@keyframes beat{50%{transform:scale(1.05)}}
+@keyframes pulse{to{transform:scale(1.1);opacity:.75}}
+</style></head>
+<body><div class="c">
+  <div class="warm"></div>
+  <div class="z cloud">🌧️</div>
+  <div class="z brand">GUARIPOLA</div>
+  <h1 class="z"><span class="q">¿Llueve?</span><span class="b">Quedate<br>en casa</span></h1>
+  <div class="z sub">Nosotros te llevamos todo · <b>20–25 min</b></div>
+  <div class="z moto">🛵💨</div>
+  <div class="z locs">
+    <div class="loc"><span class="e">🍗</span><b>Pollería<i>pollo a la brasa + mandioca</i></b><span class="hr">11:45–16:00</span></div>
+    <div class="loc"><span class="e">🛒</span><b>Bodega<i>bebidas, snacks y más</i></b><span class="hr">13:30–00:00</span></div>
+    <div class="loc"><span class="e">🔥</span><b>Asadito<i>a la parrilla</i></b><span class="hr">17:30–23:30</span></div>
+  </div>
+  <div class="z gift">🎉 Delivery GRATIS en tu 1ª compra online<small>se aplica solo al poner tu número</small></div>
+  <div class="z info">
+    <div class="cta">Pedí online 👉<br>app.guaripola.com/pedidos.html<small>sin mojarte, desde el celular</small></div>
+    <div class="wa">WhatsApp 0981 800 816</div>
+  </div>
+</div>
+<script>
+const c=document.querySelector('.c');
+for(let i=0;i<70;i++){const d=document.createElement('div');d.className='drop';
+  d.style.left=((i*53)%115)+'%';d.style.animationDuration=(0.7+((i*7)%6)*0.08)+'s';d.style.animationDelay=(-((i*0.137)%1.2))+'s';
+  d.style.setProperty('--dl',(60+(i*11)%70)+'px');d.style.opacity=.35+((i*3)%6)/10;c.appendChild(d);}
+</script>
+</body></html>
