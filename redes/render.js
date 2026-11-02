@@ -1,6 +1,6 @@
 const {chromium}=require('playwright');const path=require('path');
-const F={story:{w:1080,h:1920,v:'--pad:200px;--padb:220px;--gy:330px;--h1:150px;--emo:200px;--emt:0px;--lt:14px;--gap:18px;--rp:20px;--rn:44px;--rpz:58px;--hz:38px'},
-         feed:{w:1080,h:1350,v:'--pad:48px;--gy:170px;--h1:112px;--emo:160px;--emt:6px;--lt:16px;--gap:12px;--rp:12px;--rn:36px;--rpz:48px;--hz:28px'}};
+const F={story:{w:1080,h:1920,v:'--pad:200px;--padb:220px;--gy:330px;--h1:150px;--emo:150px;--emt:0px;--lt:14px;--gap:18px;--rp:20px;--rn:44px;--rpz:58px;--hz:38px'},
+         feed:{w:1080,h:1350,v:'--pad:48px;--gy:170px;--h1:112px;--emo:110px;--emt:6px;--lt:16px;--gap:12px;--rp:12px;--rn:36px;--rpz:48px;--hz:28px'}};
 (async()=>{const b=await chromium.launch();const mode=process.argv[2];
  for(const k of Object.keys(F)){const f=F[k];if(mode==='video'&&k!=='story')continue;
   const p=await b.newPage({viewport:{width:f.w,height:f.h}});
