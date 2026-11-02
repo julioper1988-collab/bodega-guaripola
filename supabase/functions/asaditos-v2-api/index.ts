@@ -48,18 +48,20 @@ async function requireSession(token: string | undefined) {
 }
 
 // Arma las líneas de un ticket con nombre y precio del sistema (no del cliente)
-async function armarItems(accountId: string, lineas: any[]) {
+async function armarItems(accountId: string, lineas: any[], vacioOk = false) {
   const { data: st, error } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', accountId).maybeSingle();
   if (error) return { error: 'No se pudo cargar la base.' };
   const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
-  const items: { id: string; nombre: string; precio: number; cant: number }[] = [];
+  // persona: 0 = sin asignar, 1 a 8 = cuenta separada de una mesa
+  const items: { id: string; nombre: string; precio: number; cant: number; persona?: number }[] = [];
   for (const l of lineas) {
     const p = productos.get(String(l?.id));
-    const cant = Number(l?.cant);
+    const cant = Number(l?.cant), persona = Number(l?.persona ?? 0);
     if (!p || !Number.isInteger(cant) || cant < 1 || cant > 999) return { error: 'Producto o cantidad inválida.' };
-    items.push({ id: String(p.id), nombre: String(p.name || ''), precio: Number(p.price) || 0, cant });
+    if (!Number.isInteger(persona) || persona < 0 || persona > 8) return { error: 'Persona inválida.' };
+    items.push({ id: String(p.id), nombre: String(p.name || ''), precio: Number(p.price) || 0, cant, ...(persona ? { persona } : {}) });
   }
-  if (!items.length) return { error: 'El ticket está vacío.' };
+  if (!items.length && !vacioOk) return { error: 'El ticket está vacío.' };
   return { items, total: items.reduce((a, x) => a + x.precio * x.cant, 0) };
 }
 
@@ -245,9 +247,12 @@ Deno.serve(async (req) => {
     if (!METODOS.includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
     const armado = await armarItems(session.accountId, Array.isArray(body.items) ? body.items : []);
     if ('error' in armado) return json({ error: armado.error }, 400);
+    // resto: lo que queda sin cobrar (otras personas); si hay, la mesa sigue abierta con eso
+    const resto = await armarItems(session.accountId, Array.isArray(body.resto) ? body.resto : [], true);
+    if ('error' in resto) return json({ error: resto.error }, 400);
     // Se cierra primero (solo si sigue abierta): así dos celulares no la cobran dos veces
     const { data: mesa } = await db.from('asaditos_v2_mesas')
-      .update({ cerrada: true, items: armado.items, usuario: session.username, updated_at: new Date().toISOString() })
+      .update({ cerrada: true, usuario: session.username, updated_at: new Date().toISOString() })
       .eq('account_id', session.accountId).eq('id', String(body.id || '')).eq('cerrada', false).select('id').maybeSingle();
     if (!mesa) return json({ error: 'Esa mesa ya fue cobrada o borrada.' }, 409);
     const { data: venta, error } = await db.from('asaditos_v2_ventas')
@@ -257,7 +262,7 @@ Deno.serve(async (req) => {
       await db.from('asaditos_v2_mesas').update({ cerrada: false }).eq('id', mesa.id);
       return json({ error: 'No se pudo guardar la venta.' }, 500);
     }
-    await db.from('asaditos_v2_mesas').update({ venta_id: venta.id }).eq('id', mesa.id);
+    await db.from('asaditos_v2_mesas').update(resto.items.length ? { cerrada: false, items: resto.items, venta_id: venta.id } : { items: armado.items, venta_id: venta.id }).eq('id', mesa.id);
     return json({ ok: true, venta });
   }
 

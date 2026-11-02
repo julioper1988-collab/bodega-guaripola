@@ -40,6 +40,8 @@ html,body{-webkit-text-size-adjust:100%}button{touch-action:manipulation}
 .line .n{flex:1}.num{font-variant-numeric:tabular-nums;text-align:right}
 .q{width:30px;height:30px;padding:0;border-radius:8px}
 .total{display:flex;justify-content:space-between;font-size:1.4rem;font-weight:800;margin:10px 0}
+.pers{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 8px}.pers .btn{padding:6px 10px;font-size:.85rem}.pers .btn.on{border-color:var(--acc);color:var(--acc);font-weight:700}
+.grp{display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 8px;background:var(--input);border-radius:8px;font-weight:700}.grp .n{flex:1}.grp.on{outline:1px solid var(--acc)}
 .mesas{display:flex;gap:8px;overflow-x:auto;padding:10px 14px 0;max-width:1300px;margin:0 auto}.mesas:empty{display:none}
 .mesa{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;text-align:left;cursor:pointer}.mesa b{display:block}.mesa span{color:var(--acc);font-weight:700;font-size:.85rem}.mesa.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
 .metodos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}.metodos .btn.on{border-color:var(--acc);color:var(--acc);font-weight:700}
@@ -69,6 +71,7 @@ details.card>summary{cursor:pointer;font-weight:700;list-style:none}details.card
   <aside>
     <div class="card">
       <h2 id="ticketTit">Ticket</h2>
+      <div class="pers" id="pers"></div>
       <div id="ticket"></div>
       <div class="total"><span>Total</span><span id="total" class="num">₲ 0</span></div>
       <div class="metodos" id="metodos"></div>
@@ -117,7 +120,9 @@ const TOKEN_KEY='caja_asaditos_token';
 const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna',ju:'Julio'}; // ch/mi/ju: consumo sin pago en caja
 const $=id=>document.getElementById(id);
 const DENOM=[100000,50000,20000,10000,5000,2000,1000,500,100,50];
-let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),conteo=null,billetes={},cobrando=false,mesas=[],mesa=null,sucio=false;
+let token=localStorage.getItem(TOKEN_KEY)||'',productos=[],carrito={},metodo='ef',ventas=[],agotados=new Set(),conteo=null,billetes={},cobrando=false,mesas=[],mesa=null,sucio=false,pers=0,cobrarP=null;
+// Carrito: clave «idProducto|persona» (persona 0 = sin asignar, 1 a 8 = cuenta separada)
+const ck=(id,p)=>id+'|'+(p||0),cid=k=>k.split('|')[0],cpers=k=>+k.split('|')[1]||0;
 
 // Noche de trabajo: hasta las 6:00 cuenta como el día anterior (igual que Pedidos online)
 function hoy(){const d=new Date(Date.now()-6*3600e3);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
@@ -135,12 +140,12 @@ function toast(t){const el=$('toast');el.textContent=t;el.style.display='block';
 async function cargarProductos(){
   const out=await api('productos');
   productos=out.productos||[];
-  Object.keys(carrito).forEach(id=>{if(!productos.some(p=>p.id===id))delete carrito[id]});
+  Object.keys(carrito).forEach(k=>{if(!productos.some(p=>p.id===cid(k)))delete carrito[k]});
   render();
 }
 async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas=out.ventas||[];agotados=new Set(out.agotados||[]);conteo=out.conteo||null;mesas=out.mesas||[];
   // Si la mesa abierta acá ya se cobró o borró en otro celular, se suelta
-  if(mesa&&!mesas.some(m=>m.id===mesa.id)){mesa=null;carrito={};sucio=false;toast('Esa mesa ya fue cerrada')}
+  if(mesa&&!mesas.some(m=>m.id===mesa.id)){mesa=null;carrito={};sucio=false;pers=0;cobrarP=null;toast('Esa mesa ya fue cerrada')}
   renderConteo();renderVentas();render()}
 async function iniciar(){
   $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
@@ -148,22 +153,33 @@ async function iniciar(){
   try{await cargarProductos();await cargarVentas()}catch(e){$('err').textContent=e.message}
 }
 
-function totalCarrito(){return productos.reduce((a,p)=>a+(carrito[p.id]||0)*(+p.price||0),0)}
+// Líneas del carrito ordenadas por persona; cobrarP elige a quién se cobra (null = todo)
+function lineasCarrito(){const out=[];for(let q=0;q<=8;q++)productos.forEach(p=>{const c=carrito[ck(p.id,q)];if(c)out.push({key:ck(p.id,q),id:p.id,p:q,cant:c,prod:p})});return out}
+const aCobrar=()=>lineasCarrito().filter(l=>cobrarP===null||l.p===cobrarP);
+const sumar=ls=>ls.reduce((a,l)=>a+l.cant*(+l.prod.price||0),0);
+function totalCarrito(){return sumar(aCobrar())}
+const enProd=id=>Object.keys(carrito).filter(k=>cid(k)===id).reduce((a,k)=>a+carrito[k],0);
 function render(){
   $('mesas').innerHTML=mesas.map(m=>`<button class="mesa ${mesa&&mesa.id===m.id?'on':''}" data-mesa="${esc(m.id)}"><b>🍽️ ${esc(m.nombre)}</b><span>${money(m.items.reduce((a,i)=>a+i.precio*i.cant,0))}</span></button>`).join('');
-  $('ticketTit').textContent=mesa?'🍽️ '+mesa.nombre:'Ticket';
   $('guardarMesa').textContent=mesa?'💾 Guardar mesa':'🍽️ Dejar como mesa pendiente';
   $('limpiar').textContent=mesa?'Volver a venta nueva':'Limpiar';
   $('borrarMesa').style.display=mesa?'':'none';
-  $('grid').innerHTML=productos.map(p=>`<button class="prod" data-id="${esc(p.id)}">${carrito[p.id]?`<i>${carrito[p.id]}</i>`:''}<b>${esc(p.name)}</b><span>${money(p.price)}</span>${quedan(p.id)}</button>`).join('')||'<div class="muted">Sin productos activos en el sistema de asaditos.</div>';
-  const lineas=productos.filter(p=>carrito[p.id]);
-  $('ticket').innerHTML=lineas.map(p=>`<div class="line"><span class="n">${esc(p.name)}</span><button class="btn q" data-menos="${esc(p.id)}">−</button><b class="num" style="width:26px;text-align:center">${carrito[p.id]}</b><button class="btn q" data-mas="${esc(p.id)}">+</button><span class="num" style="width:84px">${money(carrito[p.id]*(+p.price||0))}</span></div>`).join('')||'<div class="muted">Tocá un producto para agregarlo.</div>';
+  $('grid').innerHTML=productos.map(p=>`<button class="prod" data-id="${esc(p.id)}">${enProd(p.id)?`<i>${enProd(p.id)}</i>`:''}<b>${esc(p.name)}</b><span>${money(p.price)}</span>${quedan(p.id)}</button>`).join('')||'<div class="muted">Sin productos activos en el sistema de asaditos.</div>';
+  const lineas=lineasCarrito(),separado=lineas.some(l=>l.p>0);
+  if(cobrarP!==null&&!lineas.some(l=>l.p===cobrarP))cobrarP=null;
+  $('pers').innerHTML='<span class="muted" style="align-self:center;font-size:.85rem">Anotar a:</span>'+[0,1,2,3,4,5,6,7,8].map(q=>`<button class="btn ${q===pers?'on':''}" data-pers="${q}">${q?'👤'+q:'Todos'}</button>`).join('');
+  const fila=l=>`<div class="line"><span class="n">${esc(l.prod.name)}</span><button class="btn q" data-menos="${esc(l.key)}">−</button><b class="num" style="width:26px;text-align:center">${l.cant}</b><button class="btn q" data-mas="${esc(l.key)}">+</button><span class="num" style="width:84px">${money(l.cant*(+l.prod.price||0))}</span></div>`;
+  $('ticket').innerHTML=!lineas.length?'<div class="muted">Tocá un producto para agregarlo.</div>':!separado?lineas.map(fila).join(''):
+    [0,1,2,3,4,5,6,7,8].map(q=>{const ls=lineas.filter(l=>l.p===q);if(!ls.length)return '';
+      return `<div class="grp ${cobrarP===q?'on':''}"><span class="n">${q?'👤 Persona '+q:'Sin asignar'} · ${money(sumar(ls))}</span><button class="btn q" style="width:auto;padding:0 10px" data-cobrarp="${q}">${cobrarP===q?'✓ Cobrando':'Cobrar'}</button></div>`+ls.map(fila).join('')}).join('');
+  $('ticketTit').textContent=(mesa?'🍽️ '+mesa.nombre:'Ticket')+(cobrarP!==null?' · '+(cobrarP?'Persona '+cobrarP:'Sin asignar'):'');
   $('total').textContent=money(totalCarrito());
   $('metodos').innerHTML=Object.entries(METODOS).map(([k,v])=>`<button class="btn ${k===metodo?'on':''}" data-met="${k}">${v}</button>`).join('');
   $('efBox').style.display=metodo==='ef'?'':'none';
   calcVuelto();
   $('cobrar').disabled=!lineas.length||cobrando;$('guardarMesa').disabled=!lineas.length||cobrando;
-  const uds=lineas.reduce((a,p)=>a+carrito[p.id],0),t=totalCarrito();
+  $('cobrar').textContent=cobrarP===null?(separado?'Cobrar todo':'Cobrar'):'Cobrar '+(cobrarP?'Persona '+cobrarP:'sin asignar');
+  const uds=lineas.reduce((a,l)=>a+l.cant,0),t=totalCarrito();
   $('barra').classList.toggle('vacia',!uds);document.body.classList.toggle('con-barra',!!uds);
   $('barraUds').textContent=uds+' producto'+(uds===1?'':'s');$('barraTot').textContent=money(t);
   // Montos rápidos para el efectivo recibido: justo y billetes que alcanzan
@@ -191,7 +207,9 @@ function renderVentas(){
 
 document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
-  if(b.dataset.id){carrito[b.dataset.id]=(carrito[b.dataset.id]||0)+1;sucio=true;render()}
+  if(b.dataset.id){const k=ck(b.dataset.id,pers);carrito[k]=(carrito[k]||0)+1;sucio=true;render()}
+  else if(b.dataset.pers){pers=+b.dataset.pers;render()}
+  else if(b.dataset.cobrarp){const q=+b.dataset.cobrarp;cobrarP=cobrarP===q?null:q;$('recibido').value='';render()}
   else if(b.dataset.mas){carrito[b.dataset.mas]++;sucio=true;render()}
   else if(b.dataset.menos){if(--carrito[b.dataset.menos]<=0)delete carrito[b.dataset.menos];sucio=true;render()}
   else if(b.dataset.mesa)abrirMesa(b.dataset.mesa);
@@ -214,15 +232,20 @@ $('guardarConteo').onclick=async()=>{
 };
 renderBills();
 $('recibido').oninput=e=>{e.target.value=e.target.value.replace(/\D/g,'');calcVuelto()};
-$('limpiar').onclick=()=>{if(mesa&&sucio&&!confirm('Hay cambios sin guardar en la mesa. ¿Descartarlos?'))return;mesa=null;sucio=false;carrito={};$('recibido').value='';$('err').textContent='';render()};
+$('limpiar').onclick=()=>{if(mesa&&sucio&&!confirm('Hay cambios sin guardar en la mesa. ¿Descartarlos?'))return;mesa=null;sucio=false;carrito={};pers=0;cobrarP=null;$('recibido').value='';$('err').textContent='';render()};
 $('cobrar').onclick=async()=>{
-  const items=Object.entries(carrito).map(([id,cant])=>({id,cant}));
+  const sel=aCobrar(),items=sel.map(l=>({id:l.id,cant:l.cant,persona:l.p}));
+  const claves=new Set(sel.map(l=>l.key)),resto=lineasCarrito().filter(l=>!claves.has(l.key)).map(l=>({id:l.id,cant:l.cant,persona:l.p}));
   if(!items.length||cobrando)return;
   if(metodo==='ef'&&$('recibido').value&&+$('recibido').value<totalCarrito()){$('err').textContent='El monto recibido no alcanza.';return}
   cobrando=true;$('err').textContent='';render();
   try{
-    const out=mesa?await api('mesa_cobrar',{id:mesa.id,fecha:hoy(),metodo,items}):await api('venta',{fecha:hoy(),metodo,items});
-    carrito={};mesa=null;sucio=false;ventas.unshift(out.venta);renderVentas();cargarVentas().catch(()=>{});
+    const out=mesa?await api('mesa_cobrar',{id:mesa.id,fecha:hoy(),metodo,items,resto}):await api('venta',{fecha:hoy(),metodo,items});
+    // Se saca del carrito lo cobrado; si queda algo (otras personas), sigue abierto
+    sel.forEach(l=>delete carrito[l.key]);cobrarP=null;
+    if(!resto.length){carrito={};mesa=null;pers=0}
+    sucio=false;
+    ventas.unshift(out.venta);renderVentas();cargarVentas().catch(()=>{});
     $('recibido').value='';metodo='ef';toast('Cobrado '+money(out.venta.total));
   }catch(err){$('err').textContent=err.message}
   finally{cobrando=false;render()}
@@ -231,20 +254,20 @@ $('cobrar').onclick=async()=>{
 function abrirMesa(id){
   const m=mesas.find(x=>x.id===id);if(!m||(mesa&&mesa.id===id))return;
   if(sucio&&Object.keys(carrito).length&&!confirm(mesa?'Hay cambios sin guardar en '+mesa.nombre+'. ¿Descartarlos?':'Hay un ticket sin cobrar. ¿Descartarlo?'))return;
-  mesa={id:m.id,nombre:m.nombre};carrito={};sucio=false;$('recibido').value='';$('err').textContent='';
-  m.items.forEach(i=>{if(productos.some(p=>p.id===i.id))carrito[i.id]=(carrito[i.id]||0)+i.cant});
+  mesa={id:m.id,nombre:m.nombre};carrito={};sucio=false;pers=0;cobrarP=null;$('recibido').value='';$('err').textContent='';
+  m.items.forEach(i=>{if(productos.some(p=>p.id===i.id)){const k=ck(i.id,i.persona);carrito[k]=(carrito[k]||0)+i.cant}});
   render();$('ticketTit').scrollIntoView({behavior:'smooth',block:'start'});
 }
 $('guardarMesa').onclick=async()=>{
-  const items=Object.entries(carrito).map(([id,cant])=>({id,cant}));if(!items.length)return;
+  const items=lineasCarrito().map(l=>({id:l.id,cant:l.cant,persona:l.p}));if(!items.length)return;
   let nombre=mesa&&mesa.nombre;
   if(!mesa){nombre=(prompt('Nombre de la mesa (ej: Mesa 3, Juan):','Mesa '+(mesas.length+1))||'').trim();if(!nombre)return}
-  try{await api('mesa_guardar',{id:mesa&&mesa.id,fecha:hoy(),nombre,items});carrito={};mesa=null;sucio=false;$('recibido').value='';toast('Mesa guardada: '+nombre);await cargarVentas()}
+  try{await api('mesa_guardar',{id:mesa&&mesa.id,fecha:hoy(),nombre,items});carrito={};mesa=null;sucio=false;pers=0;cobrarP=null;$('recibido').value='';toast('Mesa guardada: '+nombre);await cargarVentas()}
   catch(err){$('err').textContent=err.message}
 };
 $('borrarMesa').onclick=async()=>{
   if(!mesa||!confirm('¿Borrar '+mesa.nombre+'? No se cobra nada.'))return;
-  try{await api('mesa_borrar',{id:mesa.id});carrito={};mesa=null;sucio=false;toast('Mesa borrada');await cargarVentas()}catch(err){alert(err.message)}
+  try{await api('mesa_borrar',{id:mesa.id});carrito={};mesa=null;sucio=false;pers=0;cobrarP=null;toast('Mesa borrada');await cargarVentas()}catch(err){alert(err.message)}
 };
 $('recargar').onclick=async()=>{try{await cargarProductos();await cargarVentas();toast('Actualizado')}catch(e){$('err').textContent=e.message}};
 $('salir').onclick=async()=>{if(!confirm('¿Cerrar sesión?'))return;try{await api('logout')}catch(e){}token='';localStorage.removeItem(TOKEN_KEY);$('auth').classList.add('on')};
