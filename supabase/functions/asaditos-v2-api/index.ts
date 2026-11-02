@@ -47,6 +47,25 @@ async function requireSession(token: string | undefined) {
   return { sessionId: data.id, accountId: caja ? account.caja_de : data.account_id, username: account.username, caja };
 }
 
+// Arma las líneas de un ticket con nombre y precio del sistema (no del cliente)
+async function armarItems(accountId: string, lineas: any[]) {
+  const { data: st, error } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', accountId).maybeSingle();
+  if (error) return { error: 'No se pudo cargar la base.' };
+  const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
+  const items: { id: string; nombre: string; precio: number; cant: number }[] = [];
+  for (const l of lineas) {
+    const p = productos.get(String(l?.id));
+    const cant = Number(l?.cant);
+    if (!p || !Number.isInteger(cant) || cant < 1 || cant > 999) return { error: 'Producto o cantidad inválida.' };
+    items.push({ id: String(p.id), nombre: String(p.name || ''), precio: Number(p.price) || 0, cant });
+  }
+  if (!items.length) return { error: 'El ticket está vacío.' };
+  return { items, total: items.reduce((a, x) => a + x.precio * x.cant, 0) };
+}
+
+const METODOS = ['ef', 'pos', 'tr', 'py', 'mo', 'ch', 'mi', 'ju'];
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -86,7 +105,7 @@ Deno.serve(async (req) => {
   const token = String(body.token || '');
   const session = await requireSession(token);
   if (!session) return json({ error: 'Sesión vencida o inválida.' }, 401);
-  if (session.caja && !['productos', 'venta', 'ventas', 'anular', 'conteo', 'logout'].includes(action)) {
+  if (session.caja && !['productos', 'venta', 'ventas', 'anular', 'conteo', 'mesa_guardar', 'mesa_cobrar', 'mesa_borrar', 'logout'].includes(action)) {
     return json({ error: 'Este usuario es solo para la caja.' }, 403);
   }
 
@@ -146,19 +165,10 @@ Deno.serve(async (req) => {
     const metodo = String(body.metodo || '');
     const lineas = Array.isArray(body.items) ? body.items : [];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
-    if (!['ef', 'pos', 'tr', 'py', 'mo', 'ch', 'mi', 'ju'].includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
-    const { data: st, error: stError } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', session.accountId).maybeSingle();
-    if (stError) return json({ error: 'No se pudo cargar la base.' }, 500);
-    const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
-    const items: { id: string; nombre: string; precio: number; cant: number }[] = [];
-    for (const l of lineas) {
-      const p = productos.get(String(l?.id));
-      const cant = Number(l?.cant);
-      if (!p || !Number.isInteger(cant) || cant < 1 || cant > 999) return json({ error: 'Producto o cantidad inválida.' }, 400);
-      items.push({ id: String(p.id), nombre: String(p.name || ''), precio: Number(p.price) || 0, cant });
-    }
-    if (!items.length) return json({ error: 'El ticket está vacío.' }, 400);
-    const total = items.reduce((a, x) => a + x.precio * x.cant, 0);
+    if (!METODOS.includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
+    const armado = await armarItems(session.accountId, lineas);
+    if ('error' in armado) return json({ error: armado.error }, 400);
+    const { items, total } = armado;
     const { data, error } = await db.from('asaditos_v2_ventas')
       .insert({ account_id: session.accountId, fecha, metodo, items, total })
       .select('id,fecha,items,total,metodo,anulada,created_at').single();
@@ -178,7 +188,9 @@ Deno.serve(async (req) => {
     const agotados = (stock ?? []).filter((s: any) => s.disponible !== null && s.disponible <= 0).map((s: any) => s.prod_id);
     const { data: conteo } = await db.from('asaditos_v2_conteos').select('total,billetes,usuario,created_at')
       .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    return json({ ok: true, ventas: data, agotados, conteo });
+    const { data: mesas } = await db.from('asaditos_v2_mesas').select('id,nombre,items,usuario,created_at,updated_at')
+      .eq('account_id', session.accountId).eq('cerrada', false).order('created_at');
+    return json({ ok: true, ventas: data, agotados, conteo, mesas: mesas ?? [] });
   }
 
   if (action === 'anular') {
@@ -205,6 +217,55 @@ Deno.serve(async (req) => {
       .select('total,billetes,usuario,created_at').single();
     if (error) return json({ error: 'No se pudo guardar el conteo.' }, 500);
     return json({ ok: true, conteo: data });
+  }
+
+  // Mesas pendientes: guardar (nueva o actualizar), cobrar (crea la venta) o borrar (queda registrada)
+  if (action === 'mesa_guardar') {
+    const fecha = String(body.fecha || '');
+    const nombre = String(body.nombre || '').trim().slice(0, 40);
+    if (!FECHA_RE.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
+    if (!nombre) return json({ error: 'Poné un nombre a la mesa.' }, 400);
+    const armado = await armarItems(session.accountId, Array.isArray(body.items) ? body.items : []);
+    if ('error' in armado) return json({ error: armado.error }, 400);
+    const cols = 'id,nombre,items,usuario,created_at,updated_at';
+    const { data, error } = body.id
+      ? await db.from('asaditos_v2_mesas').update({ nombre, items: armado.items, usuario: session.username, updated_at: new Date().toISOString() })
+          .eq('account_id', session.accountId).eq('id', String(body.id)).eq('cerrada', false).select(cols).maybeSingle()
+      : await db.from('asaditos_v2_mesas').insert({ account_id: session.accountId, fecha, nombre, items: armado.items, usuario: session.username })
+          .select(cols).maybeSingle();
+    if (error) return json({ error: 'No se pudo guardar la mesa.' }, 500);
+    if (!data) return json({ error: 'Esa mesa ya fue cobrada o borrada.' }, 409);
+    return json({ ok: true, mesa: data });
+  }
+
+  if (action === 'mesa_cobrar') {
+    const fecha = String(body.fecha || '');
+    const metodo = String(body.metodo || '');
+    if (!FECHA_RE.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
+    if (!METODOS.includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
+    const armado = await armarItems(session.accountId, Array.isArray(body.items) ? body.items : []);
+    if ('error' in armado) return json({ error: armado.error }, 400);
+    // Se cierra primero (solo si sigue abierta): así dos celulares no la cobran dos veces
+    const { data: mesa } = await db.from('asaditos_v2_mesas')
+      .update({ cerrada: true, items: armado.items, usuario: session.username, updated_at: new Date().toISOString() })
+      .eq('account_id', session.accountId).eq('id', String(body.id || '')).eq('cerrada', false).select('id').maybeSingle();
+    if (!mesa) return json({ error: 'Esa mesa ya fue cobrada o borrada.' }, 409);
+    const { data: venta, error } = await db.from('asaditos_v2_ventas')
+      .insert({ account_id: session.accountId, fecha, metodo, items: armado.items, total: armado.total })
+      .select('id,fecha,items,total,metodo,anulada,created_at').single();
+    if (error) {
+      await db.from('asaditos_v2_mesas').update({ cerrada: false }).eq('id', mesa.id);
+      return json({ error: 'No se pudo guardar la venta.' }, 500);
+    }
+    await db.from('asaditos_v2_mesas').update({ venta_id: venta.id }).eq('id', mesa.id);
+    return json({ ok: true, venta });
+  }
+
+  if (action === 'mesa_borrar') {
+    const { error } = await db.from('asaditos_v2_mesas').update({ cerrada: true, borrada: true, usuario: session.username, updated_at: new Date().toISOString() })
+      .eq('account_id', session.accountId).eq('id', String(body.id || '')).eq('cerrada', false);
+    if (error) return json({ error: 'No se pudo borrar la mesa.' }, 500);
+    return json({ ok: true });
   }
 
   if (action === 'logout') {

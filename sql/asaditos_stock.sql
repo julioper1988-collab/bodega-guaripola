@@ -1,7 +1,7 @@
 -- Stock del día de asaditos, compartido por la Caja de asaditos y Pedidos online.
 -- Noche = pedidos_noche(now()) (el día cambia a las 6:00, igual que los pedidos).
 -- disponible = viene (sobrante del último día cerrado) + producción − averiados
---              − vendidos en caja (asaditos_v2_ventas) − pedidos online no cancelados.
+--              − vendidos en caja (asaditos_v2_ventas) − mesas abiertas (asaditos_v2_mesas) − pedidos online no cancelados.
 -- Siempre controla: lo que sobró (viene) es stock; la producción que se cargue en la noche suma al disponible.
 create or replace function public.asadito_stock()
 returns table(prod_id text, disponible int)
@@ -17,6 +17,9 @@ as $$
   caja as (select i->>'id' id, sum((i->>'cant')::int) n
              from asaditos_v2_ventas v, st, f, jsonb_array_elements(v.items) i
             where v.account_id = st.account_id and v.fecha = f.f and not v.anulada group by 1),
+  mesas as (select i->>'id' id, sum((i->>'cant')::int) n
+              from asaditos_v2_mesas m, st, f, jsonb_array_elements(m.items) i
+             where m.account_id = st.account_id and m.fecha = f.f and not m.cerrada group by 1),
   online as (select i->>'id' id, sum((i->>'cantidad')::int) n
                from pedidos_online o, f, jsonb_array_elements(o.items) i
               where pedidos_noche(o.created_at) = f.f and o.estado <> 'cancelado' and i->>'origen' = 'asadito' group by 1)
@@ -26,6 +29,7 @@ as $$
            + coalesce(nullif((select it from hoy)->(p->>'id')->>'prod','')::numeric, 0)
            - coalesce(nullif((select it from hoy)->(p->>'id')->>'av','')::numeric, 0)
            - coalesce((select n from caja where caja.id = p->>'id'), 0)
+           - coalesce((select n from mesas where mesas.id = p->>'id'), 0)
            - coalesce((select n from online where online.id = p->>'id'), 0))::int
     from st, jsonb_array_elements(coalesce(st.data->'products','[]'::jsonb)) p
    where coalesce(p->>'id','') <> '';
