@@ -250,7 +250,7 @@ const key=(o,id,pk)=>o+':'+id+(pk?'|'+pk:'');
 // Promociones vigentes (vienen del servidor; la base vuelve a calcular todo al confirmar)
 const PROMOS=()=>cat.promos||[];
 function promoTxt(x){
-  const hasta=x.hora_hasta?' hasta las '+hhmm(x.hora_hasta):'',loc=x.local==='asadito'?' del asadito':x.local==='bodega'?' de la bodega':'';
+  const hasta=x.hora_hasta?' hasta las '+hhmm(x.hora_hasta):'',loc=x.local==='asadito'?' del asadito':x.local==='bodega'?' de la bodega':x.local==='polleria'?' de la pollería':'';
   if(x.tipo==='delivery_gratis')return '🛵 Delivery gratis'+(Number(x.monto_minimo)>0?' desde '+gs(x.monto_minimo):'')+(loc?' en compras'+loc:'')+hasta;
   if(x.tipo==='descuento')return '🏷️ '+Number(x.porcentaje)+'% off en '+(x.categorias&&x.categorias.length?x.categorias.join(', ').toLowerCase():x.productos&&x.productos.length?'productos seleccionados':'todo'+loc)+(Number(x.monto_minimo)>0?' (compras desde '+gs(x.monto_minimo)+')':'')+hasta;
   if(x.tipo==='fidelidad')return '⭐ Cada '+x.cada_n+' pedidos, el siguiente con delivery gratis';
@@ -548,25 +548,25 @@ async function verCobertura(){
     m.fitBounds(circ.getBounds(),{padding:[8,8]});
   }catch(e){el.innerHTML='<div class="small" style="padding:12px">No se pudo cargar el mapa.</div>';}
 }
-function deliveryInfo(neto,na,nb){
+function deliveryInfo(neto,na,nb,np){
   const zs=ent==='delivery'?zonas():null,km=zs?kmUbi():null,z=km!=null?zs.find(x=>Number(x.km)>=km):null;
   if(km!=null&&!z)return {dl0:0,dl:0,km,fuera:true};
-  return Object.assign(deliveryBase(neto,na,nb,z?Number(z.precio)||0:null),{km,sinUbi:!!zs&&km==null});
+  return Object.assign(deliveryBase(neto,na,nb,z?Number(z.precio)||0:null,np),{km,sinUbi:!!zs&&km==null});
 }
-function deliveryBase(neto,na,nb,zp){
+function deliveryBase(neto,na,nb,zp,np){
   const c=cat.config||{},dl0=ent==='delivery'?(zp!=null?zp:Number(c.costo_delivery)||0):0;
   if(!dl0)return {dl0,dl:0};
   if(esNuevo)return {dl0,dl:0,motivo:'Delivery · primera compra'};
   for(const pr of PROMOS()){
     if(pr.tipo==='fidelidad'&&pr.cada_n>=2&&prevPed>0&&prevPed%pr.cada_n===0)return {dl0,dl:0,motivo:'Delivery · '+pr.nombre};
-    if(pr.tipo==='delivery_gratis'){const base=pr.local==='asadito'?na:pr.local==='bodega'?nb:neto;
+    if(pr.tipo==='delivery_gratis'){const base=pr.local==='asadito'?na:pr.local==='bodega'?nb:pr.local==='polleria'?(np||0):neto;
       if(base>=(Number(pr.monto_minimo)||0))return {dl0,dl:0,motivo:'Delivery gratis'};}
   }
   const dg=PROMOS().filter(x=>x.tipo==='delivery_gratis'&&!x.local).map(x=>Number(x.monto_minimo)||0).sort((a,b)=>a-b)[0];
   return {dl0,dl:dl0,falta:dg!=null&&dg>neto?dg-neto:0};
 }
 function totHtml(){
-  const c=cat.config||{},t=totals(),dp=descPreview(),neto=t.sub-dp.d,di=deliveryInfo(neto,t.a-dp.da,t.b-(dp.d-dp.da-(dp.dp||0)));
+  const c=cat.config||{},t=totals(),dp=descPreview(),neto=t.sub-dp.d,di=deliveryInfo(neto,t.a-dp.da,t.b-(dp.d-dp.da-(dp.dp||0)),t.p-(dp.dp||0));
   const envT=Object.keys(cart).reduce((a,k)=>a+envCosto(k),0);
   return (envT?'<div class="line"><span>♻️ Envases</span><span>'+gs(envT)+'</span></div>':'')+'<div class="line"><span>Subtotal</span><span>'+gs(t.sub)+'</span></div>'+
     (dp.d?'<div class="line promo"><span>🏷️ Descuentos</span><span>−'+gs(dp.d)+'</span></div>':'')+

@@ -437,15 +437,15 @@
   window.pedComboQuitar=function(i){promoLeer();promoEd.combo.splice(i,1);pedPromoForm();};
   function pedPromoForm(){
     var e=promoEd,P=promoProds,box=g('promo-form');if(!box)return;
-    var catsA=['ASADITO','EMBUTIDO','BEBIDA','OTROS'],cats=e.local==='asadito'?catsA:e.local==='bodega'?P.cats:catsA.concat(P.cats);
+    var catsA=['ASADITO','EMBUTIDO','BEBIDA','OTROS'],cats=e.local==='asadito'?catsA:e.local==='bodega'?P.cats:e.local==='polleria'?['POLLERÍA']:catsA.concat(['POLLERÍA'],P.cats);
     var normal=(e.combo||[]).reduce(function(a,c){return a+precioProd(c)*c.cantidad;},0);
     var html='<div class="form-grid">'+
       '<div class="form-group" style="grid-column:1/-1"><label>Tipo</label><select onchange="pedPromoTipo(this.value)">'+Object.keys(TIPOS_P).map(function(k){return '<option value="'+k+'"'+(e.tipo===k?' selected':'')+'>'+TIPOS_P[k]+'</option>';}).join('')+'</select></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Nombre</label><input id="pp-nombre" value="'+h(e.nombre)+'" placeholder="Ej: Lunes de combo"></div>';
     if(e.tipo==='delivery_gratis') html+='<div class="form-group"><label>Monto mínimo (Gs.)</label><input id="pp-min" inputmode="numeric" value="'+(e.monto_minimo||0)+'"></div>'+
-      '<div class="form-group"><label>Cuenta el monto de</label><select id="pp-local"><option value="">Todo el pedido</option><option value="asadito"'+(e.local==='asadito'?' selected':'')+'>Solo asadito</option><option value="bodega"'+(e.local==='bodega'?' selected':'')+'>Solo bodega</option></select></div>';
+      '<div class="form-group"><label>Cuenta el monto de</label><select id="pp-local"><option value="">Todo el pedido</option><option value="asadito"'+(e.local==='asadito'?' selected':'')+'>Solo asadito</option><option value="bodega"'+(e.local==='bodega'?' selected':'')+'>Solo bodega</option><option value="polleria"'+(e.local==='polleria'?' selected':'')+'>Solo pollería</option></select></div>';
     if(e.tipo==='descuento') html+='<div class="form-group"><label>Descuento %</label><input id="pp-pct" type="number" min="1" max="90" value="'+(e.porcentaje||10)+'"></div>'+
-      '<div class="form-group"><label>Local</label><select id="pp-local" onchange="pedPromoLocal()"><option value="">Ambos</option><option value="asadito"'+(e.local==='asadito'?' selected':'')+'>Asadito</option><option value="bodega"'+(e.local==='bodega'?' selected':'')+'>Bodega</option></select></div>'+
+      '<div class="form-group"><label>Local</label><select id="pp-local" onchange="pedPromoLocal()"><option value="">Todos</option><option value="asadito"'+(e.local==='asadito'?' selected':'')+'>Asadito</option><option value="polleria"'+(e.local==='polleria'?' selected':'')+'>Pollería</option><option value="bodega"'+(e.local==='bodega'?' selected':'')+'>Bodega</option></select></div>'+
       '<div class="form-group" style="grid-column:1/-1"><label>Categorías (si no marcás ninguna, aplica a todo el local)</label><div style="display:flex;flex-wrap:wrap;gap:6px 14px">'+cats.map(function(c){return '<label style="display:flex;gap:5px;align-items:center;margin:0;cursor:pointer;font-size:13px"><input type="checkbox" class="pp-cat" value="'+h(c)+'" style="width:auto" '+(e.categorias.indexOf(c)>=0?'checked':'')+'> '+h(c)+'</label>';}).join('')+'</div></div>'+
       '<div class="form-group"><label>Compra mínima (Gs., opcional)</label><input id="pp-min" inputmode="numeric" value="'+(e.monto_minimo||0)+'"></div>';
     if(e.tipo==='combo') html+='<div class="form-group" style="grid-column:1/-1"><label>Productos del combo</label>'+

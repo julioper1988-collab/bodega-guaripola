@@ -23,3 +23,8 @@ alter table public.pedidos_online add column if not exists descuento_polleria nu
 --   controla su horario (horarios->'polleria'), y guarda total_polleria / descuento_polleria aparte;
 --   el total, el pedido mínimo y los descuentos los incluyen. La venta automática de la bodega no los toma.
 -- Parches aplicados con replace() sobre las definiciones vigentes (ver migración «pedidos_polleria»).
+
+-- Migración «pedidos_promos_polleria»: promos para la pollería.
+-- pedidos_promos.local acepta 'polleria' (descuento % y delivery gratis «Solo pollería»).
+-- pedidos_crear(): delivery_gratis con local 'polleria' cuenta v_tot_p - v_desc_p.
+-- Combos: la pollería sigue sin entrar en combos.
