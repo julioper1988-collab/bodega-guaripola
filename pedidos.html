@@ -176,6 +176,7 @@ label{display:block;font-size:13px;color:var(--text2);margin:12px 0 5px;font-wei
 .done .num{font-size:48px;font-weight:800;color:var(--acc)}
 .estado{display:inline-block;margin-top:8px;padding:7px 15px;border-radius:999px;background:#fff;font-weight:700;box-shadow:var(--sh)}
 .hide{display:none!important}
+body.compacto .hero,body.compacto .top .muted{display:none}body.compacto .top{padding-top:4px}
 @media (max-width:420px){.top h1{font-size:23px}.hero{padding:20px}.hero h2{font-size:20px}.hero .sym{font-size:44px}.tabs{gap:7px}.tab{font-size:12px;padding:10px 2px 8px}.tab b{font-size:22px}}
 @media (min-width:760px){.top h1{font-size:30px}.hero{padding:31px}.hero h2{font-size:28px}.hero .sym{font-size:80px}}
 </style>
@@ -424,8 +425,9 @@ function render(){
     if(con.length)h+='<div class="sectionhead"><h3>🏷️ Con descuento</h3><span>'+con.length+'</span></div><div class="products">'+con.map(([o,p])=>cardHtml(o,p)).join('')+'</div>';
     if(!h)h='<div class="empty">'+(t?'Sin resultados':'Hoy no hay promos activas. ¡Volvé pronto!')+'</div>';
   }else{
-    if(tab==='todos'&&!t)h+=destacadosHtml();
-    h+=combosHtml(combos);
+    // desde un anuncio, primero los combos del día
+    if(COMPACTO){h+=combosHtml(combos);if(tab==='todos'&&!t)h+=destacadosHtml();}
+    else{if(tab==='todos'&&!t)h+=destacadosHtml();h+=combosHtml(combos);}
     // en "Todos", primero el local abierto
     const ls=tab==='todos'?['asadito','bodega'].sort((a,b)=>abierto(b)-abierto(a)):[tab];
     for(const o of ls){const it=filt(o);if(tab==='todos'&&t&&!it.length)continue;h+=seccionHtml(o,it,tab!=='todos');}
@@ -640,6 +642,7 @@ function closeSheet(){const s=$('sheet');s.classList.remove('show');setTimeout((
 // Navegadores internos de apps (Instagram, Facebook, TikTok…) suelen bloquear la ubicación
 const UA=navigator.userAgent||'';
 const IN_APP=/Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|musical_ly|Bytedance|TikTok|Line\//i.test(UA);
+const COMPACTO=IN_APP||(SRC!=='directo'&&SRC!=='web');
 const IS_ANDROID=/Android/i.test(UA);
 // Link para abrir esta página en el navegador del celular, llevando el carrito
 function linkNavegador(){
@@ -841,8 +844,8 @@ $('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet();})
 let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{q=e.target.value.trim();render();},200);});
 // Carrito traído desde el navegador interno (?c=...)
 try{const u=new URL(location.href),c0=u.searchParams.get('c');if(c0){const c=JSON.parse(atob(c0));if(c&&typeof c==='object'){cart=c;lsSet(LS_CART,cart);}u.searchParams.delete('c');history.replaceState(null,'',u.pathname+u.search);}}catch(e){}
-if(IN_APP){const d=document.createElement('div');d.className='banner';d.innerHTML='📍 Para compartir tu ubicación, abrí esta página en tu navegador.'+ayudaNavegador();$('msg').after(d);
-  d.addEventListener('click',e=>{const a=e.target.closest('a');if(a)a.href=linkNavegador();});}
+// Desde Instagram/Facebook o un link con ?src= (anuncios): encabezado compacto para que los productos se vean en la primera pantalla
+if(COMPACTO)document.body.classList.add('compacto');
 {const n=String(lsGet(LS_CLI,{}).nombre||'').trim().split(/\s+/)[0];if(n)$('hola').textContent='Hola, '+n.charAt(0).toUpperCase()+n.slice(1).toLowerCase()+'. ¿Qué pedimos hoy?';}
 // con el teclado abierto, que el campo no quede tapado
 document.addEventListener('focusin',e=>{const i=e.target;if(i.matches&&i.matches('#box input,#box textarea,#box select'))setTimeout(()=>i.scrollIntoView({block:'center',behavior:'smooth'}),300);});
