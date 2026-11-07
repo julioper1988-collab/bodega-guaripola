@@ -6286,23 +6286,25 @@ initMobileShell();
       const g=grupos.get(key);g.ventas.push(v);g.fiado+=v.fiado;
       if(v.saldo===null)g.incompleto=true;else g.saldo+=v.saldo;
     }
+    // Por cliente: productos sumados y ordenados por nombre (una sola tabla), y abajo sus ventas en una línea
+    const nomP=p=>p.bodega_productos?.nombre||'Producto sin nombre';
+    const tot={};
     const bloques=Array.from(grupos.values()).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(g=>{
-      const ventasHTML=g.ventas.map(v=>{
-        const productos=v.productos.map(p=>{
-          const cantidad=Number(p.cantidad)||0;
-          const packs=p.es_embalaje && Number(p.uds_por_embalaje)>0;
-          const presentacion=packs?' ('+(p.cantidad_embalajes??cantidad/Number(p.uds_por_embalaje))+' embalajes × '+Number(p.uds_por_embalaje)+')':'';
-          return `<tr><td>${escapeHtml(p.bodega_productos?.nombre||'Producto sin nombre')}</td><td>${cantidad} unidades${escapeHtml(presentacion)}</td><td>${p.subtotal===null||p.subtotal===undefined?'No disponible':fmtGs(p.subtotal)}</td></tr>`;
-        }).join('')||'<tr><td colspan="3">Sin detalle de productos registrado para esta venta.</td></tr>';
-        return `<div style="margin:12px 0;break-inside:avoid"><p><strong>Venta ${escapeHtml(String(v.numero))}</strong> · Total: ${fmtGs(v.total)} · Cobrado al vender: ${fmtGs(v.cobrado)} · Fiado original: <strong>${fmtGs(v.fiado)}</strong> · Pendiente actual: ${v.saldo===null?'No disponible':fmtGs(v.saldo)}</p>
-          <div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>Producto</th><th>Cantidad</th><th>Importe de productos</th></tr></thead><tbody>${productos}</tbody></table></div>
-          ${v.descuento?'<p>Descuento de la venta: '+fmtGs(v.descuento)+'</p>':''}
-          ${v.cobrado>0?'<p style="font-size:12px">Pago parcial: el fiado corresponde al conjunto de esta venta; no se atribuye la deuda a un producto específico.</p>':''}
-          ${v.saldo===null?'<p style="font-size:12px">No se pudo determinar el saldo actual con los registros de fiado disponibles.</p>':''}</div>`;
-      }).join('');
-      return `<section style="margin:16px 0;padding:12px;border:1px solid var(--border,#ccc);border-radius:8px"><h4 style="margin:0 0 8px">${escapeHtml(g.nombre)}</h4><p>Fiado original: <strong>${fmtGs(g.fiado)}</strong> · Pendiente actual de estas ventas: <strong>${g.incompleto?'No disponible (datos incompletos)':fmtGs(g.saldo)}</strong></p>${ventasHTML}</section>`;
+      const ag={};
+      for(const v of g.ventas)for(const p of v.productos){
+        const n=nomP(p),a=ag[n]||(ag[n]={cant:0,imp:0,sinImp:false,ventas:new Set()});
+        a.cant+=Number(p.cantidad)||0; if(p.subtotal==null)a.sinImp=true;else a.imp+=Number(p.subtotal)||0; a.ventas.add(String(v.numero));
+        const t=tot[n]||(tot[n]={cant:0,imp:0,clientes:new Set()}); t.cant+=Number(p.cantidad)||0; t.imp+=Number(p.subtotal)||0; t.clientes.add(g.nombre);
+      }
+      const filas=Object.keys(ag).sort((a,b)=>a.localeCompare(b,'es')).map(n=>`<tr><td>${escapeHtml(n)}</td><td style="text-align:right">${ag[n].cant}</td><td style="text-align:right">${ag[n].sinImp?'—':fmtGs(ag[n].imp)}</td><td style="color:var(--text2);font-size:12px">${[...ag[n].ventas].map(x=>'#'+escapeHtml(x)).join(', ')}</td></tr>`).join('')||'<tr><td colspan="4">Sin detalle de productos registrado.</td></tr>';
+      const vts=g.ventas.slice().sort((a,b)=>String(a.numero).localeCompare(String(b.numero),'es',{numeric:true})).map(v=>`#${escapeHtml(String(v.numero))} ${fmtGs(v.fiado)}${v.cobrado>0?' (pagó '+fmtGs(v.cobrado)+' al vender)':''}${v.saldo===null?' · saldo ?':v.saldo<v.fiado?' · debe '+fmtGs(v.saldo):''}${v.descuento?' · desc. '+fmtGs(v.descuento):''}`).join(' · ');
+      return `<section style="margin:12px 0;padding:12px;border:1px solid var(--border,#ccc);border-radius:10px;break-inside:avoid">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px"><h4 style="margin:0">${escapeHtml(g.nombre)}</h4><span>Fiado: <strong>${fmtGs(g.fiado)}</strong> · Pendiente: <strong>${g.incompleto?'No disponible':fmtGs(g.saldo)}</strong></span></div>
+        <div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>Producto</th><th style="text-align:right">Cant.</th><th style="text-align:right">Importe</th><th>Ventas</th></tr></thead><tbody>${filas}</tbody></table></div>
+        <p style="font-size:12px;color:var(--text2);margin:8px 0 0">Ventas: ${vts}</p></section>`;
     }).join('');
-    return `<div class="card" style="padding:16px;margin-bottom:16px"><h3>Fiados por cliente y producto</h3><p style="font-size:12px">Fuente: Sistema Bodega · Ventas de este arqueo. Saldos actuales al consultar: ${new Date().toLocaleString('es-PY')}. Los importes de productos son los registrados antes del descuento general de la venta. El saldo mostrado corresponde solo a estas ventas, no a toda la deuda del cliente.</p>${bloques||'<p>No hay fiados registrados en las ventas vinculadas a este arqueo. Esto no confirma que no hayan existido.</p>'}<p><strong>Total originalmente fiado: ${fmtGs(ventas.fiado)}</strong></p></div>`;
+    const resumenProd=Object.keys(tot).length?`<h4 style="margin:18px 0 8px">Resumen por producto</h4><div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>Producto</th><th style="text-align:right">Cant.</th><th style="text-align:right">Importe</th><th>Clientes</th></tr></thead><tbody>${Object.keys(tot).sort((a,b)=>a.localeCompare(b,'es')).map(n=>`<tr><td>${escapeHtml(n)}</td><td style="text-align:right">${tot[n].cant}</td><td style="text-align:right">${fmtGs(tot[n].imp)}</td><td style="color:var(--text2);font-size:12px">${[...tot[n].clientes].sort((a,b)=>a.localeCompare(b,'es')).map(escapeHtml).join(', ')}</td></tr>`).join('')}</tbody></table></div>`:'';
+    return `<div class="card" style="padding:16px;margin-bottom:16px"><h3>Fiados por cliente y producto</h3><p style="font-size:12px">Fuente: Sistema Bodega · Ventas de este arqueo. Saldos actuales al consultar: ${new Date().toLocaleString('es-PY')}. Los importes de productos son los registrados antes del descuento general de la venta. El saldo mostrado corresponde solo a estas ventas, no a toda la deuda del cliente.</p>${bloques||'<p>No hay fiados registrados en las ventas vinculadas a este arqueo. Esto no confirma que no hayan existido.</p>'}${resumenProd}<p><strong>Total originalmente fiado: ${fmtGs(ventas.fiado)}</strong></p></div>`;
   }
 
   function resumenVentaArqueoHTML(caja,ventas){
