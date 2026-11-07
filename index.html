@@ -7178,13 +7178,17 @@ initMobileShell();
       const totalRetiro = ventasFiltradas.filter(v=>repNorm(v.metodo_pago)==='retiro').reduce((s,v)=>s+(Number(v.total_final)||0),0);
       const totalCobrado = totalVentas - (productoQ ? detalles.filter(d=>['fiado','retiro'].includes(repNorm(ventasMap[d.venta_id]?.metodo_pago))).reduce((s,d)=>s+repLineTotal(d),0) : totalFiado+totalRetiro);
       const costo=detalles.reduce((s,d)=>s+(Number(d.cantidad)||0)*repProductCost(d),0);
-      const margen=repMargin(totalVentas,costo);
+      // Delivery de pedidos online: entra a la caja, pero se muestra aparte (no es venta de productos)
+      const esDel=d=>/^delivery$/i.test(String(repProductName(d)||'').trim());
+      const dets=detalles.filter(esDel), totalDelivery=dets.reduce((s,d)=>s+repLineTotal(d),0), costoDel=dets.reduce((s,d)=>s+(Number(d.cantidad)||0)*repProductCost(d),0);
+      const margen=repMargin(totalVentas-totalDelivery,costo-costoDel);
       const comprasFinalizadas=compras.filter(c=>c.estado==='finalizado').reduce((s,c)=>s+(Number(c.total)||0),0);
       const gastosTotal=gastos.reduce((s,g)=>s+(Number(g.monto)||0),0);
       document.getElementById('rep-stats').innerHTML=`
-        <div class="stat-card"><div class="label">Total vendido</div><div class="value" style="color:var(--green)">${repMoney(totalVentas)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
+        <div class="stat-card"><div class="label">Total vendido${totalDelivery?' (sin delivery)':''}</div><div class="value" style="color:var(--green)">${repMoney(totalVentas-totalDelivery)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
+        ${totalDelivery?`<div class="stat-card"><div class="label">🛵 Delivery cobrado</div><div class="value" style="color:var(--accent)">${repMoney(totalDelivery)}</div><div class="sub">${dets.length} pedido${dets.length===1?'':'s'} online · entra a la caja</div></div>`:''}
         <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}${totalRetiro?` · Retiros: ${repMoney(totalRetiro)}`:''}</div></div>
-        <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos)}</div><div class="sub">unidades filtradas</div></div>
+        <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos-dets.reduce((s,d)=>s+(Number(d.cantidad)||0),0))}</div><div class="sub">unidades filtradas</div></div>
         <div class="stat-card"><div class="label">Margen estimado</div><div class="value" style="color:${margen.gan>=0?'var(--green)':'var(--red)'}">${margen.pct.toFixed(1)}%</div><div class="sub">${repMoney(margen.gan)}</div></div>
         <div class="stat-card"><div class="label">Compras / gastos caja</div><div class="value" style="color:var(--amber)">${repMoney(comprasFinalizadas)}</div><div class="sub">Gastos caja: ${repMoney(gastosTotal)}</div></div>
       `;
@@ -16190,9 +16194,12 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     var tot=ventas.reduce(function(a,v){return a+Number(v.total_final||0);},0);
     var deuda=fiados.reduce(function(a,f){return a+Number(f.saldo||0);},0);
     var k=function(t,v,sm,c){return '<div class="in3-k"><span>'+t+'</span><b>'+v+'</b><small class="'+(c||'')+'">'+sm+'</small></div>';};
-    var cant=k('Cantidad',ventas.length,(ventas.length===1?'venta':'ventas')+' · ticket '+gs_(ventas.length?tot/ventas.length:0));
     var fia=k('Fiado pendiente',gs_(deuda),fiados.length+' deuda'+(fiados.length===1?'':'s'));
     var t1=document.querySelector('#in3-horas')&&document.querySelector('#in3-horas').previousElementSibling, t2=document.querySelector('#in3-top')&&document.querySelector('#in3-top').previousElementSibling;
+    // Ventas sin delivery (el delivery de los pedidos online entra a la caja, pero se muestra aparte)
+    var pintarKPI=function(D,nD){
+    var neto=tot-D, del=D?'<br>+ 🛵 delivery '+gs_(D)+' ('+nD+')':'';
+    var cant=k('Cantidad',ventas.length,(ventas.length===1?'venta':'ventas')+' · ticket '+gs_(ventas.length?neto/ventas.length:0));
     if(caja){
       // Efectivo esperado, igual que el arqueo: apertura + efectivo de ventas + cobros de fiado en efectivo − gastos + ingresos
       var ef=0;ventas.forEach(function(v){var m=String(v.metodo_pago||'').toLowerCase(),t=Number(v.total_final||0);if(m==='efectivo')ef+=t;else if(m==='mixto'||m==='parcial')ef+=Number(v.monto_efectivo||0);});
@@ -16200,14 +16207,16 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
       var cob=0;(r[2].data||[]).forEach(function(pf){var m=String(pf.metodo_pago||'efectivo').toLowerCase();if(['transferencia','qr','debito','credito'].indexOf(m)<0)cob+=Number(pf.monto||0);});
       var esp=Number(caja.apertura_efectivo||0)+ef+cob-gas+ing;
       document.getElementById('in3-kpis').innerHTML=
-        k('Ventas del turno',gs_(tot),'desde las '+hhmm(caja.opened_at))+cant+
+        k('Ventas del turno',gs_(neto),'desde las '+hhmm(caja.opened_at)+del)+cant+
         k('Efectivo en caja',gs_(esp),'apertura '+gs_(caja.apertura_efectivo)+(gas?' · gastos '+gs_(gas):''))+fia;
       if(t1)t1.textContent='Ventas por hora (turno)'; if(t2)t2.textContent='Más vendidos del turno';
     }else{
       var totPrev=(r[1].data||[]).reduce(function(a,v){return a+Number(v.total_final||0);},0), cmp='&nbsp;', cls='';
       if(totPrev>0){var d=Math.round((tot-totPrev)/totPrev*100);cmp=(d>=0?'▲ ':'▼ ')+Math.abs(d)+'% vs. '+new Date(semPas+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long'})+' pasado';cls=d>=0?'up':'down';}
-      document.getElementById('in3-kpis').innerHTML=k('Ventas de hoy',gs_(tot),cmp,cls)+cant+k('Ticket promedio',gs_(ventas.length?tot/ventas.length:0),'&nbsp;')+fia;
+      document.getElementById('in3-kpis').innerHTML=k('Ventas de hoy',gs_(neto),cmp+del,cls)+cant+k('Ticket promedio',gs_(ventas.length?neto/ventas.length:0),'&nbsp;')+fia;
     }
+    };
+    pintarKPI(0,0);
     // Ventas por hora: desde la apertura del turno (o 0 h) hasta ahora
     var h0=caja?horaPY(caja.opened_at):0, hNow=horaPY(ahora.toISOString()), n=caja?((hNow-h0+24)%24)+1:24;
     if(caja&&caja.opened_at&&ahora-new Date(caja.opened_at)>=864e5)n=24;
@@ -16226,6 +16235,11 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     if(!ids.length){top.innerHTML='<div class="in3-vacio">Sin ventas todavía.</div>';return;}
     var det=[];
     for(var i=0;i<ids.length;i+=150){var q=await sb.from('bodega_ventas_detalle').select('producto_id,cantidad,precio_unitario').in('venta_id',ids.slice(i,i+150));det=det.concat(q.data||[]);}
+    // delivery de pedidos online: se resta de las ventas y se muestra aparte
+    var delIds=(prodCache||[]).filter(function(x){return /^delivery$/i.test(String(x.nombre||'').trim());}).map(function(x){return String(x.id);});
+    if(!delIds.length){try{var qd=await sb.from('bodega_productos').select('id').ilike('nombre','delivery');delIds=(qd.data||[]).map(function(x){return String(x.id);});}catch(_){}}
+    var D=0,nD=0;det.forEach(function(d){if(delIds.indexOf(String(d.producto_id))>=0){D+=Number(d.cantidad||0)*Number(d.precio_unitario||0);nD++;}});
+    if(D&&document.getElementById('in3-kpis'))pintarKPI(D,nD);
     var ag={};det.forEach(function(d){var a=ag[d.producto_id]||(ag[d.producto_id]={c:0,t:0});a.c+=Number(d.cantidad||0);a.t+=Number(d.cantidad||0)*Number(d.precio_unitario||0);});
     var lista=Object.keys(ag).map(function(id){var p=(prodCache||[]).find(function(x){return String(x.id)===String(id);});return {n:p?p.nombre:'Producto',c:ag[id].c,t:ag[id].t};}).filter(function(x){return !/^delivery$/i.test(x.n);}).sort(function(a,b){return b.c-a.c;}).slice(0,6);
     if(document.getElementById('in3-top')) top.innerHTML=lista.length?lista.map(function(x){return '<div class="in3-li"><span class="nm">'+e(x.n)+'</span><span>'+x.c+' uds · '+gs_(x.t)+'</span></div>';}).join(''):'<div class="in3-vacio">Sin datos.</div>';
