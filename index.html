@@ -16528,6 +16528,24 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 })();
 </script>
 <style id="bg-pulido-v1">
+/* Carrito en vista grilla (PC): cada producto en dos líneas para que entren total y botón de quitar */
+@media (min-width:901px){
+  #venta-layout.bg5-grid #venta-table,#venta-layout.bg5-grid #venta-tbody{display:block;width:100%}
+  #venta-layout.bg5-grid #venta-table thead{display:none}
+  #venta-layout.bg5-grid #venta-tbody > tr:has(> td:nth-child(5)){display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);grid-template-areas:"desc desc quitar" "cant unit total";gap:6px 10px;align-items:end;padding:10px 12px;border-bottom:1px solid var(--border)}
+  #venta-layout.bg5-grid #venta-tbody > tr:has(> td:nth-child(5)) > td{display:block;padding:0!important;border:0!important;min-width:0;text-align:left!important}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(1){grid-area:desc;align-self:start;font-weight:600}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(2){grid-area:cant}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3){grid-area:unit}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4){grid-area:total}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5){grid-area:quitar;justify-self:end;align-self:start}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3)::before{content:'Precio unit.'}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4)::before{content:'Total'}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3)::before,#venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4)::before{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);margin-bottom:2px}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3) input,#venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4) input{width:100%!important}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5) button{width:30px;height:30px;border-radius:8px;border:1px solid var(--border)!important;background:var(--bg3)!important;font-size:14px!important;line-height:1}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5) button:hover{background:var(--red-bg)!important;border-color:var(--red)!important}
+}
 .bg-dias-card{margin-bottom:12px}
 .bg-dias-svg{display:block;width:100%;height:auto;max-height:260px}
 .bg-dias-res{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:2px 0 8px}
