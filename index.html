@@ -13315,6 +13315,28 @@ window.diagnosticarStockCompras = async function(){
     }catch(e){ var b=document.getElementById('bg-mes-det'); if(b) b.innerHTML='<div class="bg-chart-empty">Error: '+esc(e.message||String(e))+'</div>'; }
   };
 
+  /* Ventas por día del mes: gráfico de área en SVG (usa las ventas ya cargadas) */
+  function lineaDias(ventas,rango){
+    var porDia={};
+    (ventas||[]).forEach(function(v){var d=String(v.fecha||v.created_at||'').slice(0,10);if(d.slice(0,7)!==rango.ym)return;porDia[d]=(porDia[d]||0)+n(v.total_final);});
+    var ult=parseInt(String(rango.end).slice(8,10),10)||30, hoy=new Date(), ymHoy=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
+    if(rango.ym===ymHoy) ult=Math.min(ult,hoy.getDate());
+    var pts=[];for(var d=1;d<=ult;d++){var k=rango.ym+'-'+String(d).padStart(2,'0');pts.push({d:d,v:porDia[k]||0});}
+    var max=Math.max.apply(null,pts.map(function(x){return x.v;}));
+    if(!pts.length||max<=0) return '<div class="bg-chart-empty">Sin ventas en este mes.</div>';
+    var W=720,H=190,L=10,R=10,T=14,B=24,iw=W-L-R,ih=H-T-B;
+    var X=function(i){return L+(pts.length>1?i*iw/(pts.length-1):iw/2);}, Y=function(v){return T+ih-(v/max)*ih;};
+    var linea=pts.map(function(x,i){return (i?'L':'M')+X(i).toFixed(1)+' '+Y(x.v).toFixed(1);}).join(' ');
+    var area=linea+' L'+X(pts.length-1).toFixed(1)+' '+(T+ih)+' L'+X(0).toFixed(1)+' '+(T+ih)+' Z';
+    var grid=[0,.5,1].map(function(f){var y=(T+ih-f*ih).toFixed(1);return '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--border)" stroke-width="1"/>';}).join('');
+    var mejor=pts.reduce(function(a,b){return b.v>a.v?b:a;});
+    var dots=pts.map(function(x,i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.v).toFixed(1)+'" r="'+(x===mejor?4:2.5)+'" fill="var(--accent)" stroke="var(--bg2)" stroke-width="1.5"><title>Día '+x.d+': '+money(x.v)+'</title></circle>';}).join('');
+    var marcas=pts.filter(function(x,i){return i===0||i===pts.length-1||x.d%5===0;}).map(function(x){return '<text x="'+X(x.d-1).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="var(--text2)">'+x.d+'</text>';}).join('');
+    var total=pts.reduce(function(a,x){return a+x.v;},0), conVenta=pts.filter(function(x){return x.v>0;}).length;
+    return '<div class="bg-dias-res"><span>Mejor día: <b>'+mejor.d+' · '+money(mejor.v)+'</b></span><span>Promedio por día con ventas: <b>'+money(conVenta?total/conVenta:0)+'</b></span></div>'+
+      '<svg class="bg-dias-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ventas por día del mes">'+grid+
+      '<path d="'+area+'" fill="rgba(var(--accent-rgb),.16)"/><path d="'+linea+'" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+dots+marcas+'</svg>';
+  }
   window.bgRenderDashboardArqueoCharts = async function(ym){
     var host=document.getElementById('bg-dash-chart-content');
     if(!host) return;
@@ -13345,6 +13367,7 @@ window.diagnosticarStockCompras = async function(){
           '<div><span>Cantidad ventas</span><b>'+cant.toLocaleString('es-PY')+'</b></div>'+
           '<div><span>Ticket promedio</span><b>'+money(ticket)+'</b></div>'+
         '</div>'+
+        '<div class="bg-dash-graph-card bg-dias-card"><div class="bg-graph-title"><b>Ventas por día</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+lineaDias(ventas,rango)+'</div>'+
         '<div class="bg-dash-graph-grid">'+
           '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por arqueo / jornada</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+bars(arqueos,false)+'</div>'+
           '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por mes</b><span>Últimos 12 meses · tocá un mes</span></div>'+barsMes(meses,comprasMap)+'</div>'+
@@ -16474,7 +16497,40 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
 })();
 </script>
+<script id="bg-tablas-num">
+/* Tablas: columnas de importes y cantidades alineadas a la derecha (solo escritorio) */
+(function(){
+  var NUM=/^(Gs\.?\s*)?-?\d[\d.]*(,\d+)?\s*%?$/, seq=0, t=null;
+  var st=document.createElement('style');st.id='bg-tablas-num-css';document.head.appendChild(st);
+  function revisar(){
+    var reglas=[];
+    document.querySelectorAll('#content table, #modal-body table').forEach(function(tb){
+      if(tb.classList.contains('productos-excel'))return;
+      var cont=tb.parentElement; /* si la tabla desborda su contenedor, alinear a la derecha escondería los importes */
+      if(cont&&tb.offsetWidth>cont.clientWidth+2){tb.removeAttribute('data-bgt');return;}
+      var filas=[].slice.call(tb.querySelectorAll('tbody > tr')).filter(function(r){return r.children.length>1&&![].some.call(r.children,function(c){return c.colSpan>1;});}).slice(0,12);
+      if(!filas.length){tb.removeAttribute('data-bgt');return;}
+      var cols=filas[0].children.length, der=[];
+      for(var c=0;c<cols;c++){var ok=0,tot=0;
+        filas.forEach(function(r){var td=r.children[c];if(!td||td.querySelector('button,input,select,a'))return;var x=td.textContent.trim();if(!x||x==='-')return;tot++;if(NUM.test(x))ok++;});
+        if(tot>0&&ok===tot&&c>0)der.push(c+1);}
+      if(!der.length){tb.removeAttribute('data-bgt');return;}
+      var id=tb.getAttribute('data-bgt');if(!id){id='t'+(++seq);tb.setAttribute('data-bgt',id);}
+      der.forEach(function(i){reglas.push('table[data-bgt="'+id+'"] tr>*:nth-child('+i+')');});
+    });
+    var css=reglas.length?'@media (min-width:901px){'+reglas.join(',')+'{text-align:right!important;font-feature-settings:"tnum"}}':'';
+    if(st.textContent!==css)st.textContent=css;
+  }
+  function prog(){clearTimeout(t);t=setTimeout(revisar,180);}
+  function iniciar(){['content','modal-body'].forEach(function(id){var e=document.getElementById(id);if(e)new MutationObserver(prog).observe(e,{childList:true,subtree:true});});prog();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
+})();
+</script>
 <style id="bg-pulido-v1">
+.bg-dias-card{margin-bottom:12px}
+.bg-dias-svg{display:block;width:100%;height:auto;max-height:260px}
+.bg-dias-res{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:2px 0 8px}
+.bg-dias-res b{color:var(--text)}
 /* Íconos de acción (reemplazan emojis) */
 :root{--bg-i-edit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E");--bg-i-trash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E");--bg-i-box:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E");--bg-i-cart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h2l2.5 11h10L20 7H6'/%3E%3Cpath d='M9 20a1 1 0 1 0 0-.01M17 20a1 1 0 1 0 0-.01'/%3E%3C/svg%3E");--bg-i-users:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1'/%3E%3Cpath d='M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3Cpath d='M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E");--bg-i-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3C/svg%3E");--bg-i-list:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4h6v3H9Z'/%3E%3Cpath d='M9 5H6v16h12V5h-3'/%3E%3Cpath d='M9 12h6M9 16h6'/%3E%3C/svg%3E");--bg-i-tag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8Z'/%3E%3Cpath d='M7.5 8.5h.01'/%3E%3C/svg%3E");--bg-i-cash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v11H3Z'/%3E%3Cpath d='M3 11h18'/%3E%3Cpath d='M7 15h3'/%3E%3C/svg%3E");--bg-i-chart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V4'/%3E%3Cpath d='M4 20h16'/%3E%3Cpath d='M8 16v-5M12 16V8M16 16v-3'/%3E%3C/svg%3E");--bg-i-camera:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l2-3h6l2 3h3v11H4Z'/%3E%3Cpath d='M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'/%3E%3C/svg%3E");--bg-i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");--bg-i-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z'/%3E%3Cpath d='M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6'/%3E%3C/svg%3E")}
 .bg-ico{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.18em;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat;font-style:normal;flex:0 0 auto}
