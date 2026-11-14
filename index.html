@@ -20,6 +20,51 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
+<script id="bg-marca-core">
+/* Marca del comercio: nombre, datos, logo y color configurables */
+(function(){
+  var DEF={nombre:'Bodega Guaripola',lema:'Sistema de gestión',ruc:'',direccion:'',telefono:'',logo:'',color:'#ef6a24'};
+  function h(v){return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+  function leer(){
+    var m={};try{m=JSON.parse(localStorage.getItem('bg_marca')||'{}')||{};}catch(e){m={};}
+    var o={};for(var k in DEF){o[k]=(m[k]!=null&&String(m[k]).trim()!=='')?String(m[k]):DEF[k];}
+    if(!/^#[0-9a-f]{6}$/i.test(o.color))o.color=DEF.color;
+    if(o.logo&&!/^data:image\/(png|jpeg|webp);base64,/.test(o.logo))o.logo='';
+    return o;
+  }
+  function iniciales(n){var p=String(n||'').trim().split(/\s+/).filter(Boolean);return ((p[0]||'?').charAt(0)+(p[1]?p[1].charAt(0):'')).toUpperCase();}
+  function rgb(hex){return [1,3,5].map(function(i){return parseInt(hex.substr(i,2),16);});}
+  function oscuro(hex,f){return '#'+rgb(hex).map(function(c){return ('0'+Math.round(c*f).toString(16)).slice(-2);}).join('');}
+  window.BG_MARCA_DEF=DEF;
+  window.bgMarca=leer;
+  window.bgMarcaIniciales=function(){return iniciales(leer().nombre);};
+  /* versiones ya escapadas, para insertar en HTML */
+  window.bgMarcaNombre=function(){return h(leer().nombre);};
+  window.bgMarcaDatos=function(){var m=leer(),a=[];if(m.ruc)a.push('RUC '+m.ruc);if(m.direccion)a.push(m.direccion);if(m.telefono)a.push('Tel. '+m.telefono);return h(a.join(' · '));};
+  window.bgMarcaLogoHtml=function(px){var m=leer();px=px||40;
+    return m.logo?'<img src="'+m.logo+'" alt="" style="width:'+px+'px;height:'+px+'px;object-fit:contain;border-radius:'+Math.round(px/4)+'px;display:block">'
+      :'<span style="width:'+px+'px;height:'+px+'px;border-radius:'+Math.round(px/4)+'px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:'+Math.round(px*.38)+'px;letter-spacing:.5px">'+h(iniciales(m.nombre))+'</span>';};
+  window.bgMarcaAplicar=function(){
+    var m=leer();
+    try{document.title=m.nombre;}catch(e){}
+    var mt=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(mt)mt.setAttribute('content',m.nombre);
+    var t=document.querySelector('#sidebar .logo-text h1');if(t)t.textContent=m.nombre;
+    var l=document.querySelector('#sidebar .logo-text p');if(l)l.textContent=m.lema;
+    var ic=document.querySelector('#sidebar .logo-icon');
+    if(ic){if(m.logo){ic.innerHTML='<img src="'+m.logo+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;display:block">';ic.classList.add('con-logo');}else{ic.textContent=iniciales(m.nombre);ic.classList.remove('con-logo');}}
+    var mb=document.querySelector('#bg-mobile-title strong');if(mb)mb.textContent=m.nombre;
+    var st=document.getElementById('bg-marca-color');
+    if(m.color.toLowerCase()===DEF.color){if(st)st.remove();}
+    else{
+      if(!st){st=document.createElement('style');st.id='bg-marca-color';}
+      var c=rgb(m.color).join(',');
+      st.textContent=':root,body,body.theme-light{--accent:'+m.color+'!important;--accent2:'+oscuro(m.color,.86)+'!important;--accent-rgb:'+c+'!important;--accent-bg:rgba('+c+',.12)!important;--accent-glow:0 0 20px rgba('+c+',.25)!important}';
+      (document.body||document.documentElement).appendChild(st); /* al final: gana a los temas */
+    }
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',window.bgMarcaAplicar);else window.bgMarcaAplicar();
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script id="bg-safehtml-global-fix">
 // ── Función única global de escape HTML ──
@@ -661,6 +706,7 @@ window.bgLoadZXing=function(){
   /* ── Brand / Accent ── */
   --accent:    #ef6a24;
   --accent2:   #d65413;
+  --accent-rgb: 239,106,36;
   --accent-bg: rgba(239,106,36,.12);
   --accent-glow: 0 0 20px rgba(239,106,36,.25);
 
@@ -815,7 +861,7 @@ body {
 #sidebar nav a span:not(.ico) { opacity: 1; display: inline; }
 #sidebar nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
 #sidebar nav a.active {
-  background: rgba(239,106,36,.25);
+  background: rgba(var(--accent-rgb),.25);
   color: #fff; font-weight: 600;
 }
 #sidebar nav a.active::before { display: none; }
@@ -942,7 +988,7 @@ thead th {
   border-bottom: 1px solid var(--border);
 }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-tbody tr:hover { background: rgba(239,106,36,.06); }
+tbody tr:hover { background: rgba(var(--accent-rgb),.06); }
 tbody td {
   padding: 11px 14px; font-size: 13px;
   color: var(--text);
@@ -960,11 +1006,11 @@ tbody tr:last-child { border-bottom: none; }
 }
 .btn-primary {
   background: var(--accent); color: #fff;
-  box-shadow: 0 2px 8px rgba(239,106,36,.3);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb),.3);
 }
 .btn-primary:hover {
   background: var(--accent2);
-  box-shadow: 0 4px 12px rgba(239,106,36,.4);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb),.4);
   transform: translateY(-1px);
 }
 .btn-secondary {
@@ -1014,7 +1060,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(239,106,36,.15);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.15);
   background: var(--bg2);
 }
 select option { background: var(--bg2); color: var(--text); }
@@ -1233,7 +1279,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   letter-spacing: .5px;
 }
 #venta-table tbody tr { border-bottom: 1px solid var(--border); }
-#venta-table tbody tr:hover { background: rgba(239,106,36,.07); }
+#venta-table tbody tr:hover { background: rgba(var(--accent-rgb),.07); }
 #venta-table tbody td { padding: 10px 14px; font-size: 13px; color: var(--text); }
 
 /* ── Derecha (panel de cobro) ── */
@@ -1273,7 +1319,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   color: var(--accent);
   background: var(--accent-bg);
   font-weight: 800;
-  box-shadow: 0 0 0 2px rgba(239,106,36,.2);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb),.2);
 }
 .pay-grid {
   display: grid;
@@ -1283,18 +1329,18 @@ input::placeholder { color: var(--text2); opacity: .7; }
 
 /* ── Botón COBRAR ── */
 .cobrar-btn {
-  background: linear-gradient(135deg, #ef6a24 0%, #d65413 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
   color: #fff; border: none;
   border-radius: var(--radius); padding: 16px;
   font-size: 17px; font-weight: 800;
   cursor: pointer; width: 100%;
   transition: all .15s; font-family: inherit;
   letter-spacing: .4px;
-  box-shadow: 0 4px 16px rgba(239,106,36,.35);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb),.35);
 }
 .cobrar-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(239,106,36,.5);
+  box-shadow: 0 6px 24px rgba(var(--accent-rgb),.5);
 }
 .cobrar-btn:active { transform: translateY(0); }
 
@@ -1547,7 +1593,7 @@ input[type=number] { -moz-appearance: textfield; }
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 900; color: #fff;
   letter-spacing: -.5px; flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(239,106,36,.4);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb),.4);
 }
 #sidebar .logo h1 { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
 #sidebar .logo p { font-size: 10px; color: var(--text2); margin-top: 1px; }
@@ -4082,7 +4128,7 @@ async function imprimirOrdenCompra(id){
   <html lang="es">
   <head>
     <meta charset="utf-8">
-    <title>Orden de pedido - Bodega Guaripola</title>
+    <title>Orden de pedido - ${bgMarcaNombre()}</title>
     <style>
       body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:13px}
       .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:18px}
@@ -4104,7 +4150,8 @@ async function imprimirOrdenCompra(id){
     <button onclick="window.print()" style="float:right;padding:8px 12px">Imprimir / Guardar PDF</button>
     <div class="top">
       <div>
-        <h1>Bodega Guaripola</h1>
+        <h1>${bgMarcaNombre()}</h1>
+        <div class="muted">${bgMarcaDatos()}</div>
         <div class="muted">Orden de pedido / compra</div>
       </div>
       <div style="text-align:right">
@@ -4447,7 +4494,7 @@ async function imprimirArqueo(id){
   const ventas=await resumenVentasDia(caja.fecha);
   const den=caja.denominaciones_cierre||{};
   const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong></p><p>Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${caja.notas_cierre||''}</p></body></html>`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>${bgMarcaNombre()}</h1><p class="muted">${bgMarcaDatos()}</p><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong></p><p>Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${caja.notas_cierre||''}</p></body></html>`;
   const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
 }
 function initCajaNav(){
@@ -5967,7 +6014,7 @@ initMobileShell();
     const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
     const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>${bgMarcaNombre()}</h1><p class="muted">${bgMarcaDatos()}</p><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
@@ -6037,26 +6084,45 @@ initMobileShell();
     nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
   }
   function mostrarLoginUsuarios(usuarios){
-    const opts=usuarios.map(u=>`<option value="${escapeHtml(u.auth_email)}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
-    openModal('Ingresar al sistema',`<div class="form-grid">
-      <div class="form-group" style="grid-column:1/-1"><label>Usuario</label><select id="login-user">${opts}</select></div>
-      <div class="form-group" style="grid-column:1/-1"><label>PIN</label><input id="login-pin" type="password" inputmode="numeric" placeholder="PIN del usuario" onkeydown="if(event.key==='Enter')loginUsuarioSistema()"></div>
-      <div class="alert alert-warning" style="grid-column:1/-1">Acceso con Supabase Auth. Ingresá tu PIN.</div>
-    </div>`,()=>loginUsuarioSistema(),'Entrar');
+    const opts=usuarios.map(u=>`<option value="${escapeHtml(u.auth_email)}">${escapeHtml(u.nombre)} · ${escapeHtml(u.rol)}</option>`).join('');
+    let ov=gs('bg-login'); if(!ov){ov=document.createElement('div');ov.id='bg-login';document.body.appendChild(ov);}
+    const m=bgMarca();
+    ov.innerHTML=`<form class="bg-login-card" onsubmit="event.preventDefault();loginUsuarioSistema()" autocomplete="off">
+      <div class="bg-login-marca">${bgMarcaLogoHtml(64)}<h1>${bgMarcaNombre()}</h1><p>${escapeHtml(m.lema)}</p></div>
+      <label for="login-user">Usuario</label>
+      <select id="login-user">${opts}</select>
+      <label for="login-pin">PIN</label>
+      <input id="login-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Ingresá tu PIN">
+      <div id="bg-login-err" role="alert"></div>
+      <button type="submit" id="bg-login-btn" class="btn btn-primary">Entrar</button>
+      <small>Acceso solo para personal autorizado</small>
+    </form>`;
+    try{const last=JSON.parse(lsGet('bg_login_ultimo')||'null'); if(last&&[...gs('login-user').options].some(o=>o.value===last)) gs('login-user').value=last;}catch(e){_swallow(e)}
+    setTimeout(()=>{const p=gs('login-pin'); if(p) p.focus();},60);
   }
+  function loginError(msg){const e=gs('bg-login-err'); if(e){e.textContent=msg;e.style.display=msg?'block':'none';} else if(msg) toast(msg,'err');}
+  function loginOcupado(on){const b=gs('bg-login-btn'); if(b){b.disabled=on;b.textContent=on?'Ingresando…':'Entrar';}}
   window.loginUsuarioSistema = async function(){
     const email=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
-    const {error:aerr}=await sb.auth.signInWithPassword({email,password:'gpola_'+pin});
-    if(aerr){toast('Usuario o PIN incorrecto','err');return;}
-    const {data:{user}}=await sb.auth.getUser();
-    const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
-    if(error||!data){toast('No se pudo cargar el perfil','err');return;}
-    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
+    if(!pin){loginError('Ingresá tu PIN.');return;}
+    loginError('');loginOcupado(true);
+    try{
+      const {error:aerr}=await sb.auth.signInWithPassword({email,password:'gpola_'+pin});
+      if(aerr){loginError('Usuario o PIN incorrecto.');const p=gs('login-pin');if(p){p.value='';p.focus();}return;}
+      const {data:{user}}=await sb.auth.getUser();
+      const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
+      if(error||!data){loginError('No se pudo cargar el perfil.');return;}
+      usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); lsSet('bg_login_ultimo',JSON.stringify(email));
+      const ov=gs('bg-login'); if(ov) ov.remove();
+      closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
+    }catch(e){loginError('Sin conexión. Probá de nuevo.');}
+    finally{loginOcupado(false);}
   };
   function mostrarMenuUsuario(){
     const admin=!usuarioActual||usuarioActual.rol==='admin', claro=document.body.classList.contains('theme-light'), may=document.body.classList.contains('con-mayorista');
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap">`+
       (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">Usuarios y respaldo</button>`:'')+
+      (admin?`<button class="btn btn-secondary" onclick="closeModal();bgMarcaEditar()">Datos del comercio</button>`:'')+
       `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'Tema oscuro':'Tema claro'}</button>`+
       (admin?`<button class="btn btn-secondary" onclick="bgToggleMayorista();closeModal()">${may?'Ocultar ventas mayoristas':'Activar ventas mayoristas'}</button>`:'')+
       `<button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button>`+
@@ -6068,7 +6134,7 @@ initMobileShell();
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
     const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
-    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    gs('content').innerHTML=(typeof bgMarcaCardHtml==='function'?bgMarcaCardHtml():'')+`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   window.bgVerAuditoria = function(){
     if(typeof openModal!=='function') return;
@@ -6831,7 +6897,7 @@ initMobileShell();
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
     const ventaEfectivoReal=(Number(caja.efectivo_contado)||0)+(gastos.total||0)-(Number(caja.apertura_efectivo)||0)-(ingresos.total||0);
     const totalGeneralContado=Number(caja.total_contado)||(Number(caja.efectivo_contado||0)+Number(caja.qr_contado||0)+Number(caja.transferencia_contado||0)+Number(caja.debito_contado||0)+Number(caja.credito_contado||0));
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>${bgMarcaNombre()}</h1><p class="muted">${bgMarcaDatos()}</p><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
@@ -10113,7 +10179,7 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(var(--accent-rgb),.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-cart"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Nueva venta</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Registrar venta al mostrador</div>
@@ -10187,7 +10253,7 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(var(--accent-rgb),.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
             <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-box"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Productos</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y editar el catálogo</div>
@@ -10261,7 +10327,7 @@ async function revertirStockCompraReal(compraId, detalles){
   justify-content:space-between;
   gap:16px;
   background:
-    radial-gradient(circle at top left, rgba(239,106,36,.14), transparent 34%),
+    radial-gradient(circle at top left, rgba(var(--accent-rgb),.14), transparent 34%),
     var(--bg2);
 }
 .compras-module-head h3{
@@ -10311,7 +10377,7 @@ async function revertirStockCompraReal(compraId, detalles){
   color:#fff;
   background:var(--accent);
   border-color:var(--accent);
-  box-shadow:0 4px 16px rgba(239,106,36,.28);
+  box-shadow:0 4px 16px rgba(var(--accent-rgb),.28);
 }
 #compras-tab-content > .card:first-child{ margin-top:0; }
 @media(max-width:900px){
@@ -10433,7 +10499,7 @@ async function revertirStockCompraReal(compraId, detalles){
     color: #fff !important;
   }
   #sidebar nav a.active {
-    background: rgba(239,106,36,.25) !important;
+    background: rgba(var(--accent-rgb),.25) !important;
     color: #fff !important;
     font-weight: 600 !important;
   }
@@ -10578,7 +10644,7 @@ async function revertirStockCompraReal(compraId, detalles){
     position: relative !important;
   }
   .hist-table-wrap tbody tr:hover {
-    background: rgba(239,106,36,.07) !important;
+    background: rgba(var(--accent-rgb),.07) !important;
   }
   .hist-table-wrap tbody td {
     padding: 3px 0 !important;
@@ -10821,7 +10887,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu a:hover,
   #sidebar nav#macos-main-menu button.mac-menu-trigger:hover,
   #sidebar nav#macos-main-menu .mac-menu-group.open > button.mac-menu-trigger{background:rgba(255,255,255,.12)!important;color:#fff!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;font-weight:650!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.28)!important;color:#fff!important;font-weight:650!important;}
   #sidebar nav#macos-main-menu .ico,
   #sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-caret{font-size:9px!important;opacity:.72!important;margin-left:1px!important;}
@@ -10833,7 +10899,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu,
   #sidebar nav#macos-main-menu .mac-menu-group:hover > .mac-submenu{display:block!important;}
   #sidebar nav#macos-main-menu .mac-submenu a{height:30px!important;margin:0!important;width:100%!important;justify-content:flex-start!important;padding:0 12px!important;border-radius:7px!important;color:rgba(255,255,255,.82)!important;font-size:12.5px!important;}
-  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(239,106,36,.22)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(var(--accent-rgb),.22)!important;color:#fff!important;}
   #sidebar .cfg-btn{height:30px!important;min-height:30px!important;padding:0 10px!important;border-top:none!important;border-left:1px solid rgba(255,255,255,.1)!important;margin-left:6px!important;display:flex!important;align-items:center!important;color:rgba(255,255,255,.45)!important;background:transparent!important;flex-shrink:0!important;}
   #sidebar .cfg-btn svg{width:11px!important;height:11px!important;}
   #sidebar .cfg-btn span{opacity:1!important;font-size:11px!important;}
@@ -10853,7 +10919,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu::-webkit-scrollbar{display:none!important;}
   #sidebar nav#macos-main-menu .mac-menu-group{position:relative!important;display:inline-flex!important;flex-shrink:0!important;}
   #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{height:30px!important;min-height:30px!important;padding:0 11px!important;border:0!important;border-radius:8px!important;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86)!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important;display:inline-flex!important;align-items:center!important;gap:4px!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.3)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.3)!important;color:#fff!important;}
   #sidebar nav#macos-main-menu .ico,#sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-submenu{display:none!important;position:fixed!important;top:74px!important;left:8px!important;right:8px!important;padding:8px!important;background:rgba(28,31,45,.99)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:12px!important;box-shadow:0 16px 40px rgba(0,0,0,.6)!important;z-index:9999!important;}
   #sidebar nav#macos-main-menu .mac-menu-group.open>.mac-submenu{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;}
@@ -11031,7 +11097,7 @@ async function revertirStockCompraReal(compraId, detalles){
     #sidebar nav#macos-main-menu{height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important;padding:12px!important;margin:0!important;overflow:visible!important;white-space:normal!important;flex:0 0 auto!important;}
     #sidebar nav#macos-main-menu .mac-menu-group{width:100%!important;height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;position:relative!important;}
     #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{width:100%!important;height:46px!important;min-height:46px!important;padding:0 14px!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:13px!important;background:rgba(255,255,255,.055)!important;color:rgba(255,255,255,.9)!important;font-size:15px!important;font-weight:750!important;text-decoration:none!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;margin:0!important;box-shadow:none!important;}
-    #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;border-color:rgba(239,106,36,.42)!important;}
+    #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.28)!important;color:#fff!important;border-color:rgba(var(--accent-rgb),.42)!important;}
     #sidebar nav#macos-main-menu .mac-caret{font-size:11px!important;margin-left:auto!important;opacity:.75!important;}
     #sidebar nav#macos-main-menu .mac-submenu{position:static!important;display:none!important;min-width:0!important;width:100%!important;top:auto!important;left:auto!important;right:auto!important;padding:6px 0 2px 12px!important;margin:0!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;}
     #sidebar nav#macos-main-menu .mac-menu-group:hover>.mac-submenu{display:none!important;}
@@ -11064,7 +11130,7 @@ async function revertirStockCompraReal(compraId, detalles){
   function isMobile(){return window.matchMedia && window.matchMedia('(max-width:900px)').matches;}
   function pageTitle(){var active=document.querySelector('#macos-main-menu a.active');if(active&&active.textContent)return active.textContent.trim();var h=document.querySelector('#topbar h2');if(h&&h.textContent)return h.textContent.trim();return 'Sistema de gestión';}
   function ensureShell(){
-    if(!document.getElementById('bg-mobile-topbar')){var bar=document.createElement('div');bar.id='bg-mobile-topbar';bar.innerHTML='<button id="bg-mobile-menu-btn" type="button" aria-label="Abrir menú">☰</button><div id="bg-mobile-title"><strong>Bodega Guaripola</strong><span id="bg-mobile-current">Sistema de gestión</span></div><div id="bg-mobile-status">●</div>';document.body.appendChild(bar);}
+    if(!document.getElementById('bg-mobile-topbar')){var bar=document.createElement('div');bar.id='bg-mobile-topbar';bar.innerHTML='<button id="bg-mobile-menu-btn" type="button" aria-label="Abrir menú">☰</button><div id="bg-mobile-title"><strong>'+bgMarcaNombre()+'</strong><span id="bg-mobile-current">Sistema de gestión</span></div><div id="bg-mobile-status">●</div>';document.body.appendChild(bar);}
     if(!document.getElementById('bg-mobile-overlay')){var ov=document.createElement('div');ov.id='bg-mobile-overlay';document.body.appendChild(ov);}
     var btn=document.getElementById('bg-mobile-menu-btn');if(btn&&!btn.__bgMobileOk){btn.__bgMobileOk=true;btn.addEventListener('click',function(e){e.preventDefault();document.body.classList.toggle('bg-mobile-drawer-open');});}
     var ovl=document.getElementById('bg-mobile-overlay');if(ovl&&!ovl.__bgMobileOk){ovl.__bgMobileOk=true;ovl.addEventListener('click',function(){document.body.classList.remove('bg-mobile-drawer-open');});}
@@ -13748,7 +13814,7 @@ if('serviceWorker' in navigator){
     return '<!doctype html><html><head><meta charset="utf-8"><title>Ticket '+esc(t.numero_venta||'')+'</title>'+
       '<style>@page{size:'+width+' auto;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,monospace;font-size:12px}.ticket{width:'+width+';max-width:100%;padding:8px 9px}.center{text-align:center}.biz{font-weight:800;font-size:16px;letter-spacing:.3px}.muted{color:#555}.sep{border-top:1px dashed #111;margin:7px 0}.line{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.line b{text-align:right}table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:3px 0}.prod{width:70%}.prod span{font-size:11px;color:#555}.num{text-align:right;font-weight:700;white-space:nowrap}.total{font-size:16px;font-weight:900}.foot{font-size:11px;line-height:1.35}@media print{body{width:'+width+'}.no-print{display:none!important}}</style>'+
       '</head><body><div class="ticket">'+
-      '<div class="center"><div class="biz">BODEGA GUARIPOLA</div><div>Ticket interno</div><div class="muted">No válido como factura legal</div></div><div class="sep"></div>'+
+      '<div class="center"><div class="biz">'+bgMarcaNombre().toUpperCase()+'</div><div class="muted">'+bgMarcaDatos()+'</div><div>Ticket interno</div><div class="muted">No válido como factura legal</div></div><div class="sep"></div>'+
       '<div class="line"><span>N°</span><b>'+(t.numero_venta ? '#'+esc(t.numero_venta) : '-')+'</b></div>'+
       '<div class="line"><span>Fecha</span><b>'+esc(dateFmt(t.fecha || t.fecha_simple))+'</b></div>'+
       '<div class="line"><span>Hora</span><b>'+esc(horaFmt(t.fecha))+'</b></div>'+
@@ -14192,16 +14258,16 @@ window.renderInicio = function(){
   cont.innerHTML=''+
     '<style>'+
       '.ini2{max-width:1120px;margin:0 auto;padding:4px 2px 18px}'+
-      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(239,106,36,.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
-      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(239,106,36,.13);border:1px solid rgba(255,255,255,.08)}'+
+      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(var(--accent-rgb),.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
+      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(var(--accent-rgb),.13);border:1px solid rgba(255,255,255,.08)}'+
       '.ini2-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#ffc099;font-weight:800;margin-bottom:6px}'+
       '.ini2-title{font-size:28px;font-weight:950;letter-spacing:-.8px;line-height:1.05;color:var(--text);position:relative;z-index:1}'+
       '.ini2-sub{font-size:13px;color:var(--text3);margin-top:8px;position:relative;z-index:1;max-width:650px}'+
       '.ini2-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px;position:relative;z-index:1}'+
       '.ini2-action{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:var(--text);border-radius:15px;padding:14px 12px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s,background .12s}'+
-      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(239,106,36,.14)}'+
+      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(var(--accent-rgb),.14)}'+
       '.ini2-action:active{transform:scale(.99)}'+
-      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(239,106,36,.18);font-size:18px;flex:0 0 auto}'+
+      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(var(--accent-rgb),.18);font-size:18px;flex:0 0 auto}'+
       '.ini2-action b{display:block;font-size:13px;font-weight:900;color:var(--text)}'+
       '.ini2-action small{display:block;font-size:11px;color:var(--text2);margin-top:2px;line-height:1.2}'+
       '.ini2-green .ini2-action-ico{background:rgba(34,197,94,.16)}.ini2-amber .ini2-action-ico{background:rgba(245,158,11,.16)}'+
@@ -14211,14 +14277,14 @@ window.renderInicio = function(){
       '.ini2-panel-h span{font-size:11px;color:var(--text2);font-weight:700}'+
       '.ini2-list{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}'+
       '.ini2-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;text-decoration:none;color:var(--text);cursor:pointer;min-height:72px}'+
-      '.ini2-row:hover{border-color:var(--accent);background:rgba(239,106,36,.08)}'+
+      '.ini2-row:hover{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}'+
       '.ini2-row b{font-size:13px}.ini2-row small{display:block;color:var(--text2);font-size:11px;margin-top:2px}.ini2-arrow{color:var(--text2);font-weight:900;font-size:18px}'+
       '@media(max-width:900px){.ini2{padding:0}.ini2-hero{border-radius:0 0 22px 22px;margin:-20px -20px 16px;padding:22px 20px}.ini2-title{font-size:24px}.ini2-actions{grid-template-columns:1fr 1fr}.ini2-list{grid-template-columns:1fr}.ini2-action{padding:13px 10px}.ini2-action small{display:none}}'+
       '@media(max-width:430px){.ini2-actions{grid-template-columns:1fr 1fr}.ini2-title{font-size:22px}}'+
     '</style>'+
     '<div class="ini2">'+
       '<section class="ini2-hero">'+
-        '<div class="ini2-kicker">Bodega Guaripola · '+fecha+'</div>'+
+        '<div class="ini2-kicker">'+bgMarcaNombre()+' · '+fecha+'</div>'+
         '<div class="ini2-title">Hola'+(nombre?', '+nombre:'')+' 👋<br>Panel de trabajo</div>'+
         '<div class="ini2-sub">Entrá rápido a vender, comprar, revisar caja o controlar stock. Esta pantalla está pensada para abrir el sistema y trabajar sin perder tiempo.</div>'+
         '<div class="ini2-actions">'+
@@ -14251,7 +14317,7 @@ body.theme-light{
   --bg:#f4f6fa; --bg2:#ffffff; --bg3:#eef1f7; --bg4:#e3e7f0;
   --border:#d7dce8; --border2:#c2c9da;
   --text:#161a24; --text2:#6b7280; --text3:#374151;
-  --accent:#d65413; --accent2:#b8460f;
+  --accent:#d65413; --accent2:#b8460f; --accent-rgb:214,84,19;
   --accent-bg:rgba(214,84,19,.10); --accent-glow:0 0 20px rgba(214,84,19,.18);
   --green:#16a34a; --green-bg:rgba(22,163,74,.10);
   --red:#dc2626;   --red-bg:rgba(220,38,38,.10);
@@ -15103,7 +15169,7 @@ body:not(.theme-light){
   --bg:#1f2534; --bg2:#283044; --bg3:#232a3b; --bg4:#313a51;
   --border:#3a4560; --border2:#47536f;
   --text:#eef1f8; --text2:#a3acc4; --text3:#cbd2e3;
-  --accent:#f47a35; --accent2:#e0621c;
+  --accent:#f47a35; --accent2:#e0621c; --accent-rgb:244,122,53;
   --accent-bg:rgba(244,122,53,.16); --accent-glow:0 0 20px rgba(244,122,53,.22);
   --shadow:0 2px 8px rgba(8,12,24,.25); --shadow-md:0 4px 20px rgba(8,12,24,.30); --shadow-lg:0 8px 40px rgba(8,12,24,.35);
 }
@@ -16094,7 +16160,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .in3-hola{font-size:20px;font-weight:900;color:var(--text)}.in3-hola small{display:block;font-size:12px;font-weight:600;color:var(--text3)}
 .in3-caja{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer}
 .in3-caja i{width:9px;height:9px;border-radius:50%;background:var(--red)}.in3-caja.on i{background:var(--green)}
-.in3-vender{display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:16px;padding:16px;font-family:inherit;font-size:18px;font-weight:900;color:#fff;background:linear-gradient(135deg,#ef6a24,#d65413);box-shadow:0 8px 24px rgba(239,106,36,.3);cursor:pointer}
+.in3-vender{display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:16px;padding:16px;font-family:inherit;font-size:18px;font-weight:900;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(var(--accent-rgb),.3);cursor:pointer}
 .in3-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .in3-k{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px 14px;min-width:0}
 .in3-k span{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
@@ -16105,8 +16171,8 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .in3-card h3{font-size:13px;font-weight:900;margin:0;padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text);display:flex;justify-content:space-between;gap:8px}
 .in3-card h3 a{font-size:11px;color:var(--accent);cursor:pointer;font-weight:800}
 .in3-horas{display:flex;align-items:flex-end;gap:3px;height:110px;padding:12px 14px 4px}
-.in3-horas div{flex:1;background:rgba(239,106,36,.75);border-radius:3px 3px 0 0;min-height:2px}
-.in3-horas div.now{background:#ef6a24}
+.in3-horas div{flex:1;background:rgba(var(--accent-rgb),.75);border-radius:3px 3px 0 0;min-height:2px}
+.in3-horas div.now{background:var(--accent)}
 .in3-hlab{display:flex;justify-content:space-between;padding:0 14px 10px;font-size:10px;color:var(--text3);font-weight:700}
 .in3-li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer}
 .in3-li:last-child{border-bottom:0}.in3-li b{font-weight:800}.in3-li span{color:var(--text3);font-size:12px;white-space:nowrap}
@@ -16252,7 +16318,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .caja-k span{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)}
 .caja-k b{display:block;font-size:19px;font-weight:900;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .caja-k small{display:block;font-size:11px;color:var(--text3);line-height:1.25}
-.caja-k.big{border-color:var(--accent);background:rgba(239,106,36,.08)}
+.caja-k.big{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}
 .caja-fiados{margin-bottom:14px;padding:0}
 .caja-fiados>summary{cursor:pointer;padding:12px 16px;font-weight:800}
 .caja-fiados>.card{border:0;box-shadow:none;margin:0!important}
@@ -16271,6 +16337,96 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 </style>
 <link rel="stylesheet" href="pedidos-admin.css">
 <script src="pedidos-admin.js"></script>
+<style id="bg-marca-css">
+#sidebar .logo-icon.con-logo{background:transparent!important;border:0!important;padding:0!important;overflow:hidden}
+#bg-login{position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;
+  background:radial-gradient(1200px 600px at 50% -10%,rgba(var(--accent-rgb),.18),transparent 60%),var(--bg)}
+.bg-login-card{width:100%;max-width:380px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:28px 26px 22px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column}
+.bg-login-marca{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:20px}
+.bg-login-marca h1{font-size:20px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.3px}
+.bg-login-marca p{font-size:13px;color:var(--text2);margin-top:2px}
+.bg-login-card label{font-size:12px;font-weight:700;color:var(--text2);margin:10px 0 6px}
+.bg-login-card select,.bg-login-card input{width:100%;height:46px;border-radius:10px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font:inherit;font-size:16px;padding:0 12px}
+.bg-login-card input{letter-spacing:4px}
+.bg-login-card input::placeholder{letter-spacing:0}
+.bg-login-card select:focus,.bg-login-card input:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.2)}
+#bg-login-err{display:none;margin-top:12px;padding:9px 12px;border-radius:10px;background:var(--red-bg);color:var(--red);font-size:13px;font-weight:600}
+.bg-login-card .btn{margin-top:18px;height:48px;justify-content:center;font-size:15px!important;font-weight:800;width:100%}
+.bg-login-card small{margin-top:14px;text-align:center;color:var(--text2);font-size:11px}
+.bg-marca-card{display:flex;align-items:center;gap:14px;padding:14px;flex-wrap:wrap}
+.bg-marca-card .inf{flex:1 1 220px;min-width:0}
+.bg-marca-card .inf b{display:block;font-size:15px;color:var(--text)}
+.bg-marca-card .inf span{display:block;font-size:12px;color:var(--text2);margin-top:2px}
+.bg-marca-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bg-marca-form .full{grid-column:1/-1}
+.bg-marca-form label{display:block;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:5px}
+.bg-marca-form input[type=text]{width:100%}
+.bg-marca-logo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bg-marca-color{display:flex;align-items:center;gap:10px}
+.bg-marca-color input[type=color]{width:52px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);cursor:pointer}
+@media (max-width:560px){.bg-marca-form{grid-template-columns:1fr}}
+</style>
+<script id="bg-marca-ui">
+(function(){
+  var CAMPOS=['nombre','lema','ruc','direccion','telefono','logo','color'];
+  var logoTmp=null;
+  function h(v){return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+  function g(id){return document.getElementById(id);}
+  function guardarLocal(o){var m={};CAMPOS.forEach(function(k){if(o[k]!=null)m[k]=String(o[k]);});try{localStorage.setItem('bg_marca',JSON.stringify(m));}catch(e){}bgMarcaAplicar();}
+  window.bgMarcaCardHtml=function(){
+    var m=bgMarca(),d=bgMarcaDatos();
+    return '<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Datos del comercio</h3><button class="btn btn-secondary btn-sm" onclick="bgMarcaEditar()">Editar</button></div>'+
+      '<div class="bg-marca-card">'+bgMarcaLogoHtml(48)+'<div class="inf"><b>'+h(m.nombre)+'</b><span>'+(d||'Agregá RUC, dirección y teléfono: salen en tickets, arqueos y órdenes de compra.')+'</span></div></div></div>';
+  };
+  function pintarLogo(){var b=g('bgm-logo-prev');if(!b)return;var src=logoTmp;
+    b.innerHTML=src?'<img src="'+src+'" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:12px;background:var(--bg3);border:1px solid var(--border)">':'<span style="font-size:12px;color:var(--text2)">Sin logo: se usan las iniciales.</span>';
+    var q=g('bgm-logo-quitar');if(q)q.style.display=src?'':'none';}
+  window.bgMarcaLogoFile=function(inp){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    if(!/^image\//.test(f.type)){toast('Elegí una imagen','err');return;}
+    var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){
+      var mx=256,k=Math.min(1,mx/Math.max(im.width,im.height)),c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      logoTmp=c.toDataURL('image/png');pintarLogo();};im.onerror=function(){toast('No se pudo leer la imagen','err');};im.src=r.result;};
+    r.readAsDataURL(f);
+  };
+  window.bgMarcaLogoQuitar=function(){logoTmp='';pintarLogo();};
+  window.bgMarcaEditar=function(){
+    var m=bgMarca();logoTmp=m.logo||'';
+    openModal('Datos del comercio','<div class="bg-marca-form">'+
+      '<div class="full"><label>Nombre del comercio</label><input type="text" id="bgm-nombre" maxlength="60" value="'+h(m.nombre)+'"></div>'+
+      '<div class="full"><label>Descripción corta</label><input type="text" id="bgm-lema" maxlength="60" value="'+h(m.lema)+'"></div>'+
+      '<div><label>RUC</label><input type="text" id="bgm-ruc" maxlength="20" value="'+h(m.ruc)+'"></div>'+
+      '<div><label>Teléfono</label><input type="text" id="bgm-telefono" maxlength="30" value="'+h(m.telefono)+'"></div>'+
+      '<div class="full"><label>Dirección</label><input type="text" id="bgm-direccion" maxlength="120" value="'+h(m.direccion)+'"></div>'+
+      '<div class="full"><label>Logo</label><div class="bg-marca-logo"><span id="bgm-logo-prev"></span>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0">Elegir imagen<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="bgMarcaLogoFile(this)"></label>'+
+        '<button type="button" class="btn btn-secondary btn-sm" id="bgm-logo-quitar" onclick="bgMarcaLogoQuitar()">Quitar</button></div></div>'+
+      '<div class="full"><label>Color principal</label><div class="bg-marca-color"><input type="color" id="bgm-color" value="'+h(m.color)+'">'+
+        '<button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById(\'bgm-color\').value=BG_MARCA_DEF.color">Volver al original</button></div></div>'+
+      '</div>',guardar,'Guardar');
+    pintarLogo();
+  };
+  async function guardar(){
+    var o={nombre:(g('bgm-nombre').value||'').trim(),lema:(g('bgm-lema').value||'').trim(),ruc:(g('bgm-ruc').value||'').trim(),telefono:(g('bgm-telefono').value||'').trim(),direccion:(g('bgm-direccion').value||'').trim(),color:g('bgm-color').value,logo:logoTmp||''};
+    if(!o.nombre){toast('Poné el nombre del comercio','err');return;}
+    guardarLocal(o);closeModal();
+    var remoto=false;
+    try{ if(typeof sb!=='undefined'&&sb){var r=await sb.from('bodega_config').upsert(Object.assign({id:1,updated_at:new Date().toISOString()},o));remoto=!r.error;} }catch(e){}
+    toast(remoto?'Datos del comercio guardados':'Guardado en este dispositivo');
+    if(g('content')&&document.querySelector('.bg-marca-card')&&typeof goTo==='function')goTo('usuarios');
+  }
+  /* Si existe la tabla bodega_config, la marca se comparte entre dispositivos */
+  var intentos=0;
+  (function cargarRemoto(){
+    if(typeof sb==='undefined'||!sb){ if(++intentos<40)setTimeout(cargarRemoto,500); return; }
+    sb.from('bodega_config').select('*').eq('id',1).maybeSingle().then(function(r){
+      if(r&&!r.error&&r.data&&r.data.nombre){guardarLocal(r.data);var ov=g('bg-login');if(ov){var mk=ov.querySelector('.bg-login-marca');if(mk)mk.innerHTML=bgMarcaLogoHtml(64)+'<h1>'+bgMarcaNombre()+'</h1><p>'+h(bgMarca().lema)+'</p>';}}
+    }).catch(function(){});
+  })();
+})();
+</script>
 <style id="bg-pulido-v1">
 /* Íconos de acción (reemplazan emojis) */
 :root{--bg-i-edit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E");--bg-i-trash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E");--bg-i-box:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E");--bg-i-cart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h2l2.5 11h10L20 7H6'/%3E%3Cpath d='M9 20a1 1 0 1 0 0-.01M17 20a1 1 0 1 0 0-.01'/%3E%3C/svg%3E");--bg-i-users:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1'/%3E%3Cpath d='M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3Cpath d='M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E");--bg-i-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3C/svg%3E");--bg-i-list:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4h6v3H9Z'/%3E%3Cpath d='M9 5H6v16h12V5h-3'/%3E%3Cpath d='M9 12h6M9 16h6'/%3E%3C/svg%3E");--bg-i-tag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8Z'/%3E%3Cpath d='M7.5 8.5h.01'/%3E%3C/svg%3E");--bg-i-cash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v11H3Z'/%3E%3Cpath d='M3 11h18'/%3E%3Cpath d='M7 15h3'/%3E%3C/svg%3E");--bg-i-chart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V4'/%3E%3Cpath d='M4 20h16'/%3E%3Cpath d='M8 16v-5M12 16V8M16 16v-3'/%3E%3C/svg%3E");--bg-i-camera:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l2-3h6l2 3h3v11H4Z'/%3E%3Cpath d='M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'/%3E%3C/svg%3E");--bg-i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");--bg-i-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z'/%3E%3Cpath d='M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6'/%3E%3C/svg%3E")}
