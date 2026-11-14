@@ -15236,6 +15236,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
 .bg5-tile .pr{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 .bg5-tile .st{position:absolute;top:6px;right:6px;font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--amber);color:#111}
 .bg5-tile .st.cero{background:var(--red);color:#fff}
+.bg5-tile .st.ok{background:var(--bg2);color:var(--text);border:1px solid var(--border2)}
 .bg5-tile .qn{position:absolute;top:6px;left:6px;min-width:22px;height:22px;border-radius:999px;background:var(--green);color:#06210f;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 6px}
 #bg5-pag{display:flex;gap:6px;justify-content:center;flex:0 0 auto}
 #bg5-pag button{min-width:36px;height:34px;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -15330,8 +15331,11 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     imp.setAttribute('inputmode','numeric');
     var d=document.createElement('div'); d.id='bg5-billetes';
     d.innerHTML='<button type="button" class="bg5-exacto" onclick="bg5Billete(\'exacto\')">Exacto</button>'+
-      [2000,5000,10000,20000,50000,100000].map(function(b){ return '<button type="button" onclick="bg5Billete('+b+')">+'+(b/1000)+'k</button>'; }).join('')+
-      '<button type="button" onclick="bg5Billete(\'clear\')">✕</button>';
+      '<button type="button" class="bg5-limpiar" onclick="bg5Billete(\'clear\')" title="Borrar importe">✕ Borrar</button>'+
+      [1000,2000,5000,10000,20000,50000,100000].map(function(b){
+        var img=b<=100000?'<img src="img/billetes/'+b+'.webp" alt="" loading="lazy" decoding="async" onerror="this.remove()">':'';
+        return '<button type="button" class="bg5-bill'+(img?' con-img':'')+'" onclick="bg5Billete('+b+')" title="Sumar Gs. '+b.toLocaleString('es-PY')+'">'+img+'<span>+'+(b/1000)+'k</span></button>';
+      }).join('');
     var g=imp.closest('.form-group')||imp.parentElement; g.id='bg5-imp-group'; g.appendChild(d);
   }
 
@@ -15783,7 +15787,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       var im=p.imagen_url?'<img src="'+esc(p.imagen_url)+'" alt="" loading="lazy" decoding="async">':'<span class="ini">'+esc(iniciales(p.nombre))+'</span>';
       return '<button type="button" class="bg5-tile'+(st<=0?' sin':'')+'" onclick="bg5Tile(\''+esc(p.id)+'\')" title="'+esc(p.nombre)+'">'+
         (enCarro[p.id]?'<span class="qn">'+enCarro[p.id]+'</span>':'')+
-        (st<=0?'<span class="st cero">Sin stock</span>':(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'<span class="st">'+st+'</span>':''))+
+        (st<=0?'<span class="st cero">Sin stock</span>':'<span class="st'+(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'':' ok')+'" title="Stock">'+st.toLocaleString('es-PY')+'</span>')+
         '<div class="im" style="'+(p.imagen_url?'':(/^#[0-9a-f]{6}$/i.test(col)?'background:'+col+'26;color:'+col:'background:'+esc(col)))+'">'+im+'</div>'+
         '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(precioDe(p))+'</div></button>';
     }).join('')||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">No hay productos para mostrar</div>';
@@ -16527,6 +16531,32 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 })();
 </script>
 <style id="bg-pulido-v1">
+/* Cobro: botones de billetes con imagen */
+#bg5-billetes{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#bg5-billetes .bg5-exacto{grid-column:span 3}
+#bg5-billetes .bg5-limpiar{font-size:12px;color:var(--text2)}
+#bg5-billetes .bg5-bill{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 4px;min-height:54px}
+#bg5-billetes .bg5-bill img{display:block;max-width:100%;height:28px;object-fit:contain;border-radius:3px}
+#bg5-billetes .bg5-bill.con-img span{font-size:11px;line-height:1;color:var(--text2)}
+#bg5-billetes .bg5-bill:not(.con-img) span{font-size:15px}
+/* Carrito en vista grilla (PC): cada producto en dos líneas para que entren total y botón de quitar */
+@media (min-width:901px){
+  #venta-layout.bg5-grid #venta-table,#venta-layout.bg5-grid #venta-tbody{display:block;width:100%}
+  #venta-layout.bg5-grid #venta-table thead{display:none}
+  #venta-layout.bg5-grid #venta-tbody > tr:has(> td:nth-child(5)){display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);grid-template-areas:"desc desc quitar" "cant unit total";gap:6px 10px;align-items:end;padding:10px 12px;border-bottom:1px solid var(--border)}
+  #venta-layout.bg5-grid #venta-tbody > tr:has(> td:nth-child(5)) > td{display:block;padding:0!important;border:0!important;min-width:0;text-align:left!important}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(1){grid-area:desc;align-self:start;font-weight:600}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(2){grid-area:cant}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3){grid-area:unit}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4){grid-area:total}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5){grid-area:quitar;justify-self:end;align-self:start}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3)::before{content:'Precio unit.'}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4)::before{content:'Total'}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3)::before,#venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4)::before{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);margin-bottom:2px}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(3) input,#venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(4) input{width:100%!important}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5) button{width:30px;height:30px;border-radius:8px;border:1px solid var(--border)!important;background:var(--bg3)!important;font-size:14px!important;line-height:1}
+  #venta-layout.bg5-grid #venta-tbody > tr > td:nth-child(5) button:hover{background:var(--red-bg)!important;border-color:var(--red)!important}
+}
 .bg-dias-card{margin-bottom:12px}
 .bg-dias-svg{display:block;width:100%;height:auto;max-height:260px}
 .bg-dias-res{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:2px 0 8px}
