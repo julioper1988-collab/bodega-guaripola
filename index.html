@@ -80,7 +80,7 @@ window.safeHtml = escapeHtml;
     const a=document.createElement('a');
     a.onclick=()=>goTo('inventario');
     a.id='nav-inventario';
-    a.innerHTML='<span class="ico">🧾</span> Inventario';
+    a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-list"></i></span> Inventario';
     if(after && after.parentNode) after.parentNode.insertBefore(a, after.nextSibling); else nav.appendChild(a);
     try{ titles.inventario='Inventario'; pages.inventario=renderInventario; }catch(e){_swallow(e)}
   }
@@ -111,7 +111,7 @@ window.safeHtml = escapeHtml;
         <div class="card inv-panel-buscar">
           <div class="card-header">
             <h3>Buscar productos</h3>
-            <button class="btn btn-secondary btn-sm" onclick="invAbrirCamara()">📷 Cámara</button>
+            <button class="btn btn-secondary btn-sm" onclick="invAbrirCamara()">Cámara</button>
           </div>
           <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
             <input id="inv-search" placeholder="Nombre, código (ej: 12 = 00012)..."
@@ -148,7 +148,7 @@ window.safeHtml = escapeHtml;
               <div style="font-weight:800;font-size:15px" id="inv-resumen">Sin productos</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn-secondary" onclick="limpiarInventarioActual()">Limpiar</button>
-                <button class="btn btn-primary" onclick="guardarInventarioActual()">💾 Guardar inventario</button>
+                <button class="btn btn-primary" onclick="guardarInventarioActual()">Guardar inventario</button>
               </div>
             </div>
           </div>
@@ -216,12 +216,12 @@ window.safeHtml = escapeHtml;
               </div>
               <button class="btn btn-secondary btn-sm" onclick="addInvItem('${it.producto_id}')">+ Depósito</button>
             </div>`).join('')+
-          `<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px">🔍 Escribí para buscar productos</div>`;
+          `<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px">Escribí para buscar productos</div>`;
       } else {
         el.innerHTML=`<div style="padding:32px 20px;text-align:center;color:var(--text2)">
-          <div style="font-size:32px;margin-bottom:10px">🔍</div>
+          <div style="font-size:32px;margin-bottom:10px"><i class="bg-ico bg-ico-search"></i></div>
           <div style="font-size:15px;font-weight:700;margin-bottom:6px">Buscá un producto</div>
-          <div style="font-size:13px">Escribí el nombre o escaneá el código con 📷</div>
+          <div style="font-size:13px">Escribí el nombre o escaneá el código con la cámara</div>
         </div>`;
       }
       return;
@@ -1603,7 +1603,7 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
 
 <div id="setup" style="display:none">
   <div class="setup-card">
-    <h2>⚙️ Configuración inicial</h2>
+    <h2>Configuración inicial</h2>
     <p>Ingresá los datos de tu proyecto Supabase para conectar el sistema.</p>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="form-group"><label>Supabase URL</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
@@ -2334,7 +2334,7 @@ function dashReporteTabla(rows, totalVenta, totalGan){
         const sc=r.stock==='-'?'var(--text2)':r.stock<=0?'var(--red)':r.stock<5?'var(--amber)':'var(--green)';
         const gc=r.ganancia>=0?'var(--teal)':'var(--red)';
         return `<tr>
-          <td style="font-weight:600">${escapeHtml(r.nombre)}${r.cliente?`<div style="font-size:11px;color:var(--text2)">👤 ${escapeHtml(r.cliente)}</div>`:''}</td>
+          <td style="font-weight:600">${escapeHtml(r.nombre)}${r.cliente?`<div style="font-size:11px;color:var(--text2)">${escapeHtml(r.cliente)}</div>`:''}</td>
           <td style="text-align:center;font-weight:800;color:var(--accent2)">${r.cant}</td>
           <td style="text-align:center;font-weight:700;color:${sc}">${r.stock}</td>
           <td style="text-align:right;color:var(--green);font-weight:600">${fmtGs(r.venta)}</td>
@@ -2409,12 +2409,12 @@ async function renderProductos(){
   const {data,count}=await q;
   gs('content').innerHTML=`
   <div class="search-bar">
-    <input placeholder="🔍 Buscar..." value="${prodSearch}" oninput="prodSearch=this.value;prodPage=1;renderProductos()">
+    <input placeholder="Buscar..." value="${prodSearch}" oninput="prodSearch=this.value;prodPage=1;renderProductos()">
     <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
       <option value="">Todas las categorías</option>
       ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
     </select>
-    <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+    <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
   </div>
   <div class="card">
     <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -2716,7 +2716,7 @@ async function openEmbModal(prodId,prodNombre){
       ${!(embs||[]).length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
     </tbody>
   </table>`;
-  openModal(`📦 Embalajes — ${prodNombre}`,body,null,'');
+  openModal(`Embalajes — ${prodNombre}`,body,null,'');
 }
 async function saveEmb(prodId,prodNombre){
   const obj={producto_id:prodId,cantidad:parseInt(gs('emb-cant').value)||1,codigo_barra:gs('emb-cod').value||null,precio_costo:parseFloat(gs('emb-costo').value)||0,precio_venta:parseFloat(gs('emb-venta').value)||0,precio_mayorista:parseFloat(gs('emb-mayor').value)||0};
@@ -2742,7 +2742,7 @@ function renderVentas(){
     <!-- IZQUIERDA -->
     <div id="venta-left">
       <div id="venta-header">
-        <div class="vtitle">🛒 Ventas</div>
+        <div class="vtitle">Ventas</div>
         <div class="vinfo">N° comprobante: <span id="v-num-comp">#${ventaNum}</span> &nbsp;|&nbsp; Productos: <span id="v-count">0</span> &nbsp;|&nbsp;
           <button class="btn btn-sm ${ventaTipo==='minorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('minorista')" style="margin-right:4px">Minorista</button>
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
@@ -3173,10 +3173,10 @@ function renderCompras(){
   <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 132px)">
     <div id="prod-picker" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:12px;border-bottom:1px solid var(--border)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:10px">🚛 Agregar productos</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">Agregar productos</div>
         <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
           <div class="autocomplete-wrap">
-            <input id="cp-search" placeholder="🔍 Buscar por nombre o código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">
+            <input id="cp-search" placeholder="Buscar por nombre o código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">
             <div class="autocomplete-list" id="cp-ac-list" style="display:none"></div>
           </div>
           <input id="cp-qty" type="number" value="1" min="1" placeholder="Cant." style="text-align:center">
@@ -3194,7 +3194,7 @@ function renderCompras(){
           <div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>
           <div class="form-group"><label>Estado</label>
             <select id="comp-estado">
-              <option value="en_proceso">🕐 En proceso (no impacta stock)</option>
+              <option value="en_proceso">En proceso (no impacta stock)</option>
               <option value="finalizado">✅ Finalizado (impacta stock ahora)</option>
             </select>
           </div>
@@ -3349,7 +3349,7 @@ async function renderHistorialCompras(page){
         <td><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
         <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">👁</button>
+          <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')"><i class="bg-ico bg-ico-eye"></i></button>
           <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
           ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
         </td>
@@ -3985,7 +3985,7 @@ async function buscarRucCliente(){
 openClienteModal = function(){
   openModal('Nuevo cliente',`
     <div class="alert alert-warning" style="margin-bottom:14px">
-      🔎 El buscador primero revisa tus clientes y la tabla local de RUC. Si no encuentra, cargalo manualmente una vez y queda guardado para la próxima.
+      El buscador primero revisa tus clientes y la tabla local de RUC. Si no encuentra, cargalo manualmente una vez y queda guardado para la próxima.
     </div>
     <div class="form-grid">
       <div class="form-group">
@@ -4151,12 +4151,12 @@ renderHistorialCompras = async function(){
   function pagoDetalle(c){
     const mp = (c.metodo_pago||'').toLowerCase();
     const total = fmtGs(c.total);
-    if(mp === 'efectivo') return `<span style="color:var(--green)">💵 Efectivo: ${total}</span>`;
-    if(mp === 'transferencia') return `<span style="color:var(--accent)">🏦 Transferencia: ${total}</span>`;
-    if(mp === 'crédito' || mp === 'credito') return `<span style="color:var(--amber)">💳 Crédito: ${total}</span>`;
-    if(mp === 'cheque') return `<span style="color:var(--text2)">📄 Cheque: ${total}</span>`;
-    if(mp === 'qr') return `<span style="color:var(--accent2)">📱 QR: ${total}</span>`;
-    if(mp === 'debito') return `<span style="color:var(--accent)">💳 Débito: ${total}</span>`;
+    if(mp === 'efectivo') return `<span style="color:var(--green)">Efectivo: ${total}</span>`;
+    if(mp === 'transferencia') return `<span style="color:var(--accent)">Transferencia: ${total}</span>`;
+    if(mp === 'crédito' || mp === 'credito') return `<span style="color:var(--amber)">Crédito: ${total}</span>`;
+    if(mp === 'cheque') return `<span style="color:var(--text2)">Cheque: ${total}</span>`;
+    if(mp === 'qr') return `<span style="color:var(--accent2)">QR: ${total}</span>`;
+    if(mp === 'debito') return `<span style="color:var(--accent)">Débito: ${total}</span>`;
     if(mp) return `<span style="color:var(--text2)">${mp}: ${total}</span>`;
     return `<span style="color:var(--text2)">-</span>`;
   }
@@ -4179,7 +4179,7 @@ renderHistorialCompras = async function(){
           <button class="btn btn-danger btn-sm hc-btn" onclick="borrarCompra('${c.id}')">Borrar</button>
         </div>
         <div class="hc-pago-wrap">
-          <button class="hc-pago-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">💰 Ver pago</button>
+          <button class="hc-pago-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">Ver pago</button>
           <div class="hc-pago-detalle" style="display:none">${pagoDetalle(c)}</div>
         </div>
       </td>
@@ -4453,7 +4453,7 @@ async function imprimirArqueo(id){
 function initCajaNav(){
   if(document.getElementById('nav-caja')) return;
   const nav=document.querySelector('#sidebar nav');if(!nav) return;
-  const a=document.createElement('a');a.onclick=()=>goTo('caja');a.id='nav-caja';a.innerHTML='<span class="ico">💰</span> Caja / Arqueo';
+  const a=document.createElement('a');a.onclick=()=>goTo('caja');a.id='nav-caja';a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-cash"></i></span> Caja / Arqueo';
   const ref=document.getElementById('nav-historial-ventas');
   if(ref&&ref.nextSibling)nav.insertBefore(a,ref.nextSibling);else nav.appendChild(a);
   try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){_swallow(e)}
@@ -4698,7 +4698,7 @@ initMobileShell();
     if(cod && !document.getElementById('btn-scan-venta')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cod.parentNode.insertBefore(wrap,cod);wrap.appendChild(cod);
-      const btn=document.createElement('button');btn.id='btn-scan-venta';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='📷 Cámara';btn.onclick=()=>openBarcodeScanner('venta');wrap.appendChild(btn);
+      const btn=document.createElement('button');btn.id='btn-scan-venta';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='Cámara';btn.onclick=()=>openBarcodeScanner('venta');wrap.appendChild(btn);
     }
   };
   try{pages.ventas=renderVentas;}catch(e){_swallow(e)}
@@ -4737,12 +4737,12 @@ initMobileShell();
     const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
     gs('content').innerHTML=`
     <div class="search-bar">
-      <div class="scan-row" style="flex:1"><input placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button></div>
+      <div class="scan-row" style="flex:1"><input placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button></div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -4773,7 +4773,7 @@ initMobileShell();
     if(cp && !document.getElementById('btn-scan-compra')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cp.parentNode.insertBefore(wrap,cp);wrap.appendChild(cp);
-      const btn=document.createElement('button');btn.id='btn-scan-compra';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='📷 Cámara';btn.onclick=()=>openBarcodeScanner('compra');wrap.appendChild(btn);
+      const btn=document.createElement('button');btn.id='btn-scan-compra';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='Cámara';btn.onclick=()=>openBarcodeScanner('compra');wrap.appendChild(btn);
     }
   };
   try{pages.compras=renderCompras;}catch(e){_swallow(e)}
@@ -4918,7 +4918,7 @@ initMobileShell();
         <label>Código de barra</label>
         <div class="scan-row">
           <input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}">
-          <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button>
+          <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">Cámara</button>
         </div>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
@@ -5043,7 +5043,7 @@ initMobileShell();
         <div class="autocomplete-wrap">
           <div class="scan-row">
             <input id="aj-search" placeholder="Nombre, código o escanear..." oninput="onAjSearch(this.value)" onkeydown="onAjKeydown(event)" autocomplete="off">
-            <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('aj-search','ajuste')">📷 Cámara</button>
+            <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('aj-search','ajuste')">Cámara</button>
           </div>
           <div class="autocomplete-list" id="aj-ac-list" style="display:none"></div>
         </div>
@@ -5133,7 +5133,7 @@ initMobileShell();
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
         <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
-        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')"><i class="bg-ico bg-ico-camera"></i></button></div></div>
         <div class="form-group"><label>P. Costo</label>${mathInput('emb-costo',0,{mini:true})}</div>
         <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
         <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
@@ -5163,7 +5163,7 @@ initMobileShell();
         ${!embs.length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
     </table>`;
-    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+    openModal(`Packs / embalajes — ${prodNombre}`, body, null, '');
   };
 
   window.saveEmb = async function(prodId, prodNombre){
@@ -5260,12 +5260,12 @@ initMobileShell();
     const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
     gs('content').innerHTML=`
     <div class="search-bar">
-      <div class="scan-row" style="flex:1"><input placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button></div>
+      <div class="scan-row" style="flex:1"><input placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button></div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -5293,7 +5293,7 @@ initMobileShell();
     openModal(prod?'Editar producto':'Nuevo producto',`<div class="form-grid">
       <div class="form-group">
         <label>Código de barra</label>
-        <div class="scan-row"><input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button></div>
+        <div class="scan-row"><input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">Cámara</button></div>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
       <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
@@ -5478,7 +5478,7 @@ initMobileShell();
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
         <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
-        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')"><i class="bg-ico bg-ico-camera"></i></button></div></div>
         <div class="form-group"><label>P. Costo automático</label>${mathInput('emb-costo',initialCost,{mini:true})}</div>
         <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
         <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
@@ -5511,7 +5511,7 @@ initMobileShell();
         ${!embs.length?'<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
     </table>`;
-    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+    openModal(`Packs / embalajes — ${prodNombre}`, body, null, '');
     setTimeout(()=>{
       bgRefreshEmbMargin();
       const cant=gs('emb-cant'); if(cant) cant.addEventListener('input',embAutoCosto);
@@ -5588,7 +5588,7 @@ initMobileShell();
       if(!ts) return '--';
       return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
     };
-    sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+    sel.innerHTML=`<option value="">Seleccionar turno...</option>`+
       cajas.map(c=>{
         const estado=c.estado==='abierta'?'🟢':'🔴';
         const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
@@ -5629,7 +5629,7 @@ initMobileShell();
     const today=fechaHoyPY(), first=today.slice(0,7)+'-01';
     gs('content').innerHTML=`
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header"><h3>Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="card-header"><h3>Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">Imprimir</button></div>
         <div style="padding:14px 16px">
           <div class="rpt-filters">
             <div class="form-group"><label>Desde</label>
@@ -5647,9 +5647,9 @@ initMobileShell();
             <div class="form-group"><label>Cliente</label><input id="rpt-cliente" placeholder="Ej: Juan, Comercial..." onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="form-group"><label>Producto</label><input id="rpt-producto" placeholder="Ej: coca 1,5" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="rpt-actions">
-              <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar</button>
+              <button class="btn btn-primary" onclick="generarReportes()">Generar</button>
               <select id="rpt-turno-sel" onchange="rptCargarTurno(this.value)" style="font-size:13px;min-height:36px;border-color:var(--green);color:var(--green);font-weight:700;max-width:200px">
-                <option value="">📋 Seleccionar turno...</option>
+                <option value="">Seleccionar turno...</option>
               </select>
               <button class="btn btn-secondary" onclick="rptSetFechas('hoy')">Hoy</button>
               <button class="btn btn-secondary" onclick="rptSetFechas('7d')">7 días</button>
@@ -5989,7 +5989,7 @@ initMobileShell();
   }
   function applyUsuarioPermisos(){
     MODS.forEach(([key])=>{const nav=gs('nav-'+key); if(nav) nav.style.display=usuarioPuede(key)?'flex':'none';});
-    const ub=gs('user-badge'); if(ub) ub.textContent=usuarioActual?`👤 ${usuarioActual.nombre}`:'👤 Sin usuario';
+    const ub=gs('user-badge'); if(ub) ub.textContent=usuarioActual?`${usuarioActual.nombre}`:'Sin usuario';
   }
   async function cargarUsuariosInicial(){
     try{
@@ -6027,13 +6027,13 @@ initMobileShell();
   function initUserBadge(){
     if(gs('user-badge')) return;
     const top=document.getElementById('topbar'); if(!top) return;
-    const b=document.createElement('button'); b.id='user-badge'; b.className='btn btn-secondary btn-sm'; b.textContent='👤 Usuario'; b.onclick=()=>mostrarMenuUsuario();
+    const b=document.createElement('button'); b.id='user-badge'; b.className='btn btn-secondary btn-sm'; b.textContent='Usuario'; b.onclick=()=>mostrarMenuUsuario();
     top.appendChild(b);
   }
   function initUsuariosNav(){
     if(gs('nav-usuarios')) return;
     const nav=document.querySelector('#sidebar nav'); if(!nav) return;
-    const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico">👥</span> Usuarios';
+    const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-users"></i></span> Usuarios';
     nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
   }
   function mostrarLoginUsuarios(usuarios){
@@ -6056,11 +6056,11 @@ initMobileShell();
   function mostrarMenuUsuario(){
     const admin=!usuarioActual||usuarioActual.rol==='admin', claro=document.body.classList.contains('theme-light'), may=document.body.classList.contains('con-mayorista');
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap">`+
-      (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">👥 Usuarios y respaldo</button>`:'')+
-      `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'🌙 Tema oscuro':'☀️ Tema claro'}</button>`+
+      (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">Usuarios y respaldo</button>`:'')+
+      `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'Tema oscuro':'Tema claro'}</button>`+
       (admin?`<button class="btn btn-secondary" onclick="bgToggleMayorista();closeModal()">${may?'Ocultar ventas mayoristas':'Activar ventas mayoristas'}</button>`:'')+
       `<button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button>`+
-      (admin?`<button class="btn btn-secondary" onclick="resetConfig()" title="Solo si cambia la base de datos">🔌 Cambiar conexión</button>`:'')+`</div>`,null,'');
+      (admin?`<button class="btn btn-secondary" onclick="resetConfig()" title="Solo si cambia la base de datos">Cambiar conexión</button>`:'')+`</div>`,null,'');
   }
   window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){_swallow(e)}lsRemove('bg_usuario_actual');lsRemove('bg_usuario_offline');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){_swallow(e)}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
@@ -6072,7 +6072,7 @@ initMobileShell();
   }
   window.bgVerAuditoria = function(){
     if(typeof openModal!=='function') return;
-    openModal('📋 Auditoría', '<div style="min-width:300px">'+
+    openModal('Auditoría', '<div style="min-width:300px">'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
         '<select id="aud-accion" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda acción</option><option value="INSERT">Creó</option><option value="UPDATE">Editó</option><option value="DELETE">Borró</option><option value="LOGIN">Login</option></select>'+
         '<select id="aud-tabla" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda tabla</option><option value="bodega_ventas">Ventas</option><option value="bodega_compras">Compras</option><option value="bodega_productos">Productos</option><option value="bodega_caja">Caja</option><option value="bodega_caja_gastos">Gastos caja</option><option value="bodega_fiados">Fiados</option><option value="bodega_pagos_fiado">Pagos fiado</option><option value="bodega_clientes">Clientes</option><option value="bodega_proveedores">Proveedores</option><option value="auth">Logins</option></select>'+
@@ -6107,13 +6107,13 @@ initMobileShell();
     if(user) q=q.ilike('usuario','%'+user+'%');
     var r=await q;
     if(r.error){ if(box) box.innerHTML='<div class="bg-chart-empty">Error: '+escapeHtml(r.error.message)+'</div>'; return; }
-    var accTxt={INSERT:'➕ creó',UPDATE:'✏️ editó',DELETE:'🗑️ borró',LOGIN:'🔑 entró'};
+    var accTxt={INSERT:'+ creó',UPDATE:'✏️ editó',DELETE:'borró',LOGIN:'entró'};
     var tbTxt={bodega_ventas:'venta',bodega_compras:'compra',bodega_productos:'producto',bodega_caja:'caja',bodega_caja_gastos:'gasto caja',bodega_fiados:'fiado',bodega_pagos_fiado:'pago fiado',bodega_clientes:'cliente',bodega_proveedores:'proveedor',bodega_categorias:'categoría',bodega_embalajes:'embalaje',auth:'sesión'};
     var rows=(r.data||[]).map(function(a){
       var f=new Date(a.fecha).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       var q2=(accTxt[a.accion]||a.accion)+' '+(tbTxt[a.tabla]||a.tabla||'');
-      var dev=a.dispositivo==='Móvil'?'📱 Móvil':(a.dispositivo==='Web'?'💻 Web':'—');
-      var verBtn=(a.accion==='LOGIN')?'':'<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px" onclick="bgAudToggle(this)">🔍 ver</button>';
+      var dev=a.dispositivo==='Móvil'?'Móvil':(a.dispositivo==='Web'?'Web':'—');
+      var verBtn=(a.accion==='LOGIN')?'':'<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px" onclick="bgAudToggle(this)">ver</button>';
       var det=(a.accion==='LOGIN')?'':'<tr class="aud-det" style="display:none"><td colspan="5" style="background:rgba(0,0,0,.04);font-size:13px;padding:10px 14px">'+bgAudFmtDetalle(a.accion, a.datos)+'</td></tr>';
       return '<tr><td style="font-size:12px;white-space:nowrap">'+f+'</td><td style="font-weight:600">'+escapeHtml(a.usuario||'-')+'</td><td>'+escapeHtml(q2)+'</td><td style="font-size:12px;white-space:nowrap">'+dev+'</td><td>'+verBtn+'</td></tr>'+det;
     }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:14px">Sin registros</td></tr>';
@@ -6382,7 +6382,7 @@ initMobileShell();
           <label>Notas de apertura</label>
           <textarea id="edit-ap-notas" rows="2">${escapeHtml(caja.notas_apertura||'')}</textarea>
         </div>
-        <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">💾 Guardar importe inicial</button>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">Guardar importe inicial</button>
       </div>
     </div>`;
   }
@@ -6553,7 +6553,7 @@ initMobileShell();
         <th>N°</th><th>Fecha/hora</th><th>Cliente</th><th>Pago</th><th style="text-align:right">Total</th><th>Origen</th>
       </tr></thead><tbody>${rows}</tbody></table></div>
       <div style="padding:12px 16px">
-        <button class="btn btn-primary" onclick="asignarVentasACaja('${caja.id}')">➕ Incluir en este turno</button>
+        <button class="btn btn-primary" onclick="asignarVentasACaja('${caja.id}')">+ Incluir en este turno</button>
       </div>
     </div>`;
   };
@@ -6619,8 +6619,8 @@ initMobileShell();
       ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <span>⚠️ La última caja del día está <b>cerrada</b>. Podés reabrirla para corregir o abrir una nueva caja.</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">🔓 Reabrir esta caja</button>
-          <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
+          <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">Reabrir esta caja</button>
+          <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">+ Abrir nueva caja</button>
         </div>
       </div>`:''}
       ${(()=>{const k=(l,v,sub,col,big)=>`<div class="caja-k${big?' big':''}"><span>${l}</span><b${col?` style="color:${col}"`:''}>${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
@@ -6637,10 +6637,10 @@ initMobileShell();
           ${k('Efectivo esperado',fmtGs(esperado),'apertura + efectivo − gastos + ingresos','var(--accent2)',true)}
           ${dif!==null?k('Diferencia',fmtGs(dif),'',dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)',true):''}
         </div></div>`;})()}
-      ${(ventas.fiadosDetalle||[]).length?`<details class="card caja-fiados"><summary>📒 Fiados del turno · ${new Set(ventas.fiadosDetalle.map(v=>v.clienteNombre)).size} cliente(s) · ${fmtGs(ventas.fiado)}</summary>${detalleFiadosArqueoHTML(ventas)}</details>`:''}
+      ${(ventas.fiadosDetalle||[]).length?`<details class="card caja-fiados"><summary>Fiados del turno · ${new Set(ventas.fiadosDetalle.map(v=>v.clienteNombre)).size} cliente(s) · ${fmtGs(ventas.fiado)}</summary>${detalleFiadosArqueoHTML(ventas)}</details>`:''}
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3>Cobrado por medio de pago</h3><span class="badge">Total cobrado: ${fmtGs(ventas.total_cobrado)}</span></div>
-        <div class="caja-medios">${[['💵 Efectivo',ventas.efectivo],['🏦 Transferencia',ventas.transferencia],['📱 QR',ventas.qr],['💳 Débito',ventas.debito],['💳 Crédito',ventas.credito],['🔀 Otros (mixto)',ventas.mixto],['📒 Fiado (no ingresa)',ventas.fiado]].filter(x=>Number(x[1])).map(x=>`<div><span>${x[0]}</span><b>${fmtGs(x[1])}</b></div>`).join('')||'<div><span>Sin ventas todavía</span><b>Gs. 0</b></div>'}</div>
+        <div class="caja-medios">${[['Efectivo',ventas.efectivo],['Transferencia',ventas.transferencia],['QR',ventas.qr],['Débito',ventas.debito],['Crédito',ventas.credito],['Otros (mixto)',ventas.mixto],['Fiado (no ingresa)',ventas.fiado]].filter(x=>Number(x[1])).map(x=>`<div><span>${x[0]}</span><b>${fmtGs(x[1])}</b></div>`).join('')||'<div><span>Sin ventas todavía</span><b>Gs. 0</b></div>'}</div>
       </div>
       ${cajaVentasHuerfanasHTML(caja,huerfanas)}
       <div class="caja-2col">${cajaGastosTurnoHTML(caja,gastos)}${cajaIngresosTurnoHTML(caja,ingresos)}</div>
@@ -7058,7 +7058,7 @@ initMobileShell();
       <div class="card" style="margin-bottom:14px">
         <div class="card-header">
           <h3>Reportes</h3>
-          <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir / PDF</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.print()">Imprimir / PDF</button>
         </div>
         <div style="padding:14px 16px">
           <style>
@@ -7079,11 +7079,11 @@ initMobileShell();
           <div class="rep-row">
             <span class="rep-lbl">Turno</span>
             <select id="rep-turno-sel" onchange="repCargarTurno(this)" style="font-size:13px;min-height:36px;border:1px solid var(--green);color:var(--green);font-weight:700;max-width:280px;border-radius:var(--radius);padding:0 8px">
-              <option value="">📋 Todos / elegir turno...</option>
+              <option value="">Todos / elegir turno...</option>
             </select>
           </div>
           <div class="rep-row">
-            <span class="rep-lbl">⏰ Horario</span>
+            <span class="rep-lbl">Horario</span>
             <button class="rep-chip on" data-fr="todo" onclick="repSetFranja('todo',this)">Todo el día</button>
             <button class="rep-chip" data-fr="manana" onclick="repSetFranja('manana',this)">Mañana 6–12</button>
             <button class="rep-chip" data-fr="tarde" onclick="repSetFranja('tarde',this)">Tarde 12–18</button>
@@ -7096,7 +7096,7 @@ initMobileShell();
             </span>
           </div>
           <div class="rep-row">
-            <button class="btn btn-secondary btn-sm" onclick="repToggleAdv()">⚙️ Más filtros (fechas exactas · cliente · producto)</button>
+            <button class="btn btn-secondary btn-sm" onclick="repToggleAdv()">Más filtros (fechas exactas · cliente · producto)</button>
             <button class="btn btn-secondary btn-sm" onclick="repLimpiar()">Limpiar</button>
           </div>
           <div id="rep-adv" class="rep-adv" hidden style="border-top:1px solid var(--border);padding-top:10px">
@@ -7106,7 +7106,7 @@ initMobileShell();
               <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
               <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             </div>
-            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="generarReportes()">🔎 Aplicar filtros</button>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="generarReportes()">Aplicar filtros</button>
           </div>
         </div>
       </div>
@@ -7137,7 +7137,7 @@ initMobileShell();
         if(!ts) return '--';
         return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       };
-      sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+      sel.innerHTML=`<option value="">Seleccionar turno...</option>`+
         cajas.map(c=>{
           const estado=c.estado==='abierta'?'🟢':'🔴';
           const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
@@ -7181,7 +7181,7 @@ initMobileShell();
       const gastosTotal=gastos.reduce((s,g)=>s+(Number(g.monto)||0),0);
       document.getElementById('rep-stats').innerHTML=`
         <div class="stat-card"><div class="label">Total vendido${totalDelivery?' (sin delivery)':''}</div><div class="value" style="color:var(--green)">${repMoney(totalVentas-totalDelivery)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
-        ${totalDelivery?`<div class="stat-card"><div class="label">🛵 Delivery cobrado</div><div class="value" style="color:var(--accent)">${repMoney(totalDelivery)}</div><div class="sub">${dets.length} pedido${dets.length===1?'':'s'} online · entra a la caja</div></div>`:''}
+        ${totalDelivery?`<div class="stat-card"><div class="label">Delivery cobrado</div><div class="value" style="color:var(--accent)">${repMoney(totalDelivery)}</div><div class="sub">${dets.length} pedido${dets.length===1?'':'s'} online · entra a la caja</div></div>`:''}
         <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}${totalRetiro?` · Retiros: ${repMoney(totalRetiro)}`:''}</div></div>
         <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos-dets.reduce((s,d)=>s+(Number(d.cantidad)||0),0))}</div><div class="sub">unidades filtradas</div></div>
         <div class="stat-card"><div class="label">Margen estimado</div><div class="value" style="color:${margen.gan>=0?'var(--green)':'var(--red)'}">${margen.pct.toFixed(1)}%</div><div class="sub">${repMoney(margen.gan)}</div></div>
@@ -7299,7 +7299,7 @@ initMobileShell();
     const a=document.createElement('a');
     a.onclick=()=>goTo('clientes');
     a.id='nav-clientes';
-    a.innerHTML='<span class="ico">👤</span> Clientes / Deudas';
+    a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-user"></i></span> Clientes / Deudas';
     const ref=document.getElementById('nav-historial-ventas') || document.getElementById('nav-ventas');
     if(ref && ref.nextSibling) nav.insertBefore(a, ref.nextSibling); else nav.appendChild(a);
   }
@@ -7547,14 +7547,14 @@ initMobileShell();
     gs('content').innerHTML=`
     <div class="search-bar">
       <div class="scan-row" style="flex:1">
-        <input id="prod-search-input" placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${h(prodSearch||'')}" oninput="bgProductosSearchInput(this.value)" autocomplete="off">
-        <button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button>
+        <input id="prod-search-input" placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${h(prodSearch||'')}" oninput="bgProductosSearchInput(this.value)" autocomplete="off">
+        <button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button>
       </div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${h(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3><span class="badge">La búsqueda espera un instante antes de refrescar</span></div>
@@ -7741,7 +7741,7 @@ initMobileShell();
           <h3>Historial de ventas</h3>
           <span class="badge" id="hv-count">${count||0} ventas totales · pág ${page}/${totalPags||1}</span>
           <span class="badge" id="ventas-sel-count">Ninguna seleccionada</span>
-          <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">🗑 Borrar seleccionadas</button>
+          <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">Borrar seleccionadas</button>
         </div>
         <div class="hist-table-wrap" style="overflow-x:auto" id="hv-tabla-wrap">
           ${histVentasTabla(data||[])}
@@ -7799,28 +7799,28 @@ initMobileShell();
             if(mp==='parcial'){
               const diff=Number(v.total_final)-ef;
               return '<div style="line-height:1.6">'
-                +'<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span><br>'
-                +'<span style="color:var(--amber)">📋 Fiado: '+fmtGs(diff)+'</span>'
+                +'<span style="color:var(--green)">Efec. '+fmtGs(ef)+'</span><br>'
+                +'<span style="color:var(--amber)">Fiado: '+fmtGs(diff)+'</span>'
                 +'</div>';
             }
             if(mp==='mixto'){
               let parts=[];
-              if(ef>0) parts.push('<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span>');
-              if(tr>0) parts.push('<span style="color:var(--accent)">🏦 '+fmtGs(tr)+'</span>');
-              if(ot>0) parts.push('<span style="color:var(--accent2)">💳 '+fmtGs(ot)+'</span>');
+              if(ef>0) parts.push('<span style="color:var(--green)">Efec. '+fmtGs(ef)+'</span>');
+              if(tr>0) parts.push('<span style="color:var(--accent)">Transf. '+fmtGs(tr)+'</span>');
+              if(ot>0) parts.push('<span style="color:var(--accent2)">Otros '+fmtGs(ot)+'</span>');
               return '<div style="line-height:1.6">'+(parts.length?parts.join('<br>'):'<span style="color:var(--text2)">Mixto</span>')+'</div>';
             }
-            if(mp==='efectivo') return '<span style="color:var(--green)">💵 '+fmtGs(v.total_final)+'</span>';
-            if(mp==='transferencia') return '<span style="color:var(--accent)">🏦 '+fmtGs(v.total_final)+'</span>';
-            if(mp==='qr') return '<span style="color:var(--accent2)">📱 QR '+fmtGs(v.total_final)+'</span>';
-            if(mp==='debito') return '<span style="color:var(--accent)">💳 Déb. '+fmtGs(v.total_final)+'</span>';
-            if(mp==='credito') return '<span style="color:var(--amber)">💳 Créd. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='efectivo') return '<span style="color:var(--green)">Efec. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='transferencia') return '<span style="color:var(--accent)">Transf. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='qr') return '<span style="color:var(--accent2)">QR '+fmtGs(v.total_final)+'</span>';
+            if(mp==='debito') return '<span style="color:var(--accent)">Déb. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='credito') return '<span style="color:var(--amber)">Créd. '+fmtGs(v.total_final)+'</span>';
             return h(v.metodo_pago||'-');
           })()}
         </td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
-          <button class="btn btn-primary btn-sm" onclick="bgReimprimirTicket('${v.id}')">🧾 Ticket</button>
+          <button class="btn btn-primary btn-sm" onclick="bgReimprimirTicket('${v.id}')">Ticket</button>
           <button class="btn btn-secondary btn-sm" onclick="bgEnviarTicketWhatsApp('${v.id}')">WhatsApp</button>
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
@@ -8158,7 +8158,7 @@ function compraEditBanner(compra){
     </div>
   `);
   const btn = document.querySelector('button[onclick="finalizarCompra()"]');
-  if(btn) btn.textContent = '💾 Guardar cambios de compra';
+  if(btn) btn.textContent = 'Guardar cambios de compra';
 }
 
 window.cancelarEdicionCompraReal = async function(){
@@ -9118,16 +9118,16 @@ async function revertirStockCompraReal(compraId, detalles){
             const total = Number(v.total_final)||0;
             const iconColor = (ico,col,lbl,monto) =>
               `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                <span style="color:var(--text2);font-size:13px">${ico} ${lbl}</span>
+                <span style="color:var(--text2);font-size:13px">${lbl}</span>
                 <span style="font-weight:700;font-size:14px;color:${col}">${fmtGs(monto)}</span>
               </div>`;
             if(mp==='fiado')
-              return iconColor('📋','var(--amber)','Fiado',total);
+              return iconColor('','var(--amber)','Fiado',total);
             if(mp==='mixto'){
               let rows='<div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:700">PAGO MIXTO</div>';
-              if(ef>0) rows+=iconColor('💵','var(--green)','Efectivo',ef);
-              if(tr>0) rows+=iconColor('🏦','var(--accent)','Transferencia',tr);
-              if(ot>0) rows+=iconColor('💳','var(--accent2)','Otro (QR/Déb./Créd.)',ot);
+              if(ef>0) rows+=iconColor('','var(--green)','Efectivo',ef);
+              if(tr>0) rows+=iconColor('','var(--accent)','Transferencia',tr);
+              if(ot>0) rows+=iconColor('','var(--accent2)','Otro (QR/Déb./Créd.)',ot);
               rows+=`<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:900">
                 <span style="font-size:13px">TOTAL</span>
                 <span style="color:var(--green);font-size:15px">${fmtGs(total)}</span>
@@ -9136,10 +9136,10 @@ async function revertirStockCompraReal(compraId, detalles){
             }
             if(mp==='parcial'){
               const fiadoDiff = total - ef;
-              let rows = iconColor('💵','var(--green)','Total venta',total);
-              rows += iconColor('🤝','var(--text2)','Recibido en efectivo',ef);
+              let rows = iconColor('','var(--green)','Total venta',total);
+              rows += iconColor('','var(--text2)','Recibido en efectivo',ef);
               rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                <span style="color:var(--amber);font-size:13px">📋 Fiado (resta)</span>
+                <span style="color:var(--amber);font-size:13px">Fiado (resta)</span>
                 <span style="font-weight:700;font-size:14px;color:var(--amber)">${fmtGs(fiadoDiff)}</span>
               </div>`;
               return rows;
@@ -9147,9 +9147,9 @@ async function revertirStockCompraReal(compraId, detalles){
             if(mp==='efectivo'){
               const recibido = ef > 0 ? ef : total;
               const diff = recibido - total;
-              let rows = iconColor('💵','var(--green)','Total venta',total);
+              let rows = iconColor('','var(--green)','Total venta',total);
               if(ef > 0 && Math.abs(diff) > 0){
-                rows += iconColor('🤝','var(--text2)','Recibido',recibido);
+                rows += iconColor('','var(--text2)','Recibido',recibido);
                 if(diff > 0){
                   // Pagó de más → devolver vuelto
                   rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
@@ -9166,11 +9166,11 @@ async function revertirStockCompraReal(compraId, detalles){
               }
               return rows;
             }
-            if(mp==='transferencia') return iconColor('🏦','var(--accent)','Transferencia',total);
-            if(mp==='qr')            return iconColor('📱','var(--accent2)','QR',total);
-            if(mp==='debito')        return iconColor('💳','var(--accent)','Débito',total);
-            if(mp==='credito')       return iconColor('💳','var(--amber)','Crédito',total);
-            return iconColor('💰','var(--text)',v.metodo_pago||'-',total);
+            if(mp==='transferencia') return iconColor('','var(--accent)','Transferencia',total);
+            if(mp==='qr')            return iconColor('','var(--accent2)','QR',total);
+            if(mp==='debito')        return iconColor('','var(--accent)','Débito',total);
+            if(mp==='credito')       return iconColor('','var(--amber)','Crédito',total);
+            return iconColor('','var(--text)',v.metodo_pago||'-',total);
           })()}
           </div>
         </div>
@@ -9405,7 +9405,7 @@ async function revertirStockCompraReal(compraId, detalles){
 
     const ventaId    = data.venta_id || null;
     const numVenta   = data.numero_venta || null;
-    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · 📴 pendiente de envío' : '');
+    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · pendiente de envío' : '');
     const esFaltanteRegistrado = selectedPay==='efectivo' && importe>0 && importe<totalFinal;
     toast(__esRetiro
       ? `✓ Retiro registrado (sin cobro): ${fmtGs(totalFinal)}${nTag}`
@@ -9966,8 +9966,8 @@ async function revertirStockCompraReal(compraId, detalles){
     return 'Nueva compra';
   }
   function iconoTab(tab){
-    if(tab === 'historial') return '⏱';
-    if(tab === 'proveedores') return '🏢';
+    if(tab === 'historial') return '';
+    if(tab === 'proveedores') return '';
     return '＋';
   }
 
@@ -10114,31 +10114,31 @@ async function revertirStockCompraReal(compraId, detalles){
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
           <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🛒</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-cart"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Nueva venta</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Registrar venta al mostrador</div>
           </button>
 
           <button onclick="goTo('caja')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 0 0 3px rgba(34,197,94,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">💰</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-cash"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Caja / Arqueo</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Abrir, cerrar y revisar caja</div>
           </button>
 
           <button onclick="goTo('historial-ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--teal)';this.style.boxShadow='0 0 0 3px rgba(20,184,166,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📋</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-list"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Historial ventas</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y gestionar ventas anteriores</div>
           </button>
 
           <button onclick="goTo('clientes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--purple)';this.style.boxShadow='0 0 0 3px rgba(168,85,247,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">👥</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-users"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Clientes / Deudas</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Fiados y gestión de clientes</div>
           </button>
 
           <button onclick="goTo('reportes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,158,11,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📊</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-chart"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Reportes</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Estadísticas y análisis</div>
           </button>
@@ -10188,25 +10188,25 @@ async function revertirStockCompraReal(compraId, detalles){
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
           <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📦</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-box"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Productos</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y editar el catálogo</div>
           </button>
 
           <button onclick="goTo('categorias')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--teal)';this.style.boxShadow='0 0 0 3px rgba(20,184,166,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🏷</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-tag"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Categorías</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Organizar por categoría</div>
           </button>
 
           <button onclick="goTo('ajustes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,158,11,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">⚖️</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-tag"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Ajuste de stock</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Corregir cantidades</div>
           </button>
 
           <button onclick="goTo('inventario')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 0 0 3px rgba(34,197,94,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🧾</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-list"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Inventario</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Conteo físico de stock</div>
           </button>
@@ -10772,9 +10772,9 @@ async function revertirStockCompraReal(compraId, detalles){
     base.forEach(function(p){var m=metric(p); totalCosto+=m.costo*m.stock; totalVenta+=m.venta*m.stock; if(m.ganancia<0)neg++; if(m.ganancia>=0&&m.margen!==null&&m.margen<10)bajo++;});
     gs('content').innerHTML=''
       +'<div class="prod-excel-toolbar">'
-      +'<div class="scan-row" style="flex:1;min-width:260px"><input id="prod-search-input" placeholder="🔍 Buscar producto, código o categoría..." value="'+h(prodSearch||'')+'" oninput="bgProductosSearchInput(this.value)" autocomplete="off"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner(\'productos\')">📷 Cámara</button></div>'
+      +'<div class="scan-row" style="flex:1;min-width:260px"><input id="prod-search-input" placeholder="Buscar producto, código o categoría..." value="'+h(prodSearch||'')+'" oninput="bgProductosSearchInput(this.value)" autocomplete="off"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner(\'productos\')">Cámara</button></div>'
       +'<select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:220px"><option value="">Todas las categorías</option>'+catCache.map(function(c){return '<option value="'+c.id+'" '+(prodCatFilter===c.id?'selected':'')+'>'+h(c.nombre)+'</option>';}).join('')+'</select>'
-      +'<button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ Cargar producto</button>'
+      +'<button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ Cargar producto</button>'
       +'</div>'
       +'<div class="prod-excel-filters">'+chip('todos','Todos',counts.todos)+chip('sin_stock','Sin stock',counts.sin_stock)+chip('stock_bajo','Stock bajo',counts.stock_bajo)+chip('margen_bajo','Margen bajo',counts.margen_bajo)+chip('margen_negativo','Margen negativo',counts.margen_negativo)+'</div>'
       +'<div class="prod-excel-summary"><div class="prod-mini-stat"><b>'+count+'</b><span>Productos visibles</span></div><div class="prod-mini-stat"><b>'+fmtMoney(totalCosto)+'</b><span>Costo del stock</span></div><div class="prod-mini-stat"><b>'+fmtMoney(totalVenta)+'</b><span>Venta estimada</span></div><div class="prod-mini-stat"><b>'+neg+' / '+bajo+'</b><span>Negativo / bajo</span></div></div>'
@@ -12277,10 +12277,10 @@ small,
       '<div class="compra-main-layout" style="display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 132px)">'+
         '<div id="prod-picker" class="compra-picker-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">'+
           '<div class="compra-search-head" style="padding:12px;border-bottom:1px solid var(--border)">'+
-            '<div style="font-size:14px;font-weight:700;margin-bottom:10px">🚛 Agregar productos</div>'+
+            '<div style="font-size:14px;font-weight:700;margin-bottom:10px">Agregar productos</div>'+
             '<div class="compra-search-grid" style="display:grid;grid-template-columns:1fr 80px;gap:8px">'+
               '<div class="autocomplete-wrap">'+
-                '<input id="cp-search" placeholder="🔍 Buscar producto o escanear código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">'+
+                '<input id="cp-search" placeholder="Buscar producto o escanear código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">'+
                 '<div class="autocomplete-list" id="cp-ac-list" style="display:none"></div>'+
               '</div>'+
               '<input id="cp-qty" type="number" value="1" min="1" placeholder="Cant." style="text-align:center">'+
@@ -12296,7 +12296,7 @@ small,
               '<div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="'+fechaHoyPY()+'"></div>'+
               '<div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>'+
               '<div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>'+
-              '<div class="form-group"><label>Estado</label><select id="comp-estado"><option value="en_proceso">🕐 En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
+              '<div class="form-group"><label>Estado</label><select id="comp-estado"><option value="en_proceso">En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
             '</div>'+
           '</div>'+
           '<div style="flex:1;overflow-y:auto" id="ccomp-items"></div>'+
@@ -12315,7 +12315,7 @@ small,
     var list=gs('compra-prod-list'); if(!list)return;
     q=String(q||'').trim();
     if(!q){
-      list.innerHTML='<div class="compra-empty-search"><span class="ico">🔎</span><b>Buscá para mostrar productos</b><span>Para que en móvil no se cargue una lista gigante, los productos aparecen recién al escribir nombre, código o código de embalaje.</span></div>';
+      list.innerHTML='<div class="compra-empty-search"><span class="ico"><i class="bg-ico bg-ico-search"></i></span><b>Buscá para mostrar productos</b><span>Para que en móvil no se cargue una lista gigante, los productos aparecen recién al escribir nombre, código o código de embalaje.</span></div>';
       return;
     }
     var results=(prodCache||[]).filter(function(p){
@@ -12324,7 +12324,7 @@ small,
       return ((embCache&&embCache[p.id])||[]).some(function(e){return embalajeMatches(e,q);});
     }).slice(0,40);
     if(!results.length){
-      list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
+      list.innerHTML='<div class="compra-empty-search"><span class="ico"><i class="bg-ico bg-ico-search"></i></span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
       return;
     }
     if(!ventaStatsLoaded){ventaStatsLoaded=true;loadVentaStats();}
@@ -12660,7 +12660,7 @@ window.diagnosticarStockCompras = async function(){
   const comprasSinStock = reporte.filter(r=>r.ajustes_stock===0);
   const comprasConStock = reporte.filter(r=>r.ajustes_stock>0);
 
-  openModal('🔍 Diagnóstico de stock — Compras del mes', `
+  openModal('Diagnóstico de stock — Compras del mes', `
     <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
       <div style="background:rgba(99,102,241,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
         <div style="font-size:11px;color:var(--text2)">Compras finalizadas</div>
@@ -13211,7 +13211,7 @@ window.diagnosticarStockCompras = async function(){
   }
   window.bgDashMesDetalle = async function(ym){
     var r=mesRango(ym);
-    if(typeof openModal==='function') openModal('📅 Mes: '+mesTxt(ym),'<div id="bg-mes-det" style="min-width:280px"><div class="bg-chart-empty">Cargando...</div></div>');
+    if(typeof openModal==='function') openModal('Mes: '+mesTxt(ym),'<div id="bg-mes-det" style="min-width:280px"><div class="bg-chart-empty">Cargando...</div></div>');
     try{
       var compq=await sb.from('bodega_compras').select('fecha,total,estado,bodega_proveedores(nombre)').gte('fecha',r.start).lte('fecha',r.end).order('fecha',{ascending:false});
       var compras=compq.data||[];
@@ -13609,7 +13609,7 @@ if('serviceWorker' in navigator){
       var bar=document.createElement('div');
       bar.id='bg-update-bar';
       bar.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#1e40af;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 32px)';
-      bar.innerHTML='<span>🔄 Hay una nueva versión del sistema</span><button style="background:#fff;color:#1e40af;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer">Actualizar</button>';
+      bar.innerHTML='<span>Hay una nueva versión del sistema</span><button style="background:#fff;color:#1e40af;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer">Actualizar</button>';
       bar.querySelector('button').onclick=function(){ location.reload(); };
       document.body.appendChild(bar);
     });
@@ -13842,7 +13842,7 @@ if('serviceWorker' in navigator){
       '<div style="display:flex;justify-content:space-between"><span>Método</span><b>'+esc(modalTicketActual.metodo_pago||'-')+'</b></div>'+ 
       '</div></div>'+ 
       '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
-      '<button class="btn btn-primary" onclick="bgTicketModalPrint()">🧾 Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
+      '<button class="btn btn-primary" onclick="bgTicketModalPrint()">Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
       '<button class="btn btn-secondary" onclick="bgCerrarTicketModal()">Cerrar sin imprimir <span style="opacity:.8">Esc</span></button>'+ 
       '</div>'+
       '<div style="margin-top:10px;text-align:center;font-size:12px;color:var(--text2)">'+
@@ -13959,7 +13959,7 @@ if('serviceWorker' in navigator){
     if(document.getElementById('bg-install-btn')) return;
     var btn = document.createElement('button');
     btn.id = 'bg-install-btn';
-    btn.textContent = '📲 Instalar app';
+    btn.textContent = 'Instalar app';
     btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)';
     btn.onclick = function(){
       if(!deferredPrompt) return;
@@ -14161,7 +14161,7 @@ if('serviceWorker' in navigator){
       finally{
         const ms=Math.round(performance.now()-t);
         console.log('[PERF] '+label+': '+ms+' ms');
-        try{ toast('⏱ '+label+': '+ms+' ms'); }catch(e){_swallow(e)}
+        try{ toast(''+label+': '+ms+' ms'); }catch(e){_swallow(e)}
       }
     };
   }
@@ -14222,20 +14222,20 @@ window.renderInicio = function(){
         '<div class="ini2-title">Hola'+(nombre?', '+nombre:'')+' 👋<br>Panel de trabajo</div>'+
         '<div class="ini2-sub">Entrá rápido a vender, comprar, revisar caja o controlar stock. Esta pantalla está pensada para abrir el sistema y trabajar sin perder tiempo.</div>'+
         '<div class="ini2-actions">'+
-          acceso('ventas','🛒','Nueva venta','Mostrador / fiado','')+
-          acceso('compras','📦','Cargar compra','Mercadería y proveedores','ini2-green')+
-          acceso('caja','💰','Caja / arqueo','Abrir, cerrar y revisar','ini2-amber')+
-          acceso('dashboard','📊','Dashboard','Números del negocio','')+
+          acceso('ventas','<i class="bg-ico bg-ico-cart"></i>','Nueva venta','Mostrador / fiado','')+
+          acceso('compras','<i class="bg-ico bg-ico-box"></i>','Cargar compra','Mercadería y proveedores','ini2-green')+
+          acceso('caja','<i class="bg-ico bg-ico-cash"></i>','Caja / arqueo','Abrir, cerrar y revisar','ini2-amber')+
+          acceso('dashboard','<i class="bg-ico bg-ico-chart"></i>','Dashboard','Números del negocio','')+
         '</div>'+
       '</section>'+
       '<section class="ini2-panel">'+
         '<div class="ini2-panel-h"><h3>Accesos de gestión</h3><span>'+proveedores.length+' prov. · '+categorias.length+' cat. · '+clientes.length+' clientes</span></div>'+
         '<div class="ini2-list">'+
-          '<div class="ini2-row" onclick="goTo(\'productos\')"><span><b>📦 Productos y stock</b><small>Precios, códigos, mínimos y ajustes</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'historial-ventas\')"><span><b>📋 Historial de ventas</b><small>Buscar ventas, editar o imprimir</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'clientes\')"><span><b>👥 Clientes y fiados</b><small>Deudas, pagos y seguimiento</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'reportes\')"><span><b>📈 Reportes</b><small>Estadísticas y análisis</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'ajustes\')"><span><b>⚙️ Ajustes</b><small>Usuarios, seguridad y configuración</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'productos\')"><span><b>Productos y stock</b><small>Precios, códigos, mínimos y ajustes</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'historial-ventas\')"><span><b>Historial de ventas</b><small>Buscar ventas, editar o imprimir</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'clientes\')"><span><b>Clientes y fiados</b><small>Deudas, pagos y seguimiento</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'reportes\')"><span><b>Reportes</b><small>Estadísticas y análisis</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'ajustes\')"><span><b>Ajustes</b><small>Usuarios, seguridad y configuración</small></span><span class="ini2-arrow">›</span></div>'+
         '</div>'+
       '</section>'+
     '</div>';
@@ -15094,7 +15094,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   #venta-layout.bg5-simple .autocomplete-wrap #v-search{flex:1 1 0!important;min-width:0;width:auto!important}
   #venta-layout.bg5-simple .autocomplete-wrap .scan-row{flex:0 0 auto!important;width:auto!important;margin:0!important}
   #venta-layout.bg5-simple #btn-scan-venta{font-size:0!important;width:50px;min-height:48px}
-  #venta-layout.bg5-simple #btn-scan-venta::before{content:"📷";font-size:20px}
+  #venta-layout.bg5-simple #btn-scan-venta::before{content:"";display:inline-block;width:22px;height:22px;background:currentColor;-webkit-mask:var(--bg-i-camera) center/contain no-repeat;mask:var(--bg-i-camera) center/contain no-repeat}
   #venta-layout.bg5-simple #venta-search-row>.form-group:not(.autocomplete-wrap){display:none}
   #venta-layout.bg5-simple #venta-search-row{grid-template-columns:1fr!important}
 }
@@ -15271,7 +15271,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     lay.classList.add('bg5-simple');
     lay.setAttribute('data-pay',selectedPay||'efectivo');
     var s=gsx('v-search');
-    if(s && !s.dataset.bg5){ s.dataset.bg5='1'; s.placeholder='🔍 Buscar o escanear producto  (+5 = cantidad)'; }
+    if(s && !s.dataset.bg5){ s.dataset.bg5='1'; s.placeholder='Buscar o escanear producto  (+5 = cantidad)'; }
   }
   var origSP=window.selectPay;
   selectPay=window.selectPay=function(p){
@@ -15321,7 +15321,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     var box=gsx('v-cliente-box'); if(!box || gsx('bg5-cli-search')) return;
     var inp=document.createElement('input');
     inp.id='bg5-cli-search'; inp.setAttribute('list','bg5-cli-dl'); inp.autocomplete='off';
-    inp.placeholder='🔍 Buscar cliente por nombre o RUC...';
+    inp.placeholder='Buscar cliente por nombre o RUC...';
     var dl=document.createElement('datalist'); dl.id='bg5-cli-dl';
     dl.innerHTML=(clienteCache||[]).map(function(c){ return '<option value="'+esc(c.nombre)+'">'+esc(c.ruc||'')+'</option>'; }).join('');
     inp.addEventListener('change',function(){
@@ -15412,7 +15412,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     if(window.__ventaEditandoId){ toast('No disponible al editar una venta','err'); return; }
     if(!cart.length){ toast('El carrito está vacío','err'); return; }
     guardarEnEspera(); limpiarVentaActual(); pintarToolbar();
-    toast('⏸ Venta en espera');
+    toast('Venta en espera');
     setTimeout(function(){ var s=gsx('v-search'); if(s) s.focus(); },50);
   };
   window.bg5VerEspera=function(){
@@ -15459,7 +15459,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       if((prodCache||[]).some(function(p){ return p.id===it.producto_id; })) addToVenta(it.producto_id,it.embalaje_id||null,n(it.cantidad)||1);
       else falt++;
     });
-    toast(falt?('Repetida (sin '+falt+' producto/s inactivo/s)'):'🔁 Última venta cargada con precios actuales', falt?'err':'ok');
+    toast(falt?('Repetida (sin '+falt+' producto/s inactivo/s)'):'Última venta cargada con precios actuales', falt?'err':'ok');
   };
   window.bg5AnularUltima=async function(){
     var u=getJ(K_LAST,null);
@@ -15503,9 +15503,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     if(!tb){ tb=document.createElement('div'); tb.id='bg5-toolbar'; hdr.appendChild(tb); }
     var nh=getJ(K_HOLD,[]).length, u=getJ(K_LAST,null);
     tb.innerHTML=
-      '<button type="button" class="btn btn-secondary btn-sm" onclick="bg5PonerEnEspera()">⏸ Poner en espera</button>'+
-      (nh?'<button type="button" class="btn btn-primary btn-sm" onclick="bg5VerEspera()">📋 En espera ('+nh+')</button>':'')+
-      (u&&u.items?'<button type="button" class="btn btn-secondary btn-sm" onclick="bg5RepetirUltima()">🔁 Repetir última</button>':'')+
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="bg5PonerEnEspera()">Poner en espera</button>'+
+      (nh?'<button type="button" class="btn btn-primary btn-sm" onclick="bg5VerEspera()">En espera ('+nh+')</button>':'')+
+      (u&&u.items?'<button type="button" class="btn btn-secondary btn-sm" onclick="bg5RepetirUltima()">Repetir última</button>':'')+
       (u&&u.numero?'<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5AnularUltima()">↩ Anular N° '+u.numero+'</button>':'');
   }
 
@@ -15516,7 +15516,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       logo.addEventListener('click',function(){ goTo('inicio'); }); }
     var sub=document.querySelector('#macos-main-menu .mac-submenu');
     if(sub && !gsx('nav-panel-inicio')){
-      var a=document.createElement('a'); a.href='#'; a.id='nav-panel-inicio'; a.textContent='🏠 Panel de inicio';
+      var a=document.createElement('a'); a.href='#'; a.id='nav-panel-inicio'; a.textContent='Panel de inicio';
       a.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); goTo('inicio');
         document.querySelectorAll('.mac-menu-group.open').forEach(function(g){ g.classList.remove('open'); });
         document.body.classList.remove('bg-mobile-drawer-open'); });
@@ -15567,8 +15567,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       '<div style="min-width:0"><div style="font-weight:700;margin-bottom:4px">Foto del producto</div>'+
       '<div id="bg5-foto-txt" style="font-size:12px;color:var(--text2);margin-bottom:8px">'+(actual?'Foto cargada':'Sin foto')+'</div>'+
       '<div class="bg5-foto-btns">'+
-        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">📷 Sacar foto<input type="file" accept="image/*" capture="environment" hidden onchange="bg5FotoElegir(this)"></label>'+
-        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">🖼️ Elegir archivo<input type="file" accept="image/*" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">Sacar foto<input type="file" accept="image/*" capture="environment" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">Elegir archivo<input type="file" accept="image/*" hidden onchange="bg5FotoElegir(this)"></label>'+
         '<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5FotoQuitar()">Quitar</button>'+
       '</div></div>';
     grid.insertBefore(d,grid.firstChild);
@@ -15589,7 +15589,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       if(r.error) throw r.error;
       var viejo=rutaDeUrl(anterior); if(viejo) sb.storage.from(BUCKET).remove([viejo]).catch(function(){});
       var p=(prodCache||[]).find(function(x){ return String(x.id)===String(prodId); }); if(p) p.imagen_url=url;
-      toast(url?'📷 Foto guardada':'Foto quitada');
+      toast(url?'Foto guardada':'Foto quitada');
       if(gsx('btn-scan-productos')||document.querySelector('.productos-card')) try{ renderProductos(); }catch(e){}
     }catch(e){ toast('El producto se guardó, pero la foto no: '+(e.message||e),'err'); }
   }
@@ -15717,12 +15717,12 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     }
     if(!gsx('bg5-cart-col')){
       var cc=document.createElement('div'); cc.id='bg5-cart-col';
-      cc.innerHTML='<div id="bg5-cart-head"><span>Carrito (<span id="bg5-cart-n">0</span>)</span><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>';
+      cc.innerHTML='<div id="bg5-cart-head"><span>Carrito (<span id="bg5-cart-n">0</span>)</span><button type="button" onclick="cancelarVenta()">Limpiar</button></div>';
       left.appendChild(cc); cc.appendChild(tw);
       var f=document.createElement('div'); f.id='bg5-cart-foot';
       f.innerHTML='<div class="tot"><span id="bg5-cart-items" style="color:var(--text2);font-weight:700">Items: 0</span><b id="bg5-cart-total">Gs. 0</b></div>'+
-        '<div class="row"><button type="button" onclick="bg5Cliente()">👤 Cliente</button><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>'+
-        '<button type="button" class="cob" onclick="bg5AbrirCobro()">💳 Cobrar (F4)</button>';
+        '<div class="row"><button type="button" onclick="bg5Cliente()">Cliente</button><button type="button" onclick="cancelarVenta()">Limpiar</button></div>'+
+        '<button type="button" class="cob" onclick="bg5AbrirCobro()">Cobrar (F4)</button>';
       cc.appendChild(f);
     }
     pintarGrilla();
@@ -15760,9 +15760,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
   function bottomNav(){
     if(!gsx('bg5-bottomnav')){
       var nv=document.createElement('nav'); nv.id='bg5-bottomnav';
-      nv.innerHTML='<button type="button" data-p="ventas" onclick="goTo(\'ventas\')"><span>🛒</span>Venta</button>'+
-        '<button type="button" data-p="productos" onclick="goTo(\'productos\')"><span>📦</span>Stock</button>'+
-        '<button type="button" data-p="clientes" onclick="goTo(\'clientes\')"><span>👥</span>Fiado</button>'+
+      nv.innerHTML='<button type="button" data-p="ventas" onclick="goTo(\'ventas\')"><span><i class="bg-ico bg-ico-cart"></i></span>Venta</button>'+
+        '<button type="button" data-p="productos" onclick="goTo(\'productos\')"><span><i class="bg-ico bg-ico-box"></i></span>Stock</button>'+
+        '<button type="button" data-p="clientes" onclick="goTo(\'clientes\')"><span><i class="bg-ico bg-ico-users"></i></span>Fiado</button>'+
         '<button type="button" onclick="var b=document.getElementById(\'bg-mobile-menu-btn\');if(b)b.click();"><span>⋯</span>Más</button>';
       document.body.appendChild(nv); document.body.classList.add('bg5-has-nav');
     }
@@ -16066,12 +16066,12 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     e.preventDefault();e.target.blur();
     setTimeout(function(){if(typeof invDrawerClose==='function')invDrawerClose();var s=document.getElementById('inv-search');if(s){s.focus();s.select();}},60);
   },true);
-  // «⚙️ Datos del conteo»: fecha, responsable y estado plegados en el celular
+  // «Datos del conteo»: fecha, responsable y estado plegados en el celular
   function metaToggle(){
     var row=document.getElementById('inv-meta-row'),p=document.getElementById('inv-panel-conteo');
     if(!row||!p||document.getElementById('inv-meta-toggle'))return;
     var b=document.createElement('button');b.type='button';b.id='inv-meta-toggle';
-    var txt=function(){var est=row.querySelector('select');return (p.classList.contains('inv-meta-open')?'▾':'▸')+' ⚙️ Datos del conteo'+(est&&est.selectedOptions[0]?' · '+est.selectedOptions[0].text:'');};
+    var txt=function(){var est=row.querySelector('select');return (p.classList.contains('inv-meta-open')?'▾':'▸')+' Datos del conteo'+(est&&est.selectedOptions[0]?' · '+est.selectedOptions[0].text:'');};
     b.textContent=txt();b.onclick=function(){p.classList.toggle('inv-meta-open');b.textContent=txt();};
     row.parentNode.insertBefore(b,row);
     row.addEventListener('change',function(){b.textContent=txt();});
@@ -16086,7 +16086,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 }
 @media (hover:none),(pointer:coarse){
   body .scan-btn,body button[onclick^="invAbrirCamara"]{font-size:0!important;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px!important}
-  body .scan-btn::before,body button[onclick^="invAbrirCamara"]::before{content:'📷';font-size:20px}
+  body .scan-btn::before,body button[onclick^="invAbrirCamara"]::before{content:"";display:inline-block;width:22px;height:22px;background:currentColor;-webkit-mask:var(--bg-i-camera) center/contain no-repeat;mask:var(--bg-i-camera) center/contain no-repeat}
 }
 /* Inicio */
 .in3{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -16141,7 +16141,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     cont.innerHTML='<div class="in3">'+
       '<div class="in3-top"><div class="in3-hola">Hola'+(nombre?', '+e(nombre):'')+' 👋<small>'+e(fecha)+'</small></div>'+
         '<div class="in3-caja" id="in3-caja" onclick="goTo(\'caja\')"><i></i>Caja…</div></div>'+
-      '<button class="in3-vender" onclick="goTo(\'ventas\')">🛒 Nueva venta</button>'+
+      '<button class="in3-vender" onclick="goTo(\'ventas\')">Nueva venta</button>'+
       '<div class="in3-kpis" id="in3-kpis">'+['Ventas de hoy','Cantidad','Ticket promedio','Fiado pendiente'].map(function(t){return '<div class="in3-k"><span>'+t+'</span><b>…</b><small>&nbsp;</small></div>';}).join('')+'</div>'+
       '<div class="in3-grid">'+
         '<div class="in3-card"><h3>Ventas por hora (hoy)</h3><div id="in3-horas"><div class="in3-vacio">Cargando…</div></div></div>'+
@@ -16149,7 +16149,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
         '<div class="in3-card"><h3>Stock para revisar <a onclick="goTo(\'productos\')">Ver productos ›</a></h3><div id="in3-al" class="in3-al"></div></div>'+
         '<div class="in3-card"><h3>Últimas ventas <a onclick="goTo(\'historial-ventas\')">Historial ›</a></h3><div id="in3-ult"><div class="in3-vacio">Cargando…</div></div></div>'+
       '</div>'+
-      '<div class="in3-acc">'+acc('compras','📦','Compra')+acc('inventario','📋','Inventario')+acc('productos','🏷️','Productos')+acc('clientes','👥','Clientes')+acc('caja','💰','Caja')+acc('reportes','📈','Reportes')+'</div>'+
+      '<div class="in3-acc">'+acc('compras','<i class="bg-ico bg-ico-box"></i>','Compra')+acc('inventario','<i class="bg-ico bg-ico-list"></i>','Inventario')+acc('productos','<i class="bg-ico bg-ico-tag"></i>','Productos')+acc('clientes','<i class="bg-ico bg-ico-users"></i>','Clientes')+acc('caja','<i class="bg-ico bg-ico-cash"></i>','Caja')+acc('reportes','<i class="bg-ico bg-ico-chart"></i>','Reportes')+'</div>'+
     '</div>';
 
     // Alertas de stock (de la memoria, sin consultas)
@@ -16193,7 +16193,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     var t1=document.querySelector('#in3-horas')&&document.querySelector('#in3-horas').previousElementSibling, t2=document.querySelector('#in3-top')&&document.querySelector('#in3-top').previousElementSibling;
     // Ventas sin delivery (el delivery de los pedidos online entra a la caja, pero se muestra aparte)
     var pintarKPI=function(D,nD){
-    var neto=tot-D, del=D?'<br>+ 🛵 delivery '+gs_(D)+' ('+nD+')':'';
+    var neto=tot-D, del=D?'<br>+ delivery '+gs_(D)+' ('+nD+')':'';
     var cant=k('Cantidad',ventas.length,(ventas.length===1?'venta':'ventas')+' · ticket '+gs_(ventas.length?neto/ventas.length:0));
     if(caja){
       // Efectivo esperado, igual que el arqueo: apertura + efectivo de ventas + cobros de fiado en efectivo − gastos + ingresos
@@ -16273,10 +16273,9 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 <script src="pedidos-admin.js"></script>
 <style id="bg-pulido-v1">
 /* Íconos de acción (reemplazan emojis) */
-.bg-ico{display:inline-block;width:14px;height:14px;vertical-align:-2px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}
-.bg-ico-edit{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E")}
-.bg-ico-trash{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E")}
-.bg-ico-box{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E")}
+:root{--bg-i-edit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E");--bg-i-trash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E");--bg-i-box:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E");--bg-i-cart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h2l2.5 11h10L20 7H6'/%3E%3Cpath d='M9 20a1 1 0 1 0 0-.01M17 20a1 1 0 1 0 0-.01'/%3E%3C/svg%3E");--bg-i-users:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1'/%3E%3Cpath d='M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3Cpath d='M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E");--bg-i-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3C/svg%3E");--bg-i-list:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4h6v3H9Z'/%3E%3Cpath d='M9 5H6v16h12V5h-3'/%3E%3Cpath d='M9 12h6M9 16h6'/%3E%3C/svg%3E");--bg-i-tag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8Z'/%3E%3Cpath d='M7.5 8.5h.01'/%3E%3C/svg%3E");--bg-i-cash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v11H3Z'/%3E%3Cpath d='M3 11h18'/%3E%3Cpath d='M7 15h3'/%3E%3C/svg%3E");--bg-i-chart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V4'/%3E%3Cpath d='M4 20h16'/%3E%3Cpath d='M8 16v-5M12 16V8M16 16v-3'/%3E%3C/svg%3E");--bg-i-camera:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l2-3h6l2 3h3v11H4Z'/%3E%3Cpath d='M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'/%3E%3C/svg%3E");--bg-i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");--bg-i-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z'/%3E%3Cpath d='M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6'/%3E%3C/svg%3E")}
+.bg-ico{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.18em;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat;font-style:normal;flex:0 0 auto}
+.bg-ico-edit{--i:var(--bg-i-edit)}.bg-ico-trash{--i:var(--bg-i-trash)}.bg-ico-box{--i:var(--bg-i-box)}.bg-ico-cart{--i:var(--bg-i-cart)}.bg-ico-users{--i:var(--bg-i-users)}.bg-ico-user{--i:var(--bg-i-user)}.bg-ico-list{--i:var(--bg-i-list)}.bg-ico-tag{--i:var(--bg-i-tag)}.bg-ico-cash{--i:var(--bg-i-cash)}.bg-ico-chart{--i:var(--bg-i-chart)}.bg-ico-camera{--i:var(--bg-i-camera)}.bg-ico-search{--i:var(--bg-i-search)}.bg-ico-eye{--i:var(--bg-i-eye)}
 #content .btn:has(> .bg-ico:only-child){min-width:32px;justify-content:center}
 /* Pulido visual general (cabecera, tarjetas, tablas, barras) */
 #topbar #live-clock{flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.15!important}
