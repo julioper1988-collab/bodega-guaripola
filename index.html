@@ -14670,7 +14670,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
       .slice(0,limit||10);
   }
   function topVendidosActivo(){
-    try{ return localStorage.getItem('bg_top_vendidos_off')!=='1'; }catch(e){ return true; }
+    return false; /* fila de más vendidos quitada de Nueva venta: cargaba lento y casi no se usaba */
   }
   window.toggleTopVendidos=function(){
     var off=topVendidosActivo()?'1':'0';
@@ -14763,7 +14763,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 
   function hookAll(){
     hookAddToVenta(); hookMargen(); hookWatchdog(); hookLockVenta();
-    if(gsx('v-search')){ asegurarStats(); pintarTopVendidos(); }
+    if(gsx('v-search')){ pintarTopVendidos(); }
   }
   hookAll();
   [300,1200,3000,6000].forEach(function(ms){ setTimeout(hookAll,ms); });
