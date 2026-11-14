@@ -20,6 +20,59 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Guaripola">
 <link rel="apple-touch-icon" href="./icon-192.png">
+<script id="bg-marca-core">
+/* Marca del comercio: nombre, datos, logo y color configurables */
+(function(){
+  var DEF={nombre:'Bodega Guaripola',lema:'Sistema de gestión',ruc:'',direccion:'',telefono:'',logo:'',color:'#ef6a24'};
+  function h(v){return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+  function leer(){
+    var m={};try{m=JSON.parse(localStorage.getItem('bg_marca')||'{}')||{};}catch(e){m={};}
+    var o={};for(var k in DEF){o[k]=(m[k]!=null&&String(m[k]).trim()!=='')?String(m[k]):DEF[k];}
+    if(!/^#[0-9a-f]{6}$/i.test(o.color))o.color=DEF.color;
+    if(o.logo&&!/^data:image\/(png|jpeg|webp);base64,/.test(o.logo))o.logo='';
+    return o;
+  }
+  function iniciales(n){var p=String(n||'').trim().split(/\s+/).filter(Boolean);return ((p[0]||'?').charAt(0)+(p[1]?p[1].charAt(0):'')).toUpperCase();}
+  function rgb(hex){return [1,3,5].map(function(i){return parseInt(hex.substr(i,2),16);});}
+  function oscuro(hex,f){return '#'+rgb(hex).map(function(c){return ('0'+Math.round(c*f).toString(16)).slice(-2);}).join('');}
+  window.BG_MARCA_DEF=DEF;
+  window.bgMarca=leer;
+  window.bgMarcaIniciales=function(){return iniciales(leer().nombre);};
+  /* versiones ya escapadas, para insertar en HTML */
+  window.bgMarcaNombre=function(){return h(leer().nombre);};
+  window.bgMarcaDatos=function(){var m=leer(),a=[];if(m.ruc)a.push('RUC '+m.ruc);if(m.direccion)a.push(m.direccion);if(m.telefono)a.push('Tel. '+m.telefono);return h(a.join(' · '));};
+  window.bgMarcaLogoHtml=function(px){var m=leer();px=px||40;
+    return m.logo?'<img src="'+m.logo+'" alt="" style="width:'+px+'px;height:'+px+'px;object-fit:contain;border-radius:'+Math.round(px/4)+'px;display:block">'
+      :'<span style="width:'+px+'px;height:'+px+'px;border-radius:'+Math.round(px/4)+'px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:'+Math.round(px*.38)+'px;letter-spacing:.5px">'+h(iniciales(m.nombre))+'</span>';};
+  /* Documentos impresos (arqueos, órdenes): estilo y encabezado comunes */
+  window.bgPrintCss=function(){return "*{box-sizing:border-box}body{font-family:'Segoe UI',Helvetica,Arial,sans-serif;padding:28px 32px;color:#111827;font-size:13px;line-height:1.45}"+
+    ".doc-head{display:flex;align-items:center;gap:14px;padding-bottom:14px;margin-bottom:16px;border-bottom:2px solid #111827}.doc-head img{width:56px;height:56px;object-fit:contain}"+
+    "h1{font-size:20px;margin:0}h2{font-size:16px;margin:0 0 6px}h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#374151;margin:20px 0 0}p{margin:5px 0}"+
+    "table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#374151}td,th{border:1px solid #d1d5db;padding:7px 9px;text-align:left}"+
+    ".total{font-size:17px;font-weight:700;margin-top:16px;padding:10px 12px;background:#f3f4f6;border-radius:6px}.muted{color:#6b7280;font-size:12px}@media print{body{padding:0}}";};
+  window.bgPrintHeader=function(){var m=leer(),d=window.bgMarcaDatos();
+    return '<div class="doc-head">'+(m.logo?'<img src="'+m.logo+'" alt="">':'')+'<div><h1>'+h(m.nombre)+'</h1>'+(d?'<div class="muted">'+d+'</div>':'')+'</div></div>';};
+  window.bgMarcaAplicar=function(){
+    var m=leer();
+    try{document.title=m.nombre;}catch(e){}
+    var mt=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(mt)mt.setAttribute('content',m.nombre);
+    var t=document.querySelector('#sidebar .logo-text h1');if(t)t.textContent=m.nombre;
+    var l=document.querySelector('#sidebar .logo-text p');if(l)l.textContent=m.lema;
+    var ic=document.querySelector('#sidebar .logo-icon');
+    if(ic){if(m.logo){ic.innerHTML='<img src="'+m.logo+'" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;display:block">';ic.classList.add('con-logo');}else{ic.textContent=iniciales(m.nombre);ic.classList.remove('con-logo');}}
+    var mb=document.querySelector('#bg-mobile-title strong');if(mb)mb.textContent=m.nombre;
+    var st=document.getElementById('bg-marca-color');
+    if(m.color.toLowerCase()===DEF.color){if(st)st.remove();}
+    else{
+      if(!st){st=document.createElement('style');st.id='bg-marca-color';}
+      var c=rgb(m.color).join(',');
+      st.textContent=':root,body,body.theme-light{--accent:'+m.color+'!important;--accent2:'+oscuro(m.color,.86)+'!important;--accent-rgb:'+c+'!important;--accent-bg:rgba('+c+',.12)!important;--accent-glow:0 0 20px rgba('+c+',.25)!important}';
+      (document.body||document.documentElement).appendChild(st); /* al final: gana a los temas */
+    }
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',window.bgMarcaAplicar);else window.bgMarcaAplicar();
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script id="bg-safehtml-global-fix">
 // ── Función única global de escape HTML ──
@@ -80,7 +133,7 @@ window.safeHtml = escapeHtml;
     const a=document.createElement('a');
     a.onclick=()=>goTo('inventario');
     a.id='nav-inventario';
-    a.innerHTML='<span class="ico">🧾</span> Inventario';
+    a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-list"></i></span> Inventario';
     if(after && after.parentNode) after.parentNode.insertBefore(a, after.nextSibling); else nav.appendChild(a);
     try{ titles.inventario='Inventario'; pages.inventario=renderInventario; }catch(e){_swallow(e)}
   }
@@ -111,7 +164,7 @@ window.safeHtml = escapeHtml;
         <div class="card inv-panel-buscar">
           <div class="card-header">
             <h3>Buscar productos</h3>
-            <button class="btn btn-secondary btn-sm" onclick="invAbrirCamara()">📷 Cámara</button>
+            <button class="btn btn-secondary btn-sm" onclick="invAbrirCamara()">Cámara</button>
           </div>
           <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
             <input id="inv-search" placeholder="Nombre, código (ej: 12 = 00012)..."
@@ -148,7 +201,7 @@ window.safeHtml = escapeHtml;
               <div style="font-weight:800;font-size:15px" id="inv-resumen">Sin productos</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn-secondary" onclick="limpiarInventarioActual()">Limpiar</button>
-                <button class="btn btn-primary" onclick="guardarInventarioActual()">💾 Guardar inventario</button>
+                <button class="btn btn-primary" onclick="guardarInventarioActual()">Guardar inventario</button>
               </div>
             </div>
           </div>
@@ -216,12 +269,12 @@ window.safeHtml = escapeHtml;
               </div>
               <button class="btn btn-secondary btn-sm" onclick="addInvItem('${it.producto_id}')">+ Depósito</button>
             </div>`).join('')+
-          `<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px">🔍 Escribí para buscar productos</div>`;
+          `<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px">Escribí para buscar productos</div>`;
       } else {
         el.innerHTML=`<div style="padding:32px 20px;text-align:center;color:var(--text2)">
-          <div style="font-size:32px;margin-bottom:10px">🔍</div>
+          <div style="font-size:32px;margin-bottom:10px"><i class="bg-ico bg-ico-search"></i></div>
           <div style="font-size:15px;font-weight:700;margin-bottom:6px">Buscá un producto</div>
-          <div style="font-size:13px">Escribí el nombre o escaneá el código con 📷</div>
+          <div style="font-size:13px">Escribí el nombre o escaneá el código con la cámara</div>
         </div>`;
       }
       return;
@@ -661,6 +714,7 @@ window.bgLoadZXing=function(){
   /* ── Brand / Accent ── */
   --accent:    #ef6a24;
   --accent2:   #d65413;
+  --accent-rgb: 239,106,36;
   --accent-bg: rgba(239,106,36,.12);
   --accent-glow: 0 0 20px rgba(239,106,36,.25);
 
@@ -815,7 +869,7 @@ body {
 #sidebar nav a span:not(.ico) { opacity: 1; display: inline; }
 #sidebar nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
 #sidebar nav a.active {
-  background: rgba(239,106,36,.25);
+  background: rgba(var(--accent-rgb),.25);
   color: #fff; font-weight: 600;
 }
 #sidebar nav a.active::before { display: none; }
@@ -942,7 +996,7 @@ thead th {
   border-bottom: 1px solid var(--border);
 }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-tbody tr:hover { background: rgba(239,106,36,.06); }
+tbody tr:hover { background: rgba(var(--accent-rgb),.06); }
 tbody td {
   padding: 11px 14px; font-size: 13px;
   color: var(--text);
@@ -960,11 +1014,11 @@ tbody tr:last-child { border-bottom: none; }
 }
 .btn-primary {
   background: var(--accent); color: #fff;
-  box-shadow: 0 2px 8px rgba(239,106,36,.3);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb),.3);
 }
 .btn-primary:hover {
   background: var(--accent2);
-  box-shadow: 0 4px 12px rgba(239,106,36,.4);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb),.4);
   transform: translateY(-1px);
 }
 .btn-secondary {
@@ -1014,7 +1068,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(239,106,36,.15);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.15);
   background: var(--bg2);
 }
 select option { background: var(--bg2); color: var(--text); }
@@ -1233,7 +1287,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   letter-spacing: .5px;
 }
 #venta-table tbody tr { border-bottom: 1px solid var(--border); }
-#venta-table tbody tr:hover { background: rgba(239,106,36,.07); }
+#venta-table tbody tr:hover { background: rgba(var(--accent-rgb),.07); }
 #venta-table tbody td { padding: 10px 14px; font-size: 13px; color: var(--text); }
 
 /* ── Derecha (panel de cobro) ── */
@@ -1273,7 +1327,7 @@ input::placeholder { color: var(--text2); opacity: .7; }
   color: var(--accent);
   background: var(--accent-bg);
   font-weight: 800;
-  box-shadow: 0 0 0 2px rgba(239,106,36,.2);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb),.2);
 }
 .pay-grid {
   display: grid;
@@ -1283,18 +1337,18 @@ input::placeholder { color: var(--text2); opacity: .7; }
 
 /* ── Botón COBRAR ── */
 .cobrar-btn {
-  background: linear-gradient(135deg, #ef6a24 0%, #d65413 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
   color: #fff; border: none;
   border-radius: var(--radius); padding: 16px;
   font-size: 17px; font-weight: 800;
   cursor: pointer; width: 100%;
   transition: all .15s; font-family: inherit;
   letter-spacing: .4px;
-  box-shadow: 0 4px 16px rgba(239,106,36,.35);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb),.35);
 }
 .cobrar-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(239,106,36,.5);
+  box-shadow: 0 6px 24px rgba(var(--accent-rgb),.5);
 }
 .cobrar-btn:active { transform: translateY(0); }
 
@@ -1547,7 +1601,7 @@ input[type=number] { -moz-appearance: textfield; }
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; font-weight: 900; color: #fff;
   letter-spacing: -.5px; flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(239,106,36,.4);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb),.4);
 }
 #sidebar .logo h1 { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
 #sidebar .logo p { font-size: 10px; color: var(--text2); margin-top: 1px; }
@@ -1603,7 +1657,7 @@ body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 
 
 <div id="setup" style="display:none">
   <div class="setup-card">
-    <h2>⚙️ Configuración inicial</h2>
+    <h2>Configuración inicial</h2>
     <p>Ingresá los datos de tu proyecto Supabase para conectar el sistema.</p>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="form-group"><label>Supabase URL</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
@@ -1950,8 +2004,8 @@ function bgConfirm(mensaje, opts = {}){
     } = opts;
 
     // Icono según variante
-    const iconos = { danger:'⚠️', warning:'🔔', primary:'❓' };
-    const icono  = iconos[variant] || '❓';
+    const iconos = { danger:'', warning:'', primary:'' };
+    const icono  = iconos[variant] || '';
 
     // Colores del botón confirmar según variante
     const btnClases = {
@@ -2334,7 +2388,7 @@ function dashReporteTabla(rows, totalVenta, totalGan){
         const sc=r.stock==='-'?'var(--text2)':r.stock<=0?'var(--red)':r.stock<5?'var(--amber)':'var(--green)';
         const gc=r.ganancia>=0?'var(--teal)':'var(--red)';
         return `<tr>
-          <td style="font-weight:600">${escapeHtml(r.nombre)}${r.cliente?`<div style="font-size:11px;color:var(--text2)">👤 ${escapeHtml(r.cliente)}</div>`:''}</td>
+          <td style="font-weight:600">${escapeHtml(r.nombre)}${r.cliente?`<div style="font-size:11px;color:var(--text2)">${escapeHtml(r.cliente)}</div>`:''}</td>
           <td style="text-align:center;font-weight:800;color:var(--accent2)">${r.cant}</td>
           <td style="text-align:center;font-weight:700;color:${sc}">${r.stock}</td>
           <td style="text-align:right;color:var(--green);font-weight:600">${fmtGs(r.venta)}</td>
@@ -2409,12 +2463,12 @@ async function renderProductos(){
   const {data,count}=await q;
   gs('content').innerHTML=`
   <div class="search-bar">
-    <input placeholder="🔍 Buscar..." value="${prodSearch}" oninput="prodSearch=this.value;prodPage=1;renderProductos()">
+    <input placeholder="Buscar..." value="${prodSearch}" oninput="prodSearch=this.value;prodPage=1;renderProductos()">
     <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
       <option value="">Todas las categorías</option>
       ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
     </select>
-    <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+    <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
   </div>
   <div class="card">
     <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -2716,7 +2770,7 @@ async function openEmbModal(prodId,prodNombre){
       ${!(embs||[]).length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
     </tbody>
   </table>`;
-  openModal(`📦 Embalajes — ${prodNombre}`,body,null,'');
+  openModal(`Embalajes — ${prodNombre}`,body,null,'');
 }
 async function saveEmb(prodId,prodNombre){
   const obj={producto_id:prodId,cantidad:parseInt(gs('emb-cant').value)||1,codigo_barra:gs('emb-cod').value||null,precio_costo:parseFloat(gs('emb-costo').value)||0,precio_venta:parseFloat(gs('emb-venta').value)||0,precio_mayorista:parseFloat(gs('emb-mayor').value)||0};
@@ -2742,7 +2796,7 @@ function renderVentas(){
     <!-- IZQUIERDA -->
     <div id="venta-left">
       <div id="venta-header">
-        <div class="vtitle">🛒 Ventas</div>
+        <div class="vtitle">Ventas</div>
         <div class="vinfo">N° comprobante: <span id="v-num-comp">#${ventaNum}</span> &nbsp;|&nbsp; Productos: <span id="v-count">0</span> &nbsp;|&nbsp;
           <button class="btn btn-sm ${ventaTipo==='minorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('minorista')" style="margin-right:4px">Minorista</button>
           <button class="btn btn-sm ${ventaTipo==='mayorista'?'btn-primary':'btn-secondary'}" onclick="setVTipo('mayorista')">Mayorista</button>
@@ -3173,10 +3227,10 @@ function renderCompras(){
   <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 132px)">
     <div id="prod-picker" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:12px;border-bottom:1px solid var(--border)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:10px">🚛 Agregar productos</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">Agregar productos</div>
         <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
           <div class="autocomplete-wrap">
-            <input id="cp-search" placeholder="🔍 Buscar por nombre o código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">
+            <input id="cp-search" placeholder="Buscar por nombre o código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">
             <div class="autocomplete-list" id="cp-ac-list" style="display:none"></div>
           </div>
           <input id="cp-qty" type="number" value="1" min="1" placeholder="Cant." style="text-align:center">
@@ -3194,7 +3248,7 @@ function renderCompras(){
           <div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>
           <div class="form-group"><label>Estado</label>
             <select id="comp-estado">
-              <option value="en_proceso">🕐 En proceso (no impacta stock)</option>
+              <option value="en_proceso">En proceso (no impacta stock)</option>
               <option value="finalizado">✅ Finalizado (impacta stock ahora)</option>
             </select>
           </div>
@@ -3349,7 +3403,7 @@ async function renderHistorialCompras(page){
         <td><span class="estado-badge estado-${c.estado==='finalizado'?'finalizado':c.estado==='en_proceso'?'proceso':'cancelado'}">${c.estado==='en_proceso'?'En proceso':c.estado==='finalizado'?'Finalizado':'Cancelado'}</span></td>
         <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">👁</button>
+          <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')"><i class="bg-ico bg-ico-eye"></i></button>
           <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
           ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
         </td>
@@ -3985,7 +4039,7 @@ async function buscarRucCliente(){
 openClienteModal = function(){
   openModal('Nuevo cliente',`
     <div class="alert alert-warning" style="margin-bottom:14px">
-      🔎 El buscador primero revisa tus clientes y la tabla local de RUC. Si no encuentra, cargalo manualmente una vez y queda guardado para la próxima.
+      El buscador primero revisa tus clientes y la tabla local de RUC. Si no encuentra, cargalo manualmente una vez y queda guardado para la próxima.
     </div>
     <div class="form-grid">
       <div class="form-group">
@@ -4082,7 +4136,7 @@ async function imprimirOrdenCompra(id){
   <html lang="es">
   <head>
     <meta charset="utf-8">
-    <title>Orden de pedido - Bodega Guaripola</title>
+    <title>Orden de pedido - ${bgMarcaNombre()}</title>
     <style>
       body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:13px}
       .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:18px}
@@ -4104,7 +4158,7 @@ async function imprimirOrdenCompra(id){
     <button onclick="window.print()" style="float:right;padding:8px 12px">Imprimir / Guardar PDF</button>
     <div class="top">
       <div>
-        <h1>Bodega Guaripola</h1>
+        <div style="display:flex;align-items:center;gap:12px">${bgMarca().logo?`<img src="${bgMarca().logo}" alt="" style="width:52px;height:52px;object-fit:contain">`:''}<div><h1 style="margin:0">${bgMarcaNombre()}</h1><div class="muted">${bgMarcaDatos()}</div></div></div>
         <div class="muted">Orden de pedido / compra</div>
       </div>
       <div style="text-align:right">
@@ -4151,12 +4205,12 @@ renderHistorialCompras = async function(){
   function pagoDetalle(c){
     const mp = (c.metodo_pago||'').toLowerCase();
     const total = fmtGs(c.total);
-    if(mp === 'efectivo') return `<span style="color:var(--green)">💵 Efectivo: ${total}</span>`;
-    if(mp === 'transferencia') return `<span style="color:var(--accent)">🏦 Transferencia: ${total}</span>`;
-    if(mp === 'crédito' || mp === 'credito') return `<span style="color:var(--amber)">💳 Crédito: ${total}</span>`;
-    if(mp === 'cheque') return `<span style="color:var(--text2)">📄 Cheque: ${total}</span>`;
-    if(mp === 'qr') return `<span style="color:var(--accent2)">📱 QR: ${total}</span>`;
-    if(mp === 'debito') return `<span style="color:var(--accent)">💳 Débito: ${total}</span>`;
+    if(mp === 'efectivo') return `<span style="color:var(--green)">Efectivo: ${total}</span>`;
+    if(mp === 'transferencia') return `<span style="color:var(--accent)">Transferencia: ${total}</span>`;
+    if(mp === 'crédito' || mp === 'credito') return `<span style="color:var(--amber)">Crédito: ${total}</span>`;
+    if(mp === 'cheque') return `<span style="color:var(--text2)">Cheque: ${total}</span>`;
+    if(mp === 'qr') return `<span style="color:var(--accent2)">QR: ${total}</span>`;
+    if(mp === 'debito') return `<span style="color:var(--accent)">Débito: ${total}</span>`;
     if(mp) return `<span style="color:var(--text2)">${mp}: ${total}</span>`;
     return `<span style="color:var(--text2)">-</span>`;
   }
@@ -4179,7 +4233,7 @@ renderHistorialCompras = async function(){
           <button class="btn btn-danger btn-sm hc-btn" onclick="borrarCompra('${c.id}')">Borrar</button>
         </div>
         <div class="hc-pago-wrap">
-          <button class="hc-pago-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">💰 Ver pago</button>
+          <button class="hc-pago-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'block':'none'">Ver pago</button>
           <div class="hc-pago-detalle" style="display:none">${pagoDetalle(c)}</div>
         </div>
       </td>
@@ -4447,13 +4501,13 @@ async function imprimirArqueo(id){
   const ventas=await resumenVentasDia(caja.fecha);
   const den=caja.denominaciones_cierre||{};
   const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong></p><p>Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${caja.notas_cierre||''}</p></body></html>`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>${bgPrintCss()}</style></head><body>${bgPrintHeader()}<h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong></p><p>Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${caja.notas_cierre||''}</p></body></html>`;
   const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
 }
 function initCajaNav(){
   if(document.getElementById('nav-caja')) return;
   const nav=document.querySelector('#sidebar nav');if(!nav) return;
-  const a=document.createElement('a');a.onclick=()=>goTo('caja');a.id='nav-caja';a.innerHTML='<span class="ico">💰</span> Caja / Arqueo';
+  const a=document.createElement('a');a.onclick=()=>goTo('caja');a.id='nav-caja';a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-cash"></i></span> Caja / Arqueo';
   const ref=document.getElementById('nav-historial-ventas');
   if(ref&&ref.nextSibling)nav.insertBefore(a,ref.nextSibling);else nav.appendChild(a);
   try{titles.caja='Caja / Arqueo';pages.caja=renderCaja;}catch(e){_swallow(e)}
@@ -4698,7 +4752,7 @@ initMobileShell();
     if(cod && !document.getElementById('btn-scan-venta')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cod.parentNode.insertBefore(wrap,cod);wrap.appendChild(cod);
-      const btn=document.createElement('button');btn.id='btn-scan-venta';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='📷 Cámara';btn.onclick=()=>openBarcodeScanner('venta');wrap.appendChild(btn);
+      const btn=document.createElement('button');btn.id='btn-scan-venta';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='Cámara';btn.onclick=()=>openBarcodeScanner('venta');wrap.appendChild(btn);
     }
   };
   try{pages.ventas=renderVentas;}catch(e){_swallow(e)}
@@ -4737,12 +4791,12 @@ initMobileShell();
     const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
     gs('content').innerHTML=`
     <div class="search-bar">
-      <div class="scan-row" style="flex:1"><input placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button></div>
+      <div class="scan-row" style="flex:1"><input placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button></div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -4773,7 +4827,7 @@ initMobileShell();
     if(cp && !document.getElementById('btn-scan-compra')){
       const wrap=document.createElement('div');wrap.className='scan-row';
       cp.parentNode.insertBefore(wrap,cp);wrap.appendChild(cp);
-      const btn=document.createElement('button');btn.id='btn-scan-compra';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='📷 Cámara';btn.onclick=()=>openBarcodeScanner('compra');wrap.appendChild(btn);
+      const btn=document.createElement('button');btn.id='btn-scan-compra';btn.type='button';btn.className='btn btn-secondary btn-sm scan-btn';btn.textContent='Cámara';btn.onclick=()=>openBarcodeScanner('compra');wrap.appendChild(btn);
     }
   };
   try{pages.compras=renderCompras;}catch(e){_swallow(e)}
@@ -4918,7 +4972,7 @@ initMobileShell();
         <label>Código de barra</label>
         <div class="scan-row">
           <input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}">
-          <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button>
+          <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">Cámara</button>
         </div>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
@@ -5043,7 +5097,7 @@ initMobileShell();
         <div class="autocomplete-wrap">
           <div class="scan-row">
             <input id="aj-search" placeholder="Nombre, código o escanear..." oninput="onAjSearch(this.value)" onkeydown="onAjKeydown(event)" autocomplete="off">
-            <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('aj-search','ajuste')">📷 Cámara</button>
+            <button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('aj-search','ajuste')">Cámara</button>
           </div>
           <div class="autocomplete-list" id="aj-ac-list" style="display:none"></div>
         </div>
@@ -5133,7 +5187,7 @@ initMobileShell();
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
         <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
-        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')"><i class="bg-ico bg-ico-camera"></i></button></div></div>
         <div class="form-group"><label>P. Costo</label>${mathInput('emb-costo',0,{mini:true})}</div>
         <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
         <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
@@ -5163,7 +5217,7 @@ initMobileShell();
         ${!embs.length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
     </table>`;
-    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+    openModal(`Packs / embalajes — ${prodNombre}`, body, null, '');
   };
 
   window.saveEmb = async function(prodId, prodNombre){
@@ -5260,12 +5314,12 @@ initMobileShell();
     const count=byCat.length, from=(prodPage-1)*lim, data=byCat.slice(from,from+lim);
     gs('content').innerHTML=`
     <div class="search-bar">
-      <div class="scan-row" style="flex:1"><input placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button></div>
+      <div class="scan-row" style="flex:1"><input placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${prodSearch||''}" oninput="prodSearch=this.value;prodPage=1;renderProductos()"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button></div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3></div>
@@ -5293,7 +5347,7 @@ initMobileShell();
     openModal(prod?'Editar producto':'Nuevo producto',`<div class="form-grid">
       <div class="form-group">
         <label>Código de barra</label>
-        <div class="scan-row"><input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">📷 Cámara</button></div>
+        <div class="scan-row"><input id="p-cod" value="${escapeHtml(prod?.codigo_barra||'')}"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('p-cod','producto')">Cámara</button></div>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Nombre *</label><input id="p-nom" value="${escapeHtml(prod?.nombre||'')}"></div>
       <div class="form-group"><label>Categoría</label><select id="p-cat"><option value="">Sin categoría</option>${catCache.map(c=>`<option value="${c.id}" ${prod?.categoria_id===c.id?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
@@ -5478,7 +5532,7 @@ initMobileShell();
       <input type="hidden" id="emb-id" value="">
       <div class="emb-row-inputs" style="grid-template-columns:80px 1fr 110px 110px 110px auto auto">
         <div class="form-group"><label>Cant. uds</label>${mathInput('emb-cant',3,{integer:true,mini:true})}</div>
-        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')">📷</button></div></div>
+        <div class="form-group"><label>Código barra del pack</label><div class="scan-row"><input id="emb-cod" placeholder="Ej: 7840050026393"><button type="button" class="btn btn-secondary btn-sm scan-btn" onclick="startInlineBarcodeScanner('emb-cod','pack')"><i class="bg-ico bg-ico-camera"></i></button></div></div>
         <div class="form-group"><label>P. Costo automático</label>${mathInput('emb-costo',initialCost,{mini:true})}</div>
         <div class="form-group"><label>P. Venta</label>${mathInput('emb-venta',0,{mini:true})}</div>
         <div class="form-group"><label>P. Mayorista</label>${mathInput('emb-mayor',0,{mini:true})}</div>
@@ -5511,7 +5565,7 @@ initMobileShell();
         ${!embs.length?'<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
     </table>`;
-    openModal(`📦 Packs / embalajes — ${prodNombre}`, body, null, '');
+    openModal(`Packs / embalajes — ${prodNombre}`, body, null, '');
     setTimeout(()=>{
       bgRefreshEmbMargin();
       const cant=gs('emb-cant'); if(cant) cant.addEventListener('input',embAutoCosto);
@@ -5588,7 +5642,7 @@ initMobileShell();
       if(!ts) return '--';
       return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
     };
-    sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+    sel.innerHTML=`<option value="">Seleccionar turno...</option>`+
       cajas.map(c=>{
         const estado=c.estado==='abierta'?'🟢':'🔴';
         const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
@@ -5629,7 +5683,7 @@ initMobileShell();
     const today=fechaHoyPY(), first=today.slice(0,7)+'-01';
     gs('content').innerHTML=`
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header"><h3>Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="card-header"><h3>Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">Imprimir</button></div>
         <div style="padding:14px 16px">
           <div class="rpt-filters">
             <div class="form-group"><label>Desde</label>
@@ -5647,9 +5701,9 @@ initMobileShell();
             <div class="form-group"><label>Cliente</label><input id="rpt-cliente" placeholder="Ej: Juan, Comercial..." onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="form-group"><label>Producto</label><input id="rpt-producto" placeholder="Ej: coca 1,5" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             <div class="rpt-actions">
-              <button class="btn btn-primary" onclick="generarReportes()">🔎 Generar</button>
+              <button class="btn btn-primary" onclick="generarReportes()">Generar</button>
               <select id="rpt-turno-sel" onchange="rptCargarTurno(this.value)" style="font-size:13px;min-height:36px;border-color:var(--green);color:var(--green);font-weight:700;max-width:200px">
-                <option value="">📋 Seleccionar turno...</option>
+                <option value="">Seleccionar turno...</option>
               </select>
               <button class="btn btn-secondary" onclick="rptSetFechas('hoy')">Hoy</button>
               <button class="btn btn-secondary" onclick="rptSetFechas('7d')">7 días</button>
@@ -5967,7 +6021,7 @@ initMobileShell();
     const rows=CAJA_DENOMS.map(d=>`<tr><td>${cajaFmtDenom(d)}</td><td>${den[d]||0}</td><td>${fmtGs((den[d]||0)*d)}</td></tr>`).join('');
     const grow=(gastos.items||[]).map(g=>`<tr><td>${escapeHtml(g.descripcion)}</td><td>${fmtGs(g.monto)}</td></tr>`).join('')||'<tr><td colspan="2">Sin gastos</td></tr>';
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0);
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>${bgPrintCss()}</style></head><body>${bgPrintHeader()}<h2>Arqueo de caja</h2><p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Esperado: <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia: <strong>${fmtGs(caja.diferencia)}</strong></p><h3>Conteo</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><div class="total">Total contado: ${fmtGs(caja.efectivo_contado)}</div><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
@@ -5989,7 +6043,7 @@ initMobileShell();
   }
   function applyUsuarioPermisos(){
     MODS.forEach(([key])=>{const nav=gs('nav-'+key); if(nav) nav.style.display=usuarioPuede(key)?'flex':'none';});
-    const ub=gs('user-badge'); if(ub) ub.textContent=usuarioActual?`👤 ${usuarioActual.nombre}`:'👤 Sin usuario';
+    const ub=gs('user-badge'); if(ub) ub.textContent=usuarioActual?`${usuarioActual.nombre}`:'Sin usuario';
   }
   async function cargarUsuariosInicial(){
     try{
@@ -6027,40 +6081,59 @@ initMobileShell();
   function initUserBadge(){
     if(gs('user-badge')) return;
     const top=document.getElementById('topbar'); if(!top) return;
-    const b=document.createElement('button'); b.id='user-badge'; b.className='btn btn-secondary btn-sm'; b.textContent='👤 Usuario'; b.onclick=()=>mostrarMenuUsuario();
+    const b=document.createElement('button'); b.id='user-badge'; b.className='btn btn-secondary btn-sm'; b.textContent='Usuario'; b.onclick=()=>mostrarMenuUsuario();
     top.appendChild(b);
   }
   function initUsuariosNav(){
     if(gs('nav-usuarios')) return;
     const nav=document.querySelector('#sidebar nav'); if(!nav) return;
-    const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico">👥</span> Usuarios';
+    const a=document.createElement('a'); a.onclick=()=>goTo('usuarios'); a.id='nav-usuarios'; a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-users"></i></span> Usuarios';
     nav.appendChild(a); titles.usuarios='Usuarios'; pages.usuarios=renderUsuarios;
   }
   function mostrarLoginUsuarios(usuarios){
-    const opts=usuarios.map(u=>`<option value="${escapeHtml(u.auth_email)}">${escapeHtml(u.nombre)} · ${u.rol}</option>`).join('');
-    openModal('Ingresar al sistema',`<div class="form-grid">
-      <div class="form-group" style="grid-column:1/-1"><label>Usuario</label><select id="login-user">${opts}</select></div>
-      <div class="form-group" style="grid-column:1/-1"><label>PIN</label><input id="login-pin" type="password" inputmode="numeric" placeholder="PIN del usuario" onkeydown="if(event.key==='Enter')loginUsuarioSistema()"></div>
-      <div class="alert alert-warning" style="grid-column:1/-1">Acceso con Supabase Auth. Ingresá tu PIN.</div>
-    </div>`,()=>loginUsuarioSistema(),'Entrar');
+    const opts=usuarios.map(u=>`<option value="${escapeHtml(u.auth_email)}">${escapeHtml(u.nombre)} · ${escapeHtml(u.rol)}</option>`).join('');
+    let ov=gs('bg-login'); if(!ov){ov=document.createElement('div');ov.id='bg-login';document.body.appendChild(ov);}
+    const m=bgMarca();
+    ov.innerHTML=`<form class="bg-login-card" onsubmit="event.preventDefault();loginUsuarioSistema()" autocomplete="off">
+      <div class="bg-login-marca">${bgMarcaLogoHtml(64)}<h1>${bgMarcaNombre()}</h1><p>${escapeHtml(m.lema)}</p></div>
+      <label for="login-user">Usuario</label>
+      <select id="login-user">${opts}</select>
+      <label for="login-pin">PIN</label>
+      <input id="login-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Ingresá tu PIN">
+      <div id="bg-login-err" role="alert"></div>
+      <button type="submit" id="bg-login-btn" class="btn btn-primary">Entrar</button>
+      <small>Acceso solo para personal autorizado</small>
+    </form>`;
+    try{const last=JSON.parse(lsGet('bg_login_ultimo')||'null'); if(last&&[...gs('login-user').options].some(o=>o.value===last)) gs('login-user').value=last;}catch(e){_swallow(e)}
+    setTimeout(()=>{const p=gs('login-pin'); if(p) p.focus();},60);
   }
+  function loginError(msg){const e=gs('bg-login-err'); if(e){e.textContent=msg;e.style.display=msg?'block':'none';} else if(msg) toast(msg,'err');}
+  function loginOcupado(on){const b=gs('bg-login-btn'); if(b){b.disabled=on;b.textContent=on?'Ingresando…':'Entrar';}}
   window.loginUsuarioSistema = async function(){
     const email=gs('login-user')?.value, pin=gs('login-pin')?.value||'';
-    const {error:aerr}=await sb.auth.signInWithPassword({email,password:'gpola_'+pin});
-    if(aerr){toast('Usuario o PIN incorrecto','err');return;}
-    const {data:{user}}=await sb.auth.getUser();
-    const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
-    if(error||!data){toast('No se pudo cargar el perfil','err');return;}
-    usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
+    if(!pin){loginError('Ingresá tu PIN.');return;}
+    loginError('');loginOcupado(true);
+    try{
+      const {error:aerr}=await sb.auth.signInWithPassword({email,password:'gpola_'+pin});
+      if(aerr){loginError('Usuario o PIN incorrecto.');const p=gs('login-pin');if(p){p.value='';p.focus();}return;}
+      const {data:{user}}=await sb.auth.getUser();
+      const {data,error}=await sb.from('bodega_usuarios').select('*').eq('auth_id',user.id).maybeSingle();
+      if(error||!data){loginError('No se pudo cargar el perfil.');return;}
+      usuarioActual=data; try{ sb.rpc('registrar_login'); }catch(e){} lsSet('bg_usuario_actual',JSON.stringify({id:data.id,nombre:data.nombre})); lsSet('bg_usuario_offline',JSON.stringify(data)); lsSet('bg_login_ultimo',JSON.stringify(email));
+      const ov=gs('bg-login'); if(ov) ov.remove();
+      closeModal(); applyUsuarioPermisos(); toast('Bienvenido '+data.nombre); await loadCaches(true); goTo('inicio');
+    }catch(e){loginError('Sin conexión. Probá de nuevo.');}
+    finally{loginOcupado(false);}
   };
   function mostrarMenuUsuario(){
     const admin=!usuarioActual||usuarioActual.rol==='admin', claro=document.body.classList.contains('theme-light'), may=document.body.classList.contains('con-mayorista');
     openModal('Usuario actual',`<p style="margin-bottom:12px">${usuarioActual?escapeHtml(usuarioActual.nombre)+' · '+escapeHtml(usuarioActual.rol):'Sin usuario'}</p><div style="display:flex;gap:8px;flex-wrap:wrap">`+
-      (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">👥 Usuarios y respaldo</button>`:'')+
-      `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'🌙 Tema oscuro':'☀️ Tema claro'}</button>`+
+      (usuarioPuede('usuarios')?`<button class="btn btn-secondary" onclick="closeModal();goTo('usuarios')">Usuarios y respaldo</button>`:'')+
+      (admin?`<button class="btn btn-secondary" onclick="closeModal();bgMarcaEditar()">Datos del comercio</button>`:'')+
+      `<button class="btn btn-secondary" onclick="toggleTema();closeModal()">${claro?'Tema oscuro':'Tema claro'}</button>`+
       (admin?`<button class="btn btn-secondary" onclick="bgToggleMayorista();closeModal()">${may?'Ocultar ventas mayoristas':'Activar ventas mayoristas'}</button>`:'')+
       `<button class="btn btn-secondary" onclick="logoutUsuarioSistema()">Cambiar / cerrar sesión</button>`+
-      (admin?`<button class="btn btn-secondary" onclick="resetConfig()" title="Solo si cambia la base de datos">🔌 Cambiar conexión</button>`:'')+`</div>`,null,'');
+      (admin?`<button class="btn btn-secondary" onclick="resetConfig()" title="Solo si cambia la base de datos">Cambiar conexión</button>`:'')+`</div>`,null,'');
   }
   window.logoutUsuarioSistema=async function(){try{await sb.auth.signOut();}catch(e){_swallow(e)}lsRemove('bg_usuario_actual');lsRemove('bg_usuario_offline');try{localStorage.removeItem('bg_last_page');localStorage.removeItem('bg_draft_venta');localStorage.removeItem('bg_draft_compra');}catch(e){_swallow(e)}usuarioActual=null;closeModal();cargarUsuariosInicial();};
 
@@ -6068,11 +6141,11 @@ initMobileShell();
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
     const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
-    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    gs('content').innerHTML=(typeof bgMarcaCardHtml==='function'?bgMarcaCardHtml():'')+`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   window.bgVerAuditoria = function(){
     if(typeof openModal!=='function') return;
-    openModal('📋 Auditoría', '<div style="min-width:300px">'+
+    openModal('Auditoría', '<div style="min-width:300px">'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
         '<select id="aud-accion" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda acción</option><option value="INSERT">Creó</option><option value="UPDATE">Editó</option><option value="DELETE">Borró</option><option value="LOGIN">Login</option></select>'+
         '<select id="aud-tabla" onchange="bgAudCargar()" style="font-size:13px;padding:6px;border-radius:8px"><option value="">Toda tabla</option><option value="bodega_ventas">Ventas</option><option value="bodega_compras">Compras</option><option value="bodega_productos">Productos</option><option value="bodega_caja">Caja</option><option value="bodega_caja_gastos">Gastos caja</option><option value="bodega_fiados">Fiados</option><option value="bodega_pagos_fiado">Pagos fiado</option><option value="bodega_clientes">Clientes</option><option value="bodega_proveedores">Proveedores</option><option value="auth">Logins</option></select>'+
@@ -6107,13 +6180,13 @@ initMobileShell();
     if(user) q=q.ilike('usuario','%'+user+'%');
     var r=await q;
     if(r.error){ if(box) box.innerHTML='<div class="bg-chart-empty">Error: '+escapeHtml(r.error.message)+'</div>'; return; }
-    var accTxt={INSERT:'➕ creó',UPDATE:'✏️ editó',DELETE:'🗑️ borró',LOGIN:'🔑 entró'};
+    var accTxt={INSERT:'+ creó',UPDATE:'✏️ editó',DELETE:'borró',LOGIN:'entró'};
     var tbTxt={bodega_ventas:'venta',bodega_compras:'compra',bodega_productos:'producto',bodega_caja:'caja',bodega_caja_gastos:'gasto caja',bodega_fiados:'fiado',bodega_pagos_fiado:'pago fiado',bodega_clientes:'cliente',bodega_proveedores:'proveedor',bodega_categorias:'categoría',bodega_embalajes:'embalaje',auth:'sesión'};
     var rows=(r.data||[]).map(function(a){
       var f=new Date(a.fecha).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       var q2=(accTxt[a.accion]||a.accion)+' '+(tbTxt[a.tabla]||a.tabla||'');
-      var dev=a.dispositivo==='Móvil'?'📱 Móvil':(a.dispositivo==='Web'?'💻 Web':'—');
-      var verBtn=(a.accion==='LOGIN')?'':'<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px" onclick="bgAudToggle(this)">🔍 ver</button>';
+      var dev=a.dispositivo==='Móvil'?'Móvil':(a.dispositivo==='Web'?'Web':'—');
+      var verBtn=(a.accion==='LOGIN')?'':'<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:12px" onclick="bgAudToggle(this)">ver</button>';
       var det=(a.accion==='LOGIN')?'':'<tr class="aud-det" style="display:none"><td colspan="5" style="background:rgba(0,0,0,.04);font-size:13px;padding:10px 14px">'+bgAudFmtDetalle(a.accion, a.datos)+'</td></tr>';
       return '<tr><td style="font-size:12px;white-space:nowrap">'+f+'</td><td style="font-weight:600">'+escapeHtml(a.usuario||'-')+'</td><td>'+escapeHtml(q2)+'</td><td style="font-size:12px;white-space:nowrap">'+dev+'</td><td>'+verBtn+'</td></tr>'+det;
     }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:14px">Sin registros</td></tr>';
@@ -6382,7 +6455,7 @@ initMobileShell();
           <label>Notas de apertura</label>
           <textarea id="edit-ap-notas" rows="2">${escapeHtml(caja.notas_apertura||'')}</textarea>
         </div>
-        <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">💾 Guardar importe inicial</button>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="guardarAperturaEditada('${caja.id}')">Guardar importe inicial</button>
       </div>
     </div>`;
   }
@@ -6553,7 +6626,7 @@ initMobileShell();
         <th>N°</th><th>Fecha/hora</th><th>Cliente</th><th>Pago</th><th style="text-align:right">Total</th><th>Origen</th>
       </tr></thead><tbody>${rows}</tbody></table></div>
       <div style="padding:12px 16px">
-        <button class="btn btn-primary" onclick="asignarVentasACaja('${caja.id}')">➕ Incluir en este turno</button>
+        <button class="btn btn-primary" onclick="asignarVentasACaja('${caja.id}')">+ Incluir en este turno</button>
       </div>
     </div>`;
   };
@@ -6619,8 +6692,8 @@ initMobileShell();
       ${cerrada?`<div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <span>⚠️ La última caja del día está <b>cerrada</b>. Podés reabrirla para corregir o abrir una nueva caja.</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">🔓 Reabrir esta caja</button>
-          <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">➕ Abrir nueva caja</button>
+          <button class="btn btn-secondary btn-sm" onclick="reabrirCajaDesdeAlerta('${caja.id}')">Reabrir esta caja</button>
+          <button class="btn btn-primary btn-sm" onclick="window.cajaTabTurno='nueva';renderCajaNueva()">+ Abrir nueva caja</button>
         </div>
       </div>`:''}
       ${(()=>{const k=(l,v,sub,col,big)=>`<div class="caja-k${big?' big':''}"><span>${l}</span><b${col?` style="color:${col}"`:''}>${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
@@ -6637,10 +6710,10 @@ initMobileShell();
           ${k('Efectivo esperado',fmtGs(esperado),'apertura + efectivo − gastos + ingresos','var(--accent2)',true)}
           ${dif!==null?k('Diferencia',fmtGs(dif),'',dif===0?'var(--green)':dif>0?'var(--amber)':'var(--red)',true):''}
         </div></div>`;})()}
-      ${(ventas.fiadosDetalle||[]).length?`<details class="card caja-fiados"><summary>📒 Fiados del turno · ${new Set(ventas.fiadosDetalle.map(v=>v.clienteNombre)).size} cliente(s) · ${fmtGs(ventas.fiado)}</summary>${detalleFiadosArqueoHTML(ventas)}</details>`:''}
+      ${(ventas.fiadosDetalle||[]).length?`<details class="card caja-fiados"><summary>Fiados del turno · ${new Set(ventas.fiadosDetalle.map(v=>v.clienteNombre)).size} cliente(s) · ${fmtGs(ventas.fiado)}</summary>${detalleFiadosArqueoHTML(ventas)}</details>`:''}
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3>Cobrado por medio de pago</h3><span class="badge">Total cobrado: ${fmtGs(ventas.total_cobrado)}</span></div>
-        <div class="caja-medios">${[['💵 Efectivo',ventas.efectivo],['🏦 Transferencia',ventas.transferencia],['📱 QR',ventas.qr],['💳 Débito',ventas.debito],['💳 Crédito',ventas.credito],['🔀 Otros (mixto)',ventas.mixto],['📒 Fiado (no ingresa)',ventas.fiado]].filter(x=>Number(x[1])).map(x=>`<div><span>${x[0]}</span><b>${fmtGs(x[1])}</b></div>`).join('')||'<div><span>Sin ventas todavía</span><b>Gs. 0</b></div>'}</div>
+        <div class="caja-medios">${[['Efectivo',ventas.efectivo],['Transferencia',ventas.transferencia],['QR',ventas.qr],['Débito',ventas.debito],['Crédito',ventas.credito],['Otros (mixto)',ventas.mixto],['Fiado (no ingresa)',ventas.fiado]].filter(x=>Number(x[1])).map(x=>`<div><span>${x[0]}</span><b>${fmtGs(x[1])}</b></div>`).join('')||'<div><span>Sin ventas todavía</span><b>Gs. 0</b></div>'}</div>
       </div>
       ${cajaVentasHuerfanasHTML(caja,huerfanas)}
       <div class="caja-2col">${cajaGastosTurnoHTML(caja,gastos)}${cajaIngresosTurnoHTML(caja,ingresos)}</div>
@@ -6831,7 +6904,7 @@ initMobileShell();
     const esperado=(Number(caja.apertura_efectivo)||0)+ventas.efectivo-(gastos.total||0)+(ingresos.total||0);
     const ventaEfectivoReal=(Number(caja.efectivo_contado)||0)+(gastos.total||0)-(Number(caja.apertura_efectivo)||0)-(ingresos.total||0);
     const totalGeneralContado=Number(caja.total_contado)||(Number(caja.efectivo_contado||0)+Number(caja.qr_contado||0)+Number(caja.transferencia_contado||0)+Number(caja.debito_contado||0)+Number(caja.credito_contado||0));
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #ccc;padding:8px;text-align:left}.total{font-size:18px;font-weight:700;margin-top:16px}.muted{color:#666}</style></head><body><h1>Bodega Guaripola</h1><h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Arqueo ${caja.fecha}</title><style>${bgPrintCss()}</style></head><body>${bgPrintHeader()}<h2>Arqueo de caja - ${cajaTurnoTitulo(caja)}</h2>${resumenVentaArqueoHTML(caja,ventas)}${detalleFiadosArqueoHTML(ventas)}<p class="muted">Fecha: ${fmtDate(caja.fecha)} · Estado: ${caja.estado}</p><p>Apertura hora: ${caja.opened_at?new Date(caja.opened_at).toLocaleString('es-PY'):'-'} · Cierre hora: ${caja.closed_at?new Date(caja.closed_at).toLocaleString('es-PY'):'-'}</p><p>Apertura efectivo: <strong>${fmtGs(caja.apertura_efectivo)}</strong></p><p>Ventas efectivo del turno: <strong>${fmtGs(ventas.efectivo)}</strong> · Gastos: <strong>${fmtGs(gastos.total)}</strong> · Ingresos: <strong>${fmtGs(ingresos.total)}</strong> · Esperado (efectivo): <strong>${fmtGs(esperado)}</strong></p><p>Efectivo contado: <strong>${fmtGs(caja.efectivo_contado)}</strong> · Diferencia (efectivo): <strong>${fmtGs(caja.diferencia)}</strong></p><p>Estimación según conteo (contado + gastos − apertura − ingresos): <strong>${fmtGs(ventaEfectivoReal)}</strong></p><h3>Transacciones por método</h3><table><thead><tr><th>Efectivo</th><th>Transferencia</th><th>QR</th><th>Débito</th><th>Crédito</th><th>Fiado</th><th>Total</th></tr></thead><tbody><tr><td>${fmtGs(ventas.efectivo)}</td><td>${fmtGs(ventas.transferencia)}</td><td>${fmtGs(ventas.qr)}</td><td>${fmtGs(ventas.debito)}</td><td>${fmtGs(ventas.credito)}</td><td>${fmtGs(ventas.fiado)}</td><td>${fmtGs(ventas.total)}</td></tr></tbody></table><h3>Conteo de efectivo (billetes/monedas)</h3><table><thead><tr><th>Billete/moneda</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><h3>Gastos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${grow}</tbody></table><h3>Ingresos varios</h3><table><thead><tr><th>Descripción</th><th>Monto</th></tr></thead><tbody>${irow}</tbody></table><table style="margin-top:16px"><thead><tr><th>Efectivo contado</th><th>QR contado</th><th>Transf. contada</th><th>Débito contado</th><th>Crédito contado</th><th>Total general contado</th></tr></thead><tbody><tr><td>${fmtGs(caja.efectivo_contado)}</td><td>${fmtGs(caja.qr_contado)}</td><td>${fmtGs(caja.transferencia_contado)}</td><td>${fmtGs(caja.debito_contado)}</td><td>${fmtGs(caja.credito_contado)}</td><td><strong>${fmtGs(totalGeneralContado)}</strong></td></tr></tbody></table><p>Notas: ${escapeHtml(caja.notas_cierre||'')}</p></body></html>`;
     const w=window.open('','_blank');if(!w){toast('Permití ventanas emergentes para imprimir','err');return;}w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){_swallow(e)}},400);
   };
 
@@ -7058,7 +7131,7 @@ initMobileShell();
       <div class="card" style="margin-bottom:14px">
         <div class="card-header">
           <h3>Reportes</h3>
-          <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir / PDF</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.print()">Imprimir / PDF</button>
         </div>
         <div style="padding:14px 16px">
           <style>
@@ -7079,11 +7152,11 @@ initMobileShell();
           <div class="rep-row">
             <span class="rep-lbl">Turno</span>
             <select id="rep-turno-sel" onchange="repCargarTurno(this)" style="font-size:13px;min-height:36px;border:1px solid var(--green);color:var(--green);font-weight:700;max-width:280px;border-radius:var(--radius);padding:0 8px">
-              <option value="">📋 Todos / elegir turno...</option>
+              <option value="">Todos / elegir turno...</option>
             </select>
           </div>
           <div class="rep-row">
-            <span class="rep-lbl">⏰ Horario</span>
+            <span class="rep-lbl">Horario</span>
             <button class="rep-chip on" data-fr="todo" onclick="repSetFranja('todo',this)">Todo el día</button>
             <button class="rep-chip" data-fr="manana" onclick="repSetFranja('manana',this)">Mañana 6–12</button>
             <button class="rep-chip" data-fr="tarde" onclick="repSetFranja('tarde',this)">Tarde 12–18</button>
@@ -7096,7 +7169,7 @@ initMobileShell();
             </span>
           </div>
           <div class="rep-row">
-            <button class="btn btn-secondary btn-sm" onclick="repToggleAdv()">⚙️ Más filtros (fechas exactas · cliente · producto)</button>
+            <button class="btn btn-secondary btn-sm" onclick="repToggleAdv()">Más filtros (fechas exactas · cliente · producto)</button>
             <button class="btn btn-secondary btn-sm" onclick="repLimpiar()">Limpiar</button>
           </div>
           <div id="rep-adv" class="rep-adv" hidden style="border-top:1px solid var(--border);padding-top:10px">
@@ -7106,7 +7179,7 @@ initMobileShell();
               <div class="form-group"><label>Cliente</label><input id="rep-cliente" placeholder="Ej: Juan, María, Ocasional" onkeydown="if(event.key==='Enter')generarReportes()"></div>
               <div class="form-group"><label>Producto</label><input id="rep-producto" placeholder="Ej: coca 1,5 / brahma lata" onkeydown="if(event.key==='Enter')generarReportes()"></div>
             </div>
-            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="generarReportes()">🔎 Aplicar filtros</button>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="generarReportes()">Aplicar filtros</button>
           </div>
         </div>
       </div>
@@ -7137,7 +7210,7 @@ initMobileShell();
         if(!ts) return '--';
         return new Date(ts).toLocaleString('es-PY',{timeZone:'America/Asuncion',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
       };
-      sel.innerHTML=`<option value="">📋 Seleccionar turno...</option>`+
+      sel.innerHTML=`<option value="">Seleccionar turno...</option>`+
         cajas.map(c=>{
           const estado=c.estado==='abierta'?'🟢':'🔴';
           const nombre=c.nombre_turno?` · ${c.nombre_turno}`:'';
@@ -7181,7 +7254,7 @@ initMobileShell();
       const gastosTotal=gastos.reduce((s,g)=>s+(Number(g.monto)||0),0);
       document.getElementById('rep-stats').innerHTML=`
         <div class="stat-card"><div class="label">Total vendido${totalDelivery?' (sin delivery)':''}</div><div class="value" style="color:var(--green)">${repMoney(totalVentas-totalDelivery)}</div><div class="sub">${ventasFiltradas.length} ventas</div></div>
-        ${totalDelivery?`<div class="stat-card"><div class="label">🛵 Delivery cobrado</div><div class="value" style="color:var(--accent)">${repMoney(totalDelivery)}</div><div class="sub">${dets.length} pedido${dets.length===1?'':'s'} online · entra a la caja</div></div>`:''}
+        ${totalDelivery?`<div class="stat-card"><div class="label">Delivery cobrado</div><div class="value" style="color:var(--accent)">${repMoney(totalDelivery)}</div><div class="sub">${dets.length} pedido${dets.length===1?'':'s'} online · entra a la caja</div></div>`:''}
         <div class="stat-card"><div class="label">Total cobrado</div><div class="value" style="color:var(--accent2)">${repMoney(totalCobrado)}</div><div class="sub">Fiado: ${repMoney(productoQ ? totalVentas-totalCobrado : totalFiado)}${totalRetiro?` · Retiros: ${repMoney(totalRetiro)}`:''}</div></div>
         <div class="stat-card"><div class="label">Productos vendidos</div><div class="value" style="color:var(--teal)">${repNum(cantProductos-dets.reduce((s,d)=>s+(Number(d.cantidad)||0),0))}</div><div class="sub">unidades filtradas</div></div>
         <div class="stat-card"><div class="label">Margen estimado</div><div class="value" style="color:${margen.gan>=0?'var(--green)':'var(--red)'}">${margen.pct.toFixed(1)}%</div><div class="sub">${repMoney(margen.gan)}</div></div>
@@ -7299,7 +7372,7 @@ initMobileShell();
     const a=document.createElement('a');
     a.onclick=()=>goTo('clientes');
     a.id='nav-clientes';
-    a.innerHTML='<span class="ico">👤</span> Clientes / Deudas';
+    a.innerHTML='<span class="ico"><i class="bg-ico bg-ico-user"></i></span> Clientes / Deudas';
     const ref=document.getElementById('nav-historial-ventas') || document.getElementById('nav-ventas');
     if(ref && ref.nextSibling) nav.insertBefore(a, ref.nextSibling); else nav.appendChild(a);
   }
@@ -7547,14 +7620,14 @@ initMobileShell();
     gs('content').innerHTML=`
     <div class="search-bar">
       <div class="scan-row" style="flex:1">
-        <input id="prod-search-input" placeholder="🔍 Buscar aproximado: coca 1,5 / miller lata / 784..." value="${h(prodSearch||'')}" oninput="bgProductosSearchInput(this.value)" autocomplete="off">
-        <button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">📷 Cámara</button>
+        <input id="prod-search-input" placeholder="Buscar aproximado: coca 1,5 / miller lata / 784..." value="${h(prodSearch||'')}" oninput="bgProductosSearchInput(this.value)" autocomplete="off">
+        <button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner('productos')">Cámara</button>
       </div>
       <select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:200px">
         <option value="">Todas las categorías</option>
         ${catCache.map(c=>`<option value="${c.id}" ${prodCatFilter===c.id?'selected':''}>${h(c.nombre)}</option>`).join('')}
       </select>
-      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ CARGAR PRODUCTO</button>
+      <button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ CARGAR PRODUCTO</button>
     </div>
     <div class="card productos-card">
       <div class="card-header"><h3>Productos (${count||0})</h3><span class="badge">La búsqueda espera un instante antes de refrescar</span></div>
@@ -7741,7 +7814,7 @@ initMobileShell();
           <h3>Historial de ventas</h3>
           <span class="badge" id="hv-count">${count||0} ventas totales · pág ${page}/${totalPags||1}</span>
           <span class="badge" id="ventas-sel-count">Ninguna seleccionada</span>
-          <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">🗑 Borrar seleccionadas</button>
+          <button class="btn btn-danger btn-sm" onclick="borrarVentasSeleccionadas()">Borrar seleccionadas</button>
         </div>
         <div class="hist-table-wrap" style="overflow-x:auto" id="hv-tabla-wrap">
           ${histVentasTabla(data||[])}
@@ -7799,28 +7872,28 @@ initMobileShell();
             if(mp==='parcial'){
               const diff=Number(v.total_final)-ef;
               return '<div style="line-height:1.6">'
-                +'<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span><br>'
-                +'<span style="color:var(--amber)">📋 Fiado: '+fmtGs(diff)+'</span>'
+                +'<span style="color:var(--green)">Efec. '+fmtGs(ef)+'</span><br>'
+                +'<span style="color:var(--amber)">Fiado: '+fmtGs(diff)+'</span>'
                 +'</div>';
             }
             if(mp==='mixto'){
               let parts=[];
-              if(ef>0) parts.push('<span style="color:var(--green)">💵 '+fmtGs(ef)+'</span>');
-              if(tr>0) parts.push('<span style="color:var(--accent)">🏦 '+fmtGs(tr)+'</span>');
-              if(ot>0) parts.push('<span style="color:var(--accent2)">💳 '+fmtGs(ot)+'</span>');
+              if(ef>0) parts.push('<span style="color:var(--green)">Efec. '+fmtGs(ef)+'</span>');
+              if(tr>0) parts.push('<span style="color:var(--accent)">Transf. '+fmtGs(tr)+'</span>');
+              if(ot>0) parts.push('<span style="color:var(--accent2)">Otros '+fmtGs(ot)+'</span>');
               return '<div style="line-height:1.6">'+(parts.length?parts.join('<br>'):'<span style="color:var(--text2)">Mixto</span>')+'</div>';
             }
-            if(mp==='efectivo') return '<span style="color:var(--green)">💵 '+fmtGs(v.total_final)+'</span>';
-            if(mp==='transferencia') return '<span style="color:var(--accent)">🏦 '+fmtGs(v.total_final)+'</span>';
-            if(mp==='qr') return '<span style="color:var(--accent2)">📱 QR '+fmtGs(v.total_final)+'</span>';
-            if(mp==='debito') return '<span style="color:var(--accent)">💳 Déb. '+fmtGs(v.total_final)+'</span>';
-            if(mp==='credito') return '<span style="color:var(--amber)">💳 Créd. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='efectivo') return '<span style="color:var(--green)">Efec. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='transferencia') return '<span style="color:var(--accent)">Transf. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='qr') return '<span style="color:var(--accent2)">QR '+fmtGs(v.total_final)+'</span>';
+            if(mp==='debito') return '<span style="color:var(--accent)">Déb. '+fmtGs(v.total_final)+'</span>';
+            if(mp==='credito') return '<span style="color:var(--amber)">Créd. '+fmtGs(v.total_final)+'</span>';
             return h(v.metodo_pago||'-');
           })()}
         </td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verVenta('${v.id}')">Ver</button>
-          <button class="btn btn-primary btn-sm" onclick="bgReimprimirTicket('${v.id}')">🧾 Ticket</button>
+          <button class="btn btn-primary btn-sm" onclick="bgReimprimirTicket('${v.id}')">Ticket</button>
           <button class="btn btn-secondary btn-sm" onclick="bgEnviarTicketWhatsApp('${v.id}')">WhatsApp</button>
           <button class="btn btn-secondary btn-sm" onclick="editarVenta('${v.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="borrarVenta('${v.id}')">Borrar</button>
@@ -8158,7 +8231,7 @@ function compraEditBanner(compra){
     </div>
   `);
   const btn = document.querySelector('button[onclick="finalizarCompra()"]');
-  if(btn) btn.textContent = '💾 Guardar cambios de compra';
+  if(btn) btn.textContent = 'Guardar cambios de compra';
 }
 
 window.cancelarEdicionCompraReal = async function(){
@@ -9118,16 +9191,16 @@ async function revertirStockCompraReal(compraId, detalles){
             const total = Number(v.total_final)||0;
             const iconColor = (ico,col,lbl,monto) =>
               `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                <span style="color:var(--text2);font-size:13px">${ico} ${lbl}</span>
+                <span style="color:var(--text2);font-size:13px">${lbl}</span>
                 <span style="font-weight:700;font-size:14px;color:${col}">${fmtGs(monto)}</span>
               </div>`;
             if(mp==='fiado')
-              return iconColor('📋','var(--amber)','Fiado',total);
+              return iconColor('','var(--amber)','Fiado',total);
             if(mp==='mixto'){
               let rows='<div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:700">PAGO MIXTO</div>';
-              if(ef>0) rows+=iconColor('💵','var(--green)','Efectivo',ef);
-              if(tr>0) rows+=iconColor('🏦','var(--accent)','Transferencia',tr);
-              if(ot>0) rows+=iconColor('💳','var(--accent2)','Otro (QR/Déb./Créd.)',ot);
+              if(ef>0) rows+=iconColor('','var(--green)','Efectivo',ef);
+              if(tr>0) rows+=iconColor('','var(--accent)','Transferencia',tr);
+              if(ot>0) rows+=iconColor('','var(--accent2)','Otro (QR/Déb./Créd.)',ot);
               rows+=`<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:900">
                 <span style="font-size:13px">TOTAL</span>
                 <span style="color:var(--green);font-size:15px">${fmtGs(total)}</span>
@@ -9136,10 +9209,10 @@ async function revertirStockCompraReal(compraId, detalles){
             }
             if(mp==='parcial'){
               const fiadoDiff = total - ef;
-              let rows = iconColor('💵','var(--green)','Total venta',total);
-              rows += iconColor('🤝','var(--text2)','Recibido en efectivo',ef);
+              let rows = iconColor('','var(--green)','Total venta',total);
+              rows += iconColor('','var(--text2)','Recibido en efectivo',ef);
               rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                <span style="color:var(--amber);font-size:13px">📋 Fiado (resta)</span>
+                <span style="color:var(--amber);font-size:13px">Fiado (resta)</span>
                 <span style="font-weight:700;font-size:14px;color:var(--amber)">${fmtGs(fiadoDiff)}</span>
               </div>`;
               return rows;
@@ -9147,9 +9220,9 @@ async function revertirStockCompraReal(compraId, detalles){
             if(mp==='efectivo'){
               const recibido = ef > 0 ? ef : total;
               const diff = recibido - total;
-              let rows = iconColor('💵','var(--green)','Total venta',total);
+              let rows = iconColor('','var(--green)','Total venta',total);
               if(ef > 0 && Math.abs(diff) > 0){
-                rows += iconColor('🤝','var(--text2)','Recibido',recibido);
+                rows += iconColor('','var(--text2)','Recibido',recibido);
                 if(diff > 0){
                   // Pagó de más → devolver vuelto
                   rows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
@@ -9166,11 +9239,11 @@ async function revertirStockCompraReal(compraId, detalles){
               }
               return rows;
             }
-            if(mp==='transferencia') return iconColor('🏦','var(--accent)','Transferencia',total);
-            if(mp==='qr')            return iconColor('📱','var(--accent2)','QR',total);
-            if(mp==='debito')        return iconColor('💳','var(--accent)','Débito',total);
-            if(mp==='credito')       return iconColor('💳','var(--amber)','Crédito',total);
-            return iconColor('💰','var(--text)',v.metodo_pago||'-',total);
+            if(mp==='transferencia') return iconColor('','var(--accent)','Transferencia',total);
+            if(mp==='qr')            return iconColor('','var(--accent2)','QR',total);
+            if(mp==='debito')        return iconColor('','var(--accent)','Débito',total);
+            if(mp==='credito')       return iconColor('','var(--amber)','Crédito',total);
+            return iconColor('','var(--text)',v.metodo_pago||'-',total);
           })()}
           </div>
         </div>
@@ -9405,7 +9478,7 @@ async function revertirStockCompraReal(compraId, detalles){
 
     const ventaId    = data.venta_id || null;
     const numVenta   = data.numero_venta || null;
-    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · 📴 pendiente de envío' : '');
+    const nTag = numVenta ? ` · N° <b>${numVenta}</b>` : (data.offline ? ' · pendiente de envío' : '');
     const esFaltanteRegistrado = selectedPay==='efectivo' && importe>0 && importe<totalFinal;
     toast(__esRetiro
       ? `✓ Retiro registrado (sin cobro): ${fmtGs(totalFinal)}${nTag}`
@@ -9966,8 +10039,8 @@ async function revertirStockCompraReal(compraId, detalles){
     return 'Nueva compra';
   }
   function iconoTab(tab){
-    if(tab === 'historial') return '⏱';
-    if(tab === 'proveedores') return '🏢';
+    if(tab === 'historial') return '';
+    if(tab === 'proveedores') return '';
     return '＋';
   }
 
@@ -10113,32 +10186,32 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🛒</div>
+          <button onclick="goTo('ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(var(--accent-rgb),.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-cart"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Nueva venta</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Registrar venta al mostrador</div>
           </button>
 
           <button onclick="goTo('caja')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 0 0 3px rgba(34,197,94,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">💰</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-cash"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Caja / Arqueo</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Abrir, cerrar y revisar caja</div>
           </button>
 
           <button onclick="goTo('historial-ventas')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--teal)';this.style.boxShadow='0 0 0 3px rgba(20,184,166,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📋</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-list"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Historial ventas</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y gestionar ventas anteriores</div>
           </button>
 
           <button onclick="goTo('clientes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--purple)';this.style.boxShadow='0 0 0 3px rgba(168,85,247,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">👥</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-users"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Clientes / Deudas</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Fiados y gestión de clientes</div>
           </button>
 
           <button onclick="goTo('reportes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,158,11,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📊</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-chart"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Reportes</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Estadísticas y análisis</div>
           </button>
@@ -10187,26 +10260,26 @@ async function revertirStockCompraReal(compraId, detalles){
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
 
-          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(239,106,36,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">📦</div>
+          <button onclick="goTo('productos-lista')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(var(--accent-rgb),.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-box"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Productos</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Ver y editar el catálogo</div>
           </button>
 
           <button onclick="goTo('categorias')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--teal)';this.style.boxShadow='0 0 0 3px rgba(20,184,166,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🏷</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-tag"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Categorías</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Organizar por categoría</div>
           </button>
 
           <button onclick="goTo('ajustes')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,158,11,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">⚖️</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-tag"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Ajuste de stock</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Corregir cantidades</div>
           </button>
 
           <button onclick="goTo('inventario')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 0 0 3px rgba(34,197,94,.15)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-            <div style="font-size:28px;margin-bottom:10px">🧾</div>
+            <div style="font-size:28px;margin-bottom:10px"><i class="bg-ico bg-ico-list"></i></div>
             <div style="font-size:15px;font-weight:800;color:var(--text)">Inventario</div>
             <div style="font-size:12px;color:var(--text2);margin-top:4px">Conteo físico de stock</div>
           </button>
@@ -10261,7 +10334,7 @@ async function revertirStockCompraReal(compraId, detalles){
   justify-content:space-between;
   gap:16px;
   background:
-    radial-gradient(circle at top left, rgba(239,106,36,.14), transparent 34%),
+    radial-gradient(circle at top left, rgba(var(--accent-rgb),.14), transparent 34%),
     var(--bg2);
 }
 .compras-module-head h3{
@@ -10311,7 +10384,7 @@ async function revertirStockCompraReal(compraId, detalles){
   color:#fff;
   background:var(--accent);
   border-color:var(--accent);
-  box-shadow:0 4px 16px rgba(239,106,36,.28);
+  box-shadow:0 4px 16px rgba(var(--accent-rgb),.28);
 }
 #compras-tab-content > .card:first-child{ margin-top:0; }
 @media(max-width:900px){
@@ -10433,7 +10506,7 @@ async function revertirStockCompraReal(compraId, detalles){
     color: #fff !important;
   }
   #sidebar nav a.active {
-    background: rgba(239,106,36,.25) !important;
+    background: rgba(var(--accent-rgb),.25) !important;
     color: #fff !important;
     font-weight: 600 !important;
   }
@@ -10578,7 +10651,7 @@ async function revertirStockCompraReal(compraId, detalles){
     position: relative !important;
   }
   .hist-table-wrap tbody tr:hover {
-    background: rgba(239,106,36,.07) !important;
+    background: rgba(var(--accent-rgb),.07) !important;
   }
   .hist-table-wrap tbody td {
     padding: 3px 0 !important;
@@ -10772,9 +10845,9 @@ async function revertirStockCompraReal(compraId, detalles){
     base.forEach(function(p){var m=metric(p); totalCosto+=m.costo*m.stock; totalVenta+=m.venta*m.stock; if(m.ganancia<0)neg++; if(m.ganancia>=0&&m.margen!==null&&m.margen<10)bajo++;});
     gs('content').innerHTML=''
       +'<div class="prod-excel-toolbar">'
-      +'<div class="scan-row" style="flex:1;min-width:260px"><input id="prod-search-input" placeholder="🔍 Buscar producto, código o categoría..." value="'+h(prodSearch||'')+'" oninput="bgProductosSearchInput(this.value)" autocomplete="off"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner(\'productos\')">📷 Cámara</button></div>'
+      +'<div class="scan-row" style="flex:1;min-width:260px"><input id="prod-search-input" placeholder="Buscar producto, código o categoría..." value="'+h(prodSearch||'')+'" oninput="bgProductosSearchInput(this.value)" autocomplete="off"><button id="btn-scan-productos" class="btn btn-secondary btn-sm scan-btn" onclick="openBarcodeScanner(\'productos\')">Cámara</button></div>'
       +'<select onchange="prodCatFilter=this.value;prodPage=1;renderProductos()" style="width:220px"><option value="">Todas las categorías</option>'+catCache.map(function(c){return '<option value="'+c.id+'" '+(prodCatFilter===c.id?'selected':'')+'>'+h(c.nombre)+'</option>';}).join('')+'</select>'
-      +'<button class="btn btn-primary product-new-btn" onclick="openProdModal()">➕ Cargar producto</button>'
+      +'<button class="btn btn-primary product-new-btn" onclick="openProdModal()">+ Cargar producto</button>'
       +'</div>'
       +'<div class="prod-excel-filters">'+chip('todos','Todos',counts.todos)+chip('sin_stock','Sin stock',counts.sin_stock)+chip('stock_bajo','Stock bajo',counts.stock_bajo)+chip('margen_bajo','Margen bajo',counts.margen_bajo)+chip('margen_negativo','Margen negativo',counts.margen_negativo)+'</div>'
       +'<div class="prod-excel-summary"><div class="prod-mini-stat"><b>'+count+'</b><span>Productos visibles</span></div><div class="prod-mini-stat"><b>'+fmtMoney(totalCosto)+'</b><span>Costo del stock</span></div><div class="prod-mini-stat"><b>'+fmtMoney(totalVenta)+'</b><span>Venta estimada</span></div><div class="prod-mini-stat"><b>'+neg+' / '+bajo+'</b><span>Negativo / bajo</span></div></div>'
@@ -10821,7 +10894,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu a:hover,
   #sidebar nav#macos-main-menu button.mac-menu-trigger:hover,
   #sidebar nav#macos-main-menu .mac-menu-group.open > button.mac-menu-trigger{background:rgba(255,255,255,.12)!important;color:#fff!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;font-weight:650!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.28)!important;color:#fff!important;font-weight:650!important;}
   #sidebar nav#macos-main-menu .ico,
   #sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-caret{font-size:9px!important;opacity:.72!important;margin-left:1px!important;}
@@ -10833,7 +10906,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu .mac-menu-group.open > .mac-submenu,
   #sidebar nav#macos-main-menu .mac-menu-group:hover > .mac-submenu{display:block!important;}
   #sidebar nav#macos-main-menu .mac-submenu a{height:30px!important;margin:0!important;width:100%!important;justify-content:flex-start!important;padding:0 12px!important;border-radius:7px!important;color:rgba(255,255,255,.82)!important;font-size:12.5px!important;}
-  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(239,106,36,.22)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu .mac-submenu a:hover{background:rgba(var(--accent-rgb),.22)!important;color:#fff!important;}
   #sidebar .cfg-btn{height:30px!important;min-height:30px!important;padding:0 10px!important;border-top:none!important;border-left:1px solid rgba(255,255,255,.1)!important;margin-left:6px!important;display:flex!important;align-items:center!important;color:rgba(255,255,255,.45)!important;background:transparent!important;flex-shrink:0!important;}
   #sidebar .cfg-btn svg{width:11px!important;height:11px!important;}
   #sidebar .cfg-btn span{opacity:1!important;font-size:11px!important;}
@@ -10853,7 +10926,7 @@ async function revertirStockCompraReal(compraId, detalles){
   #sidebar nav#macos-main-menu::-webkit-scrollbar{display:none!important;}
   #sidebar nav#macos-main-menu .mac-menu-group{position:relative!important;display:inline-flex!important;flex-shrink:0!important;}
   #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{height:30px!important;min-height:30px!important;padding:0 11px!important;border:0!important;border-radius:8px!important;background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.86)!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important;display:inline-flex!important;align-items:center!important;gap:4px!important;}
-  #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.3)!important;color:#fff!important;}
+  #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.3)!important;color:#fff!important;}
   #sidebar nav#macos-main-menu .ico,#sidebar nav#macos-main-menu svg{display:none!important;}
   #sidebar nav#macos-main-menu .mac-submenu{display:none!important;position:fixed!important;top:74px!important;left:8px!important;right:8px!important;padding:8px!important;background:rgba(28,31,45,.99)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:12px!important;box-shadow:0 16px 40px rgba(0,0,0,.6)!important;z-index:9999!important;}
   #sidebar nav#macos-main-menu .mac-menu-group.open>.mac-submenu{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;}
@@ -11031,7 +11104,7 @@ async function revertirStockCompraReal(compraId, detalles){
     #sidebar nav#macos-main-menu{height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important;padding:12px!important;margin:0!important;overflow:visible!important;white-space:normal!important;flex:0 0 auto!important;}
     #sidebar nav#macos-main-menu .mac-menu-group{width:100%!important;height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;position:relative!important;}
     #sidebar nav#macos-main-menu a,#sidebar nav#macos-main-menu button.mac-menu-trigger{width:100%!important;height:46px!important;min-height:46px!important;padding:0 14px!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:13px!important;background:rgba(255,255,255,.055)!important;color:rgba(255,255,255,.9)!important;font-size:15px!important;font-weight:750!important;text-decoration:none!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;margin:0!important;box-shadow:none!important;}
-    #sidebar nav#macos-main-menu a.active{background:rgba(239,106,36,.28)!important;color:#fff!important;border-color:rgba(239,106,36,.42)!important;}
+    #sidebar nav#macos-main-menu a.active{background:rgba(var(--accent-rgb),.28)!important;color:#fff!important;border-color:rgba(var(--accent-rgb),.42)!important;}
     #sidebar nav#macos-main-menu .mac-caret{font-size:11px!important;margin-left:auto!important;opacity:.75!important;}
     #sidebar nav#macos-main-menu .mac-submenu{position:static!important;display:none!important;min-width:0!important;width:100%!important;top:auto!important;left:auto!important;right:auto!important;padding:6px 0 2px 12px!important;margin:0!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;}
     #sidebar nav#macos-main-menu .mac-menu-group:hover>.mac-submenu{display:none!important;}
@@ -11064,7 +11137,7 @@ async function revertirStockCompraReal(compraId, detalles){
   function isMobile(){return window.matchMedia && window.matchMedia('(max-width:900px)').matches;}
   function pageTitle(){var active=document.querySelector('#macos-main-menu a.active');if(active&&active.textContent)return active.textContent.trim();var h=document.querySelector('#topbar h2');if(h&&h.textContent)return h.textContent.trim();return 'Sistema de gestión';}
   function ensureShell(){
-    if(!document.getElementById('bg-mobile-topbar')){var bar=document.createElement('div');bar.id='bg-mobile-topbar';bar.innerHTML='<button id="bg-mobile-menu-btn" type="button" aria-label="Abrir menú">☰</button><div id="bg-mobile-title"><strong>Bodega Guaripola</strong><span id="bg-mobile-current">Sistema de gestión</span></div><div id="bg-mobile-status">●</div>';document.body.appendChild(bar);}
+    if(!document.getElementById('bg-mobile-topbar')){var bar=document.createElement('div');bar.id='bg-mobile-topbar';bar.innerHTML='<button id="bg-mobile-menu-btn" type="button" aria-label="Abrir menú">☰</button><div id="bg-mobile-title"><strong>'+bgMarcaNombre()+'</strong><span id="bg-mobile-current">Sistema de gestión</span></div><div id="bg-mobile-status">●</div>';document.body.appendChild(bar);}
     if(!document.getElementById('bg-mobile-overlay')){var ov=document.createElement('div');ov.id='bg-mobile-overlay';document.body.appendChild(ov);}
     var btn=document.getElementById('bg-mobile-menu-btn');if(btn&&!btn.__bgMobileOk){btn.__bgMobileOk=true;btn.addEventListener('click',function(e){e.preventDefault();document.body.classList.toggle('bg-mobile-drawer-open');});}
     var ovl=document.getElementById('bg-mobile-overlay');if(ovl&&!ovl.__bgMobileOk){ovl.__bgMobileOk=true;ovl.addEventListener('click',function(){document.body.classList.remove('bg-mobile-drawer-open');});}
@@ -11206,13 +11279,13 @@ small,
 [class*="sub"],
 [class*="meta"]{
   font-weight:900 !important;
-  color:#d2daf4 !important;
+  color:var(--text3) !important;
 }
 .detalle-legible b,
 .compra-item-sub b,
 .product-meta-readable b{
   font-weight:950 !important;
-  color:#fff !important;
+  color:var(--text) !important;
 }
 @media(max-width:1100px){
   .compra-order-meta .form-grid{
@@ -11354,10 +11427,10 @@ small,
 .compra-total-visible-row .detalle-legible{
   font-size:12.6px !important;
   font-weight:900 !important;
-  color:#d2daf4 !important;
+  color:var(--text3) !important;
 }
 .compra-total-visible-row .detalle-legible b{
-  color:#fff !important;
+  color:var(--text) !important;
   font-weight:950 !important;
 }
 .compra-total-wrap input{
@@ -11718,7 +11791,7 @@ small,
 #content:has([id*="inventario"]) .badge,
 #content:has([id*="inventario"]) label,
 #content:has([id*="inventario"]) .form-group label {
-  color: #d2daf4 !important;
+  color:var(--text3) !important;
   font-weight: 900 !important;
   letter-spacing: .08px !important;
 }
@@ -11741,7 +11814,7 @@ small,
 #content:has([id*="inventario"]) .sub strong,
 #content:has([id*="inventario"]) .meta strong,
 #content:has([id*="inventario"]) .detalle strong {
-  color: #ffffff !important;
+  color:var(--text) !important;
   font-weight: 950 !important;
 }
 
@@ -11762,7 +11835,7 @@ small,
 #content:has([id*="inventario"]) .product-meta-readable,
 #content:has([id*="inventario"]) .detalle-legible,
 #content:has([id*="inventario"]) .compra-item-sub {
-  color: #d2daf4 !important;
+  color:var(--text3) !important;
   font-weight: 900 !important;
 }
 
@@ -11798,7 +11871,7 @@ small,
 #content:has([id*="inventario"]) .stock-value,
 #content:has([id*="inventario"]) .stock-real,
 #content:has([id*="inventario"]) .inventario-stock {
-  color: #ffffff !important;
+  color:var(--text) !important;
   font-weight: 950 !important;
   text-shadow: 0 0 10px rgba(255,255,255,.08);
 }
@@ -11806,7 +11879,7 @@ small,
 /* Si el stock aparece dentro de badges, que sea una etiqueta clara y no azul */
 #content:has([id*="inventario"]) .badge,
 #content:has([id*="inventario"]) [class*="badge"] {
-  color: #ffffff !important;
+  color:var(--text) !important;
   font-weight: 950 !important;
   background: rgba(255,255,255,.08) !important;
   border: 1px solid rgba(255,255,255,.16) !important;
@@ -11826,7 +11899,7 @@ small,
 #content:has([id*="inventario"]) .detalle,
 #content:has([id*="inventario"]) [style*="font-size:11px"],
 #content:has([id*="inventario"]) [style*="font-size:12px"] {
-  color: #d7def5 !important;
+  color:var(--text3) !important;
   font-weight: 900 !important;
 }
 
@@ -11856,7 +11929,7 @@ small,
 /* Corrige específicamente: Código · Stock: CANTIDAD */
 #content:has([id*="inventario"]) .inv-stock-cantidad,
 #content:has([id*="inventario"]) b.inv-stock-cantidad{
-  color:#ffffff !important;
+  color:var(--text) !important;
   font-weight:950 !important;
   background:rgba(255,255,255,.10) !important;
   border:1px solid rgba(255,255,255,.18) !important;
@@ -11870,7 +11943,7 @@ small,
 
 /* Por si queda algún Stock con color accent2 sin clase */
 #content:has([id*="inventario"]) [style*="color:var(--accent2)"]{
-  color:#ffffff !important;
+  color:var(--text) !important;
   font-weight:950 !important;
 }
 
@@ -11905,7 +11978,7 @@ small,
   font-size: 12px !important;
   line-height: 1.35 !important;
   font-weight: 850 !important;
-  color: #d4dcf5 !important;
+  color:var(--text3) !important;
 }
 
 /* Monto principal más claro y sin empujar los datos secundarios */
@@ -11949,7 +12022,7 @@ small,
   font-size: 12.5px !important;
   line-height: 1.35 !important;
   font-weight: 900 !important;
-  color: #d7def5 !important;
+  color:var(--text3) !important;
   letter-spacing: .1px !important;
 }
 
@@ -11958,7 +12031,7 @@ small,
 #content .dashboard-grid .card:last-child b,
 #content .stats-grid .card:last-child b,
 #content .kpi-grid .card:last-child b {
-  color: #ffffff !important;
+  color:var(--text) !important;
   font-weight: 950 !important;
 }
 
@@ -12035,13 +12108,13 @@ small,
   min-width:0 !important;
 }
 #bg-stock-dashboard-card .bg-stock-extra-row span{
-  color:#b7c0da !important;
+  color:var(--text3) !important;
   font-size:11px !important;
   font-weight:950 !important;
   letter-spacing:.25px !important;
 }
 #bg-stock-dashboard-card .bg-stock-extra-row strong{
-  color:#ffffff !important;
+  color:var(--text) !important;
   font-size:13px !important;
   font-weight:950 !important;
   white-space:nowrap !important;
@@ -12277,10 +12350,10 @@ small,
       '<div class="compra-main-layout" style="display:grid;grid-template-columns:1fr 360px;gap:16px;height:calc(100vh - 132px)">'+
         '<div id="prod-picker" class="compra-picker-card" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden">'+
           '<div class="compra-search-head" style="padding:12px;border-bottom:1px solid var(--border)">'+
-            '<div style="font-size:14px;font-weight:700;margin-bottom:10px">🚛 Agregar productos</div>'+
+            '<div style="font-size:14px;font-weight:700;margin-bottom:10px">Agregar productos</div>'+
             '<div class="compra-search-grid" style="display:grid;grid-template-columns:1fr 80px;gap:8px">'+
               '<div class="autocomplete-wrap">'+
-                '<input id="cp-search" placeholder="🔍 Buscar producto o escanear código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">'+
+                '<input id="cp-search" placeholder="Buscar producto o escanear código..." oninput="onCPSearch(this.value)" onkeydown="onCPKeydown(event)" autocomplete="off">'+
                 '<div class="autocomplete-list" id="cp-ac-list" style="display:none"></div>'+
               '</div>'+
               '<input id="cp-qty" type="number" value="1" min="1" placeholder="Cant." style="text-align:center">'+
@@ -12296,7 +12369,7 @@ small,
               '<div class="form-group"><label>Fecha</label><input id="comp-fecha" type="date" value="'+fechaHoyPY()+'"></div>'+
               '<div class="form-group"><label>N° Factura</label><input id="comp-factura" placeholder="001-001-0000001"></div>'+
               '<div class="form-group"><label>Método pago</label><select id="comp-metpago"><option>efectivo</option><option>transferencia</option><option>crédito</option><option>cheque</option></select></div>'+
-              '<div class="form-group"><label>Estado</label><select id="comp-estado"><option value="en_proceso">🕐 En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
+              '<div class="form-group"><label>Estado</label><select id="comp-estado"><option value="en_proceso">En proceso (no impacta stock)</option><option value="finalizado">✅ Finalizado (impacta stock ahora)</option></select></div>'+
             '</div>'+
           '</div>'+
           '<div style="flex:1;overflow-y:auto" id="ccomp-items"></div>'+
@@ -12315,7 +12388,7 @@ small,
     var list=gs('compra-prod-list'); if(!list)return;
     q=String(q||'').trim();
     if(!q){
-      list.innerHTML='<div class="compra-empty-search"><span class="ico">🔎</span><b>Buscá para mostrar productos</b><span>Para que en móvil no se cargue una lista gigante, los productos aparecen recién al escribir nombre, código o código de embalaje.</span></div>';
+      list.innerHTML='<div class="compra-empty-search"><span class="ico"><i class="bg-ico bg-ico-search"></i></span><b>Buscá para mostrar productos</b><span>Para que en móvil no se cargue una lista gigante, los productos aparecen recién al escribir nombre, código o código de embalaje.</span></div>';
       return;
     }
     var results=(prodCache||[]).filter(function(p){
@@ -12324,7 +12397,7 @@ small,
       return ((embCache&&embCache[p.id])||[]).some(function(e){return embalajeMatches(e,q);});
     }).slice(0,40);
     if(!results.length){
-      list.innerHTML='<div class="compra-empty-search"><span class="ico">🙈</span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
+      list.innerHTML='<div class="compra-empty-search"><span class="ico"><i class="bg-ico bg-ico-search"></i></span><b>Sin resultados</b><span>No encontré productos para: '+window.safeHtml(q)+'</span></div>';
       return;
     }
     if(!ventaStatsLoaded){ventaStatsLoaded=true;loadVentaStats();}
@@ -12660,7 +12733,7 @@ window.diagnosticarStockCompras = async function(){
   const comprasSinStock = reporte.filter(r=>r.ajustes_stock===0);
   const comprasConStock = reporte.filter(r=>r.ajustes_stock>0);
 
-  openModal('🔍 Diagnóstico de stock — Compras del mes', `
+  openModal('Diagnóstico de stock — Compras del mes', `
     <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
       <div style="background:rgba(99,102,241,.1);border-radius:8px;padding:10px 14px;flex:1;min-width:130px">
         <div style="font-size:11px;color:var(--text2)">Compras finalizadas</div>
@@ -13211,7 +13284,7 @@ window.diagnosticarStockCompras = async function(){
   }
   window.bgDashMesDetalle = async function(ym){
     var r=mesRango(ym);
-    if(typeof openModal==='function') openModal('📅 Mes: '+mesTxt(ym),'<div id="bg-mes-det" style="min-width:280px"><div class="bg-chart-empty">Cargando...</div></div>');
+    if(typeof openModal==='function') openModal('Mes: '+mesTxt(ym),'<div id="bg-mes-det" style="min-width:280px"><div class="bg-chart-empty">Cargando...</div></div>');
     try{
       var compq=await sb.from('bodega_compras').select('fecha,total,estado,bodega_proveedores(nombre)').gte('fecha',r.start).lte('fecha',r.end).order('fecha',{ascending:false});
       var compras=compq.data||[];
@@ -13242,6 +13315,28 @@ window.diagnosticarStockCompras = async function(){
     }catch(e){ var b=document.getElementById('bg-mes-det'); if(b) b.innerHTML='<div class="bg-chart-empty">Error: '+esc(e.message||String(e))+'</div>'; }
   };
 
+  /* Ventas por día del mes: gráfico de área en SVG (usa las ventas ya cargadas) */
+  function lineaDias(ventas,rango){
+    var porDia={};
+    (ventas||[]).forEach(function(v){var d=String(v.fecha||v.created_at||'').slice(0,10);if(d.slice(0,7)!==rango.ym)return;porDia[d]=(porDia[d]||0)+n(v.total_final);});
+    var ult=parseInt(String(rango.end).slice(8,10),10)||30, hoy=new Date(), ymHoy=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
+    if(rango.ym===ymHoy) ult=Math.min(ult,hoy.getDate());
+    var pts=[];for(var d=1;d<=ult;d++){var k=rango.ym+'-'+String(d).padStart(2,'0');pts.push({d:d,v:porDia[k]||0});}
+    var max=Math.max.apply(null,pts.map(function(x){return x.v;}));
+    if(!pts.length||max<=0) return '<div class="bg-chart-empty">Sin ventas en este mes.</div>';
+    var W=720,H=190,L=10,R=10,T=14,B=24,iw=W-L-R,ih=H-T-B;
+    var X=function(i){return L+(pts.length>1?i*iw/(pts.length-1):iw/2);}, Y=function(v){return T+ih-(v/max)*ih;};
+    var linea=pts.map(function(x,i){return (i?'L':'M')+X(i).toFixed(1)+' '+Y(x.v).toFixed(1);}).join(' ');
+    var area=linea+' L'+X(pts.length-1).toFixed(1)+' '+(T+ih)+' L'+X(0).toFixed(1)+' '+(T+ih)+' Z';
+    var grid=[0,.5,1].map(function(f){var y=(T+ih-f*ih).toFixed(1);return '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--border)" stroke-width="1"/>';}).join('');
+    var mejor=pts.reduce(function(a,b){return b.v>a.v?b:a;});
+    var dots=pts.map(function(x,i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.v).toFixed(1)+'" r="'+(x===mejor?4:2.5)+'" fill="var(--accent)" stroke="var(--bg2)" stroke-width="1.5"><title>Día '+x.d+': '+money(x.v)+'</title></circle>';}).join('');
+    var marcas=pts.filter(function(x,i){return i===0||i===pts.length-1||x.d%5===0;}).map(function(x){return '<text x="'+X(x.d-1).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="var(--text2)">'+x.d+'</text>';}).join('');
+    var total=pts.reduce(function(a,x){return a+x.v;},0), conVenta=pts.filter(function(x){return x.v>0;}).length;
+    return '<div class="bg-dias-res"><span>Mejor día: <b>'+mejor.d+' · '+money(mejor.v)+'</b></span><span>Promedio por día con ventas: <b>'+money(conVenta?total/conVenta:0)+'</b></span></div>'+
+      '<svg class="bg-dias-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ventas por día del mes">'+grid+
+      '<path d="'+area+'" fill="rgba(var(--accent-rgb),.16)"/><path d="'+linea+'" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+dots+marcas+'</svg>';
+  }
   window.bgRenderDashboardArqueoCharts = async function(ym){
     var host=document.getElementById('bg-dash-chart-content');
     if(!host) return;
@@ -13272,6 +13367,7 @@ window.diagnosticarStockCompras = async function(){
           '<div><span>Cantidad ventas</span><b>'+cant.toLocaleString('es-PY')+'</b></div>'+
           '<div><span>Ticket promedio</span><b>'+money(ticket)+'</b></div>'+
         '</div>'+
+        '<div class="bg-dash-graph-card bg-dias-card"><div class="bg-graph-title"><b>Ventas por día</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+lineaDias(ventas,rango)+'</div>'+
         '<div class="bg-dash-graph-grid">'+
           '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por arqueo / jornada</b><span>'+esc(mesTxt(rango.ym))+'</span></div>'+bars(arqueos,false)+'</div>'+
           '<div class="bg-dash-graph-card"><div class="bg-graph-title"><b>Ventas por mes</b><span>Últimos 12 meses · tocá un mes</span></div>'+barsMes(meses,comprasMap)+'</div>'+
@@ -13609,7 +13705,7 @@ if('serviceWorker' in navigator){
       var bar=document.createElement('div');
       bar.id='bg-update-bar';
       bar.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#1e40af;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 32px)';
-      bar.innerHTML='<span>🔄 Hay una nueva versión del sistema</span><button style="background:#fff;color:#1e40af;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer">Actualizar</button>';
+      bar.innerHTML='<span>Hay una nueva versión del sistema</span><button style="background:#fff;color:#1e40af;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer">Actualizar</button>';
       bar.querySelector('button').onclick=function(){ location.reload(); };
       document.body.appendChild(bar);
     });
@@ -13748,7 +13844,7 @@ if('serviceWorker' in navigator){
     return '<!doctype html><html><head><meta charset="utf-8"><title>Ticket '+esc(t.numero_venta||'')+'</title>'+
       '<style>@page{size:'+width+' auto;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,monospace;font-size:12px}.ticket{width:'+width+';max-width:100%;padding:8px 9px}.center{text-align:center}.biz{font-weight:800;font-size:16px;letter-spacing:.3px}.muted{color:#555}.sep{border-top:1px dashed #111;margin:7px 0}.line{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.line b{text-align:right}table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:3px 0}.prod{width:70%}.prod span{font-size:11px;color:#555}.num{text-align:right;font-weight:700;white-space:nowrap}.total{font-size:16px;font-weight:900}.foot{font-size:11px;line-height:1.35}@media print{body{width:'+width+'}.no-print{display:none!important}}</style>'+
       '</head><body><div class="ticket">'+
-      '<div class="center"><div class="biz">BODEGA GUARIPOLA</div><div>Ticket interno</div><div class="muted">No válido como factura legal</div></div><div class="sep"></div>'+
+      '<div class="center"><div class="biz">'+bgMarcaNombre().toUpperCase()+'</div><div class="muted">'+bgMarcaDatos()+'</div><div>Ticket interno</div><div class="muted">No válido como factura legal</div></div><div class="sep"></div>'+
       '<div class="line"><span>N°</span><b>'+(t.numero_venta ? '#'+esc(t.numero_venta) : '-')+'</b></div>'+
       '<div class="line"><span>Fecha</span><b>'+esc(dateFmt(t.fecha || t.fecha_simple))+'</b></div>'+
       '<div class="line"><span>Hora</span><b>'+esc(horaFmt(t.fecha))+'</b></div>'+
@@ -13842,7 +13938,7 @@ if('serviceWorker' in navigator){
       '<div style="display:flex;justify-content:space-between"><span>Método</span><b>'+esc(modalTicketActual.metodo_pago||'-')+'</b></div>'+ 
       '</div></div>'+ 
       '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
-      '<button class="btn btn-primary" onclick="bgTicketModalPrint()">🧾 Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
+      '<button class="btn btn-primary" onclick="bgTicketModalPrint()">Imprimir ticket <span style="opacity:.8">Enter</span></button>'+ 
       '<button class="btn btn-secondary" onclick="bgCerrarTicketModal()">Cerrar sin imprimir <span style="opacity:.8">Esc</span></button>'+ 
       '</div>'+
       '<div style="margin-top:10px;text-align:center;font-size:12px;color:var(--text2)">'+
@@ -13959,7 +14055,7 @@ if('serviceWorker' in navigator){
     if(document.getElementById('bg-install-btn')) return;
     var btn = document.createElement('button');
     btn.id = 'bg-install-btn';
-    btn.textContent = '📲 Instalar app';
+    btn.textContent = 'Instalar app';
     btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--accent,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.4)';
     btn.onclick = function(){
       if(!deferredPrompt) return;
@@ -14161,7 +14257,7 @@ if('serviceWorker' in navigator){
       finally{
         const ms=Math.round(performance.now()-t);
         console.log('[PERF] '+label+': '+ms+' ms');
-        try{ toast('⏱ '+label+': '+ms+' ms'); }catch(e){_swallow(e)}
+        try{ toast(''+label+': '+ms+' ms'); }catch(e){_swallow(e)}
       }
     };
   }
@@ -14192,16 +14288,16 @@ window.renderInicio = function(){
   cont.innerHTML=''+
     '<style>'+
       '.ini2{max-width:1120px;margin:0 auto;padding:4px 2px 18px}'+
-      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(239,106,36,.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
-      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(239,106,36,.13);border:1px solid rgba(255,255,255,.08)}'+
+      '.ini2-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at top left,rgba(var(--accent-rgb),.32),transparent 34%),linear-gradient(135deg,#171b29 0%,#10131d 58%,#0b0d13 100%);box-shadow:var(--shadow-md);padding:22px;margin-bottom:16px}'+
+      '.ini2-hero:after{content:"";position:absolute;right:-55px;top:-75px;width:220px;height:220px;border-radius:50%;background:rgba(var(--accent-rgb),.13);border:1px solid rgba(255,255,255,.08)}'+
       '.ini2-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#ffc099;font-weight:800;margin-bottom:6px}'+
       '.ini2-title{font-size:28px;font-weight:950;letter-spacing:-.8px;line-height:1.05;color:var(--text);position:relative;z-index:1}'+
       '.ini2-sub{font-size:13px;color:var(--text3);margin-top:8px;position:relative;z-index:1;max-width:650px}'+
       '.ini2-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px;position:relative;z-index:1}'+
       '.ini2-action{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);color:var(--text);border-radius:15px;padding:14px 12px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s,background .12s}'+
-      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(239,106,36,.14)}'+
+      '.ini2-action:hover{transform:translateY(-1px);border-color:var(--accent);background:rgba(var(--accent-rgb),.14)}'+
       '.ini2-action:active{transform:scale(.99)}'+
-      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(239,106,36,.18);font-size:18px;flex:0 0 auto}'+
+      '.ini2-action-ico{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(var(--accent-rgb),.18);font-size:18px;flex:0 0 auto}'+
       '.ini2-action b{display:block;font-size:13px;font-weight:900;color:var(--text)}'+
       '.ini2-action small{display:block;font-size:11px;color:var(--text2);margin-top:2px;line-height:1.2}'+
       '.ini2-green .ini2-action-ico{background:rgba(34,197,94,.16)}.ini2-amber .ini2-action-ico{background:rgba(245,158,11,.16)}'+
@@ -14211,31 +14307,31 @@ window.renderInicio = function(){
       '.ini2-panel-h span{font-size:11px;color:var(--text2);font-weight:700}'+
       '.ini2-list{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}'+
       '.ini2-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:14px;text-decoration:none;color:var(--text);cursor:pointer;min-height:72px}'+
-      '.ini2-row:hover{border-color:var(--accent);background:rgba(239,106,36,.08)}'+
+      '.ini2-row:hover{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}'+
       '.ini2-row b{font-size:13px}.ini2-row small{display:block;color:var(--text2);font-size:11px;margin-top:2px}.ini2-arrow{color:var(--text2);font-weight:900;font-size:18px}'+
       '@media(max-width:900px){.ini2{padding:0}.ini2-hero{border-radius:0 0 22px 22px;margin:-20px -20px 16px;padding:22px 20px}.ini2-title{font-size:24px}.ini2-actions{grid-template-columns:1fr 1fr}.ini2-list{grid-template-columns:1fr}.ini2-action{padding:13px 10px}.ini2-action small{display:none}}'+
       '@media(max-width:430px){.ini2-actions{grid-template-columns:1fr 1fr}.ini2-title{font-size:22px}}'+
     '</style>'+
     '<div class="ini2">'+
       '<section class="ini2-hero">'+
-        '<div class="ini2-kicker">Bodega Guaripola · '+fecha+'</div>'+
+        '<div class="ini2-kicker">'+bgMarcaNombre()+' · '+fecha+'</div>'+
         '<div class="ini2-title">Hola'+(nombre?', '+nombre:'')+' 👋<br>Panel de trabajo</div>'+
         '<div class="ini2-sub">Entrá rápido a vender, comprar, revisar caja o controlar stock. Esta pantalla está pensada para abrir el sistema y trabajar sin perder tiempo.</div>'+
         '<div class="ini2-actions">'+
-          acceso('ventas','🛒','Nueva venta','Mostrador / fiado','')+
-          acceso('compras','📦','Cargar compra','Mercadería y proveedores','ini2-green')+
-          acceso('caja','💰','Caja / arqueo','Abrir, cerrar y revisar','ini2-amber')+
-          acceso('dashboard','📊','Dashboard','Números del negocio','')+
+          acceso('ventas','<i class="bg-ico bg-ico-cart"></i>','Nueva venta','Mostrador / fiado','')+
+          acceso('compras','<i class="bg-ico bg-ico-box"></i>','Cargar compra','Mercadería y proveedores','ini2-green')+
+          acceso('caja','<i class="bg-ico bg-ico-cash"></i>','Caja / arqueo','Abrir, cerrar y revisar','ini2-amber')+
+          acceso('dashboard','<i class="bg-ico bg-ico-chart"></i>','Dashboard','Números del negocio','')+
         '</div>'+
       '</section>'+
       '<section class="ini2-panel">'+
         '<div class="ini2-panel-h"><h3>Accesos de gestión</h3><span>'+proveedores.length+' prov. · '+categorias.length+' cat. · '+clientes.length+' clientes</span></div>'+
         '<div class="ini2-list">'+
-          '<div class="ini2-row" onclick="goTo(\'productos\')"><span><b>📦 Productos y stock</b><small>Precios, códigos, mínimos y ajustes</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'historial-ventas\')"><span><b>📋 Historial de ventas</b><small>Buscar ventas, editar o imprimir</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'clientes\')"><span><b>👥 Clientes y fiados</b><small>Deudas, pagos y seguimiento</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'reportes\')"><span><b>📈 Reportes</b><small>Estadísticas y análisis</small></span><span class="ini2-arrow">›</span></div>'+
-          '<div class="ini2-row" onclick="goTo(\'ajustes\')"><span><b>⚙️ Ajustes</b><small>Usuarios, seguridad y configuración</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'productos\')"><span><b>Productos y stock</b><small>Precios, códigos, mínimos y ajustes</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'historial-ventas\')"><span><b>Historial de ventas</b><small>Buscar ventas, editar o imprimir</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'clientes\')"><span><b>Clientes y fiados</b><small>Deudas, pagos y seguimiento</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'reportes\')"><span><b>Reportes</b><small>Estadísticas y análisis</small></span><span class="ini2-arrow">›</span></div>'+
+          '<div class="ini2-row" onclick="goTo(\'ajustes\')"><span><b>Ajustes</b><small>Usuarios, seguridad y configuración</small></span><span class="ini2-arrow">›</span></div>'+
         '</div>'+
       '</section>'+
     '</div>';
@@ -14251,7 +14347,7 @@ body.theme-light{
   --bg:#f4f6fa; --bg2:#ffffff; --bg3:#eef1f7; --bg4:#e3e7f0;
   --border:#d7dce8; --border2:#c2c9da;
   --text:#161a24; --text2:#6b7280; --text3:#374151;
-  --accent:#d65413; --accent2:#b8460f;
+  --accent:#d65413; --accent2:#b8460f; --accent-rgb:214,84,19;
   --accent-bg:rgba(214,84,19,.10); --accent-glow:0 0 20px rgba(214,84,19,.18);
   --green:#16a34a; --green-bg:rgba(22,163,74,.10);
   --red:#dc2626;   --red-bg:rgba(220,38,38,.10);
@@ -15094,7 +15190,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   #venta-layout.bg5-simple .autocomplete-wrap #v-search{flex:1 1 0!important;min-width:0;width:auto!important}
   #venta-layout.bg5-simple .autocomplete-wrap .scan-row{flex:0 0 auto!important;width:auto!important;margin:0!important}
   #venta-layout.bg5-simple #btn-scan-venta{font-size:0!important;width:50px;min-height:48px}
-  #venta-layout.bg5-simple #btn-scan-venta::before{content:"📷";font-size:20px}
+  #venta-layout.bg5-simple #btn-scan-venta::before{content:"";display:inline-block;width:22px;height:22px;background:currentColor;-webkit-mask:var(--bg-i-camera) center/contain no-repeat;mask:var(--bg-i-camera) center/contain no-repeat}
   #venta-layout.bg5-simple #venta-search-row>.form-group:not(.autocomplete-wrap){display:none}
   #venta-layout.bg5-simple #venta-search-row{grid-template-columns:1fr!important}
 }
@@ -15103,7 +15199,7 @@ body:not(.theme-light){
   --bg:#1f2534; --bg2:#283044; --bg3:#232a3b; --bg4:#313a51;
   --border:#3a4560; --border2:#47536f;
   --text:#eef1f8; --text2:#a3acc4; --text3:#cbd2e3;
-  --accent:#f47a35; --accent2:#e0621c;
+  --accent:#f47a35; --accent2:#e0621c; --accent-rgb:244,122,53;
   --accent-bg:rgba(244,122,53,.16); --accent-glow:0 0 20px rgba(244,122,53,.22);
   --shadow:0 2px 8px rgba(8,12,24,.25); --shadow-md:0 4px 20px rgba(8,12,24,.30); --shadow-lg:0 8px 40px rgba(8,12,24,.35);
 }
@@ -15271,7 +15367,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     lay.classList.add('bg5-simple');
     lay.setAttribute('data-pay',selectedPay||'efectivo');
     var s=gsx('v-search');
-    if(s && !s.dataset.bg5){ s.dataset.bg5='1'; s.placeholder='🔍 Buscar o escanear producto  (+5 = cantidad)'; }
+    if(s && !s.dataset.bg5){ s.dataset.bg5='1'; s.placeholder='Buscar o escanear producto  (+5 = cantidad)'; }
   }
   var origSP=window.selectPay;
   selectPay=window.selectPay=function(p){
@@ -15321,7 +15417,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     var box=gsx('v-cliente-box'); if(!box || gsx('bg5-cli-search')) return;
     var inp=document.createElement('input');
     inp.id='bg5-cli-search'; inp.setAttribute('list','bg5-cli-dl'); inp.autocomplete='off';
-    inp.placeholder='🔍 Buscar cliente por nombre o RUC...';
+    inp.placeholder='Buscar cliente por nombre o RUC...';
     var dl=document.createElement('datalist'); dl.id='bg5-cli-dl';
     dl.innerHTML=(clienteCache||[]).map(function(c){ return '<option value="'+esc(c.nombre)+'">'+esc(c.ruc||'')+'</option>'; }).join('');
     inp.addEventListener('change',function(){
@@ -15412,7 +15508,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     if(window.__ventaEditandoId){ toast('No disponible al editar una venta','err'); return; }
     if(!cart.length){ toast('El carrito está vacío','err'); return; }
     guardarEnEspera(); limpiarVentaActual(); pintarToolbar();
-    toast('⏸ Venta en espera');
+    toast('Venta en espera');
     setTimeout(function(){ var s=gsx('v-search'); if(s) s.focus(); },50);
   };
   window.bg5VerEspera=function(){
@@ -15459,7 +15555,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       if((prodCache||[]).some(function(p){ return p.id===it.producto_id; })) addToVenta(it.producto_id,it.embalaje_id||null,n(it.cantidad)||1);
       else falt++;
     });
-    toast(falt?('Repetida (sin '+falt+' producto/s inactivo/s)'):'🔁 Última venta cargada con precios actuales', falt?'err':'ok');
+    toast(falt?('Repetida (sin '+falt+' producto/s inactivo/s)'):'Última venta cargada con precios actuales', falt?'err':'ok');
   };
   window.bg5AnularUltima=async function(){
     var u=getJ(K_LAST,null);
@@ -15503,9 +15599,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     if(!tb){ tb=document.createElement('div'); tb.id='bg5-toolbar'; hdr.appendChild(tb); }
     var nh=getJ(K_HOLD,[]).length, u=getJ(K_LAST,null);
     tb.innerHTML=
-      '<button type="button" class="btn btn-secondary btn-sm" onclick="bg5PonerEnEspera()">⏸ Poner en espera</button>'+
-      (nh?'<button type="button" class="btn btn-primary btn-sm" onclick="bg5VerEspera()">📋 En espera ('+nh+')</button>':'')+
-      (u&&u.items?'<button type="button" class="btn btn-secondary btn-sm" onclick="bg5RepetirUltima()">🔁 Repetir última</button>':'')+
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="bg5PonerEnEspera()">Poner en espera</button>'+
+      (nh?'<button type="button" class="btn btn-primary btn-sm" onclick="bg5VerEspera()">En espera ('+nh+')</button>':'')+
+      (u&&u.items?'<button type="button" class="btn btn-secondary btn-sm" onclick="bg5RepetirUltima()">Repetir última</button>':'')+
       (u&&u.numero?'<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5AnularUltima()">↩ Anular N° '+u.numero+'</button>':'');
   }
 
@@ -15516,7 +15612,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       logo.addEventListener('click',function(){ goTo('inicio'); }); }
     var sub=document.querySelector('#macos-main-menu .mac-submenu');
     if(sub && !gsx('nav-panel-inicio')){
-      var a=document.createElement('a'); a.href='#'; a.id='nav-panel-inicio'; a.textContent='🏠 Panel de inicio';
+      var a=document.createElement('a'); a.href='#'; a.id='nav-panel-inicio'; a.textContent='Panel de inicio';
       a.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); goTo('inicio');
         document.querySelectorAll('.mac-menu-group.open').forEach(function(g){ g.classList.remove('open'); });
         document.body.classList.remove('bg-mobile-drawer-open'); });
@@ -15567,8 +15663,8 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       '<div style="min-width:0"><div style="font-weight:700;margin-bottom:4px">Foto del producto</div>'+
       '<div id="bg5-foto-txt" style="font-size:12px;color:var(--text2);margin-bottom:8px">'+(actual?'Foto cargada':'Sin foto')+'</div>'+
       '<div class="bg5-foto-btns">'+
-        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">📷 Sacar foto<input type="file" accept="image/*" capture="environment" hidden onchange="bg5FotoElegir(this)"></label>'+
-        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">🖼️ Elegir archivo<input type="file" accept="image/*" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">Sacar foto<input type="file" accept="image/*" capture="environment" hidden onchange="bg5FotoElegir(this)"></label>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer">Elegir archivo<input type="file" accept="image/*" hidden onchange="bg5FotoElegir(this)"></label>'+
         '<button type="button" class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="bg5FotoQuitar()">Quitar</button>'+
       '</div></div>';
     grid.insertBefore(d,grid.firstChild);
@@ -15589,7 +15685,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       if(r.error) throw r.error;
       var viejo=rutaDeUrl(anterior); if(viejo) sb.storage.from(BUCKET).remove([viejo]).catch(function(){});
       var p=(prodCache||[]).find(function(x){ return String(x.id)===String(prodId); }); if(p) p.imagen_url=url;
-      toast(url?'📷 Foto guardada':'Foto quitada');
+      toast(url?'Foto guardada':'Foto quitada');
       if(gsx('btn-scan-productos')||document.querySelector('.productos-card')) try{ renderProductos(); }catch(e){}
     }catch(e){ toast('El producto se guardó, pero la foto no: '+(e.message||e),'err'); }
   }
@@ -15717,12 +15813,12 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     }
     if(!gsx('bg5-cart-col')){
       var cc=document.createElement('div'); cc.id='bg5-cart-col';
-      cc.innerHTML='<div id="bg5-cart-head"><span>Carrito (<span id="bg5-cart-n">0</span>)</span><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>';
+      cc.innerHTML='<div id="bg5-cart-head"><span>Carrito (<span id="bg5-cart-n">0</span>)</span><button type="button" onclick="cancelarVenta()">Limpiar</button></div>';
       left.appendChild(cc); cc.appendChild(tw);
       var f=document.createElement('div'); f.id='bg5-cart-foot';
       f.innerHTML='<div class="tot"><span id="bg5-cart-items" style="color:var(--text2);font-weight:700">Items: 0</span><b id="bg5-cart-total">Gs. 0</b></div>'+
-        '<div class="row"><button type="button" onclick="bg5Cliente()">👤 Cliente</button><button type="button" onclick="cancelarVenta()">🗑 Limpiar</button></div>'+
-        '<button type="button" class="cob" onclick="bg5AbrirCobro()">💳 Cobrar (F4)</button>';
+        '<div class="row"><button type="button" onclick="bg5Cliente()">Cliente</button><button type="button" onclick="cancelarVenta()">Limpiar</button></div>'+
+        '<button type="button" class="cob" onclick="bg5AbrirCobro()">Cobrar (F4)</button>';
       cc.appendChild(f);
     }
     pintarGrilla();
@@ -15760,9 +15856,9 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
   function bottomNav(){
     if(!gsx('bg5-bottomnav')){
       var nv=document.createElement('nav'); nv.id='bg5-bottomnav';
-      nv.innerHTML='<button type="button" data-p="ventas" onclick="goTo(\'ventas\')"><span>🛒</span>Venta</button>'+
-        '<button type="button" data-p="productos" onclick="goTo(\'productos\')"><span>📦</span>Stock</button>'+
-        '<button type="button" data-p="clientes" onclick="goTo(\'clientes\')"><span>👥</span>Fiado</button>'+
+      nv.innerHTML='<button type="button" data-p="ventas" onclick="goTo(\'ventas\')"><span><i class="bg-ico bg-ico-cart"></i></span>Venta</button>'+
+        '<button type="button" data-p="productos" onclick="goTo(\'productos\')"><span><i class="bg-ico bg-ico-box"></i></span>Stock</button>'+
+        '<button type="button" data-p="clientes" onclick="goTo(\'clientes\')"><span><i class="bg-ico bg-ico-users"></i></span>Fiado</button>'+
         '<button type="button" onclick="var b=document.getElementById(\'bg-mobile-menu-btn\');if(b)b.click();"><span>⋯</span>Más</button>';
       document.body.appendChild(nv); document.body.classList.add('bg5-has-nav');
     }
@@ -16066,12 +16162,12 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     e.preventDefault();e.target.blur();
     setTimeout(function(){if(typeof invDrawerClose==='function')invDrawerClose();var s=document.getElementById('inv-search');if(s){s.focus();s.select();}},60);
   },true);
-  // «⚙️ Datos del conteo»: fecha, responsable y estado plegados en el celular
+  // «Datos del conteo»: fecha, responsable y estado plegados en el celular
   function metaToggle(){
     var row=document.getElementById('inv-meta-row'),p=document.getElementById('inv-panel-conteo');
     if(!row||!p||document.getElementById('inv-meta-toggle'))return;
     var b=document.createElement('button');b.type='button';b.id='inv-meta-toggle';
-    var txt=function(){var est=row.querySelector('select');return (p.classList.contains('inv-meta-open')?'▾':'▸')+' ⚙️ Datos del conteo'+(est&&est.selectedOptions[0]?' · '+est.selectedOptions[0].text:'');};
+    var txt=function(){var est=row.querySelector('select');return (p.classList.contains('inv-meta-open')?'▾':'▸')+' Datos del conteo'+(est&&est.selectedOptions[0]?' · '+est.selectedOptions[0].text:'');};
     b.textContent=txt();b.onclick=function(){p.classList.toggle('inv-meta-open');b.textContent=txt();};
     row.parentNode.insertBefore(b,row);
     row.addEventListener('change',function(){b.textContent=txt();});
@@ -16086,7 +16182,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 }
 @media (hover:none),(pointer:coarse){
   body .scan-btn,body button[onclick^="invAbrirCamara"]{font-size:0!important;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px!important}
-  body .scan-btn::before,body button[onclick^="invAbrirCamara"]::before{content:'📷';font-size:20px}
+  body .scan-btn::before,body button[onclick^="invAbrirCamara"]::before{content:"";display:inline-block;width:22px;height:22px;background:currentColor;-webkit-mask:var(--bg-i-camera) center/contain no-repeat;mask:var(--bg-i-camera) center/contain no-repeat}
 }
 /* Inicio */
 .in3{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -16094,7 +16190,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .in3-hola{font-size:20px;font-weight:900;color:var(--text)}.in3-hola small{display:block;font-size:12px;font-weight:600;color:var(--text3)}
 .in3-caja{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer}
 .in3-caja i{width:9px;height:9px;border-radius:50%;background:var(--red)}.in3-caja.on i{background:var(--green)}
-.in3-vender{display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:16px;padding:16px;font-family:inherit;font-size:18px;font-weight:900;color:#fff;background:linear-gradient(135deg,#ef6a24,#d65413);box-shadow:0 8px 24px rgba(239,106,36,.3);cursor:pointer}
+.in3-vender{display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:16px;padding:16px;font-family:inherit;font-size:18px;font-weight:900;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(var(--accent-rgb),.3);cursor:pointer}
 .in3-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .in3-k{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px 14px;min-width:0}
 .in3-k span{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)}
@@ -16105,8 +16201,8 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .in3-card h3{font-size:13px;font-weight:900;margin:0;padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text);display:flex;justify-content:space-between;gap:8px}
 .in3-card h3 a{font-size:11px;color:var(--accent);cursor:pointer;font-weight:800}
 .in3-horas{display:flex;align-items:flex-end;gap:3px;height:110px;padding:12px 14px 4px}
-.in3-horas div{flex:1;background:rgba(239,106,36,.75);border-radius:3px 3px 0 0;min-height:2px}
-.in3-horas div.now{background:#ef6a24}
+.in3-horas div{flex:1;background:rgba(var(--accent-rgb),.75);border-radius:3px 3px 0 0;min-height:2px}
+.in3-horas div.now{background:var(--accent)}
 .in3-hlab{display:flex;justify-content:space-between;padding:0 14px 10px;font-size:10px;color:var(--text3);font-weight:700}
 .in3-li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer}
 .in3-li:last-child{border-bottom:0}.in3-li b{font-weight:800}.in3-li span{color:var(--text3);font-size:12px;white-space:nowrap}
@@ -16141,7 +16237,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     cont.innerHTML='<div class="in3">'+
       '<div class="in3-top"><div class="in3-hola">Hola'+(nombre?', '+e(nombre):'')+' 👋<small>'+e(fecha)+'</small></div>'+
         '<div class="in3-caja" id="in3-caja" onclick="goTo(\'caja\')"><i></i>Caja…</div></div>'+
-      '<button class="in3-vender" onclick="goTo(\'ventas\')">🛒 Nueva venta</button>'+
+      '<button class="in3-vender" onclick="goTo(\'ventas\')">Nueva venta</button>'+
       '<div class="in3-kpis" id="in3-kpis">'+['Ventas de hoy','Cantidad','Ticket promedio','Fiado pendiente'].map(function(t){return '<div class="in3-k"><span>'+t+'</span><b>…</b><small>&nbsp;</small></div>';}).join('')+'</div>'+
       '<div class="in3-grid">'+
         '<div class="in3-card"><h3>Ventas por hora (hoy)</h3><div id="in3-horas"><div class="in3-vacio">Cargando…</div></div></div>'+
@@ -16149,7 +16245,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
         '<div class="in3-card"><h3>Stock para revisar <a onclick="goTo(\'productos\')">Ver productos ›</a></h3><div id="in3-al" class="in3-al"></div></div>'+
         '<div class="in3-card"><h3>Últimas ventas <a onclick="goTo(\'historial-ventas\')">Historial ›</a></h3><div id="in3-ult"><div class="in3-vacio">Cargando…</div></div></div>'+
       '</div>'+
-      '<div class="in3-acc">'+acc('compras','📦','Compra')+acc('inventario','📋','Inventario')+acc('productos','🏷️','Productos')+acc('clientes','👥','Clientes')+acc('caja','💰','Caja')+acc('reportes','📈','Reportes')+'</div>'+
+      '<div class="in3-acc">'+acc('compras','<i class="bg-ico bg-ico-box"></i>','Compra')+acc('inventario','<i class="bg-ico bg-ico-list"></i>','Inventario')+acc('productos','<i class="bg-ico bg-ico-tag"></i>','Productos')+acc('clientes','<i class="bg-ico bg-ico-users"></i>','Clientes')+acc('caja','<i class="bg-ico bg-ico-cash"></i>','Caja')+acc('reportes','<i class="bg-ico bg-ico-chart"></i>','Reportes')+'</div>'+
     '</div>';
 
     // Alertas de stock (de la memoria, sin consultas)
@@ -16193,7 +16289,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
     var t1=document.querySelector('#in3-horas')&&document.querySelector('#in3-horas').previousElementSibling, t2=document.querySelector('#in3-top')&&document.querySelector('#in3-top').previousElementSibling;
     // Ventas sin delivery (el delivery de los pedidos online entra a la caja, pero se muestra aparte)
     var pintarKPI=function(D,nD){
-    var neto=tot-D, del=D?'<br>+ 🛵 delivery '+gs_(D)+' ('+nD+')':'';
+    var neto=tot-D, del=D?'<br>+ delivery '+gs_(D)+' ('+nD+')':'';
     var cant=k('Cantidad',ventas.length,(ventas.length===1?'venta':'ventas')+' · ticket '+gs_(ventas.length?neto/ventas.length:0));
     if(caja){
       // Efectivo esperado, igual que el arqueo: apertura + efectivo de ventas + cobros de fiado en efectivo − gastos + ingresos
@@ -16252,7 +16348,7 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .caja-k span{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)}
 .caja-k b{display:block;font-size:19px;font-weight:900;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .caja-k small{display:block;font-size:11px;color:var(--text3);line-height:1.25}
-.caja-k.big{border-color:var(--accent);background:rgba(239,106,36,.08)}
+.caja-k.big{border-color:var(--accent);background:rgba(var(--accent-rgb),.08)}
 .caja-fiados{margin-bottom:14px;padding:0}
 .caja-fiados>summary{cursor:pointer;padding:12px 16px;font-weight:800}
 .caja-fiados>.card{border:0;box-shadow:none;margin:0!important}
@@ -16271,12 +16367,174 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 </style>
 <link rel="stylesheet" href="pedidos-admin.css">
 <script src="pedidos-admin.js"></script>
+<style id="bg-marca-css">
+#sidebar .logo-icon.con-logo{background:transparent!important;border:0!important;padding:0!important;overflow:hidden}
+#bg-login{position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;
+  background:radial-gradient(1200px 600px at 50% -10%,rgba(var(--accent-rgb),.18),transparent 60%),var(--bg)}
+.bg-login-card{width:100%;max-width:380px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:28px 26px 22px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column}
+.bg-login-marca{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:20px}
+.bg-login-marca h1{font-size:20px;font-weight:800;color:var(--text);margin-top:12px;letter-spacing:-.3px}
+.bg-login-marca p{font-size:13px;color:var(--text2);margin-top:2px}
+.bg-login-card label{font-size:12px;font-weight:700;color:var(--text2);margin:10px 0 6px}
+.bg-login-card select,.bg-login-card input{width:100%;height:46px;border-radius:10px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font:inherit;font-size:16px;padding:0 12px}
+.bg-login-card input{letter-spacing:4px}
+.bg-login-card input::placeholder{letter-spacing:0}
+.bg-login-card select:focus,.bg-login-card input:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.2)}
+#bg-login-err{display:none;margin-top:12px;padding:9px 12px;border-radius:10px;background:var(--red-bg);color:var(--red);font-size:13px;font-weight:600}
+.bg-login-card .btn{margin-top:18px;height:48px;justify-content:center;font-size:15px!important;font-weight:800;width:100%}
+.bg-login-card small{margin-top:14px;text-align:center;color:var(--text2);font-size:11px}
+.bg-marca-card{display:flex;align-items:center;gap:14px;padding:14px;flex-wrap:wrap}
+.bg-marca-card .inf{flex:1 1 220px;min-width:0}
+.bg-marca-card .inf b{display:block;font-size:15px;color:var(--text)}
+.bg-marca-card .inf span{display:block;font-size:12px;color:var(--text2);margin-top:2px}
+.bg-marca-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bg-marca-form .full{grid-column:1/-1}
+.bg-marca-form label{display:block;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:5px}
+.bg-marca-form input[type=text]{width:100%}
+.bg-marca-logo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bg-marca-color{display:flex;align-items:center;gap:10px}
+.bg-marca-color input[type=color]{width:52px;height:38px;padding:2px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);cursor:pointer}
+@media (max-width:560px){.bg-marca-form{grid-template-columns:1fr}}
+</style>
+<script id="bg-marca-ui">
+(function(){
+  var CAMPOS=['nombre','lema','ruc','direccion','telefono','logo','color'];
+  var logoTmp=null;
+  function h(v){return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+  function g(id){return document.getElementById(id);}
+  function guardarLocal(o){var m={};CAMPOS.forEach(function(k){if(o[k]!=null)m[k]=String(o[k]);});try{localStorage.setItem('bg_marca',JSON.stringify(m));}catch(e){}bgMarcaAplicar();}
+  window.bgMarcaCardHtml=function(){
+    var m=bgMarca(),d=bgMarcaDatos();
+    return '<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Datos del comercio</h3><button class="btn btn-secondary btn-sm" onclick="bgMarcaEditar()">Editar</button></div>'+
+      '<div class="bg-marca-card">'+bgMarcaLogoHtml(48)+'<div class="inf"><b>'+h(m.nombre)+'</b><span>'+(d||'Agregá RUC, dirección y teléfono: salen en tickets, arqueos y órdenes de compra.')+'</span></div></div></div>';
+  };
+  function pintarLogo(){var b=g('bgm-logo-prev');if(!b)return;var src=logoTmp;
+    b.innerHTML=src?'<img src="'+src+'" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:12px;background:var(--bg3);border:1px solid var(--border)">':'<span style="font-size:12px;color:var(--text2)">Sin logo: se usan las iniciales.</span>';
+    var q=g('bgm-logo-quitar');if(q)q.style.display=src?'':'none';}
+  window.bgMarcaLogoFile=function(inp){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    if(!/^image\//.test(f.type)){toast('Elegí una imagen','err');return;}
+    var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){
+      var mx=256,k=Math.min(1,mx/Math.max(im.width,im.height)),c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      logoTmp=c.toDataURL('image/png');pintarLogo();};im.onerror=function(){toast('No se pudo leer la imagen','err');};im.src=r.result;};
+    r.readAsDataURL(f);
+  };
+  window.bgMarcaLogoQuitar=function(){logoTmp='';pintarLogo();};
+  window.bgMarcaEditar=function(){
+    var m=bgMarca();logoTmp=m.logo||'';
+    openModal('Datos del comercio','<div class="bg-marca-form">'+
+      '<div class="full"><label>Nombre del comercio</label><input type="text" id="bgm-nombre" maxlength="60" value="'+h(m.nombre)+'"></div>'+
+      '<div class="full"><label>Descripción corta</label><input type="text" id="bgm-lema" maxlength="60" value="'+h(m.lema)+'"></div>'+
+      '<div><label>RUC</label><input type="text" id="bgm-ruc" maxlength="20" value="'+h(m.ruc)+'"></div>'+
+      '<div><label>Teléfono</label><input type="text" id="bgm-telefono" maxlength="30" value="'+h(m.telefono)+'"></div>'+
+      '<div class="full"><label>Dirección</label><input type="text" id="bgm-direccion" maxlength="120" value="'+h(m.direccion)+'"></div>'+
+      '<div class="full"><label>Logo</label><div class="bg-marca-logo"><span id="bgm-logo-prev"></span>'+
+        '<label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0">Elegir imagen<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="bgMarcaLogoFile(this)"></label>'+
+        '<button type="button" class="btn btn-secondary btn-sm" id="bgm-logo-quitar" onclick="bgMarcaLogoQuitar()">Quitar</button></div></div>'+
+      '<div class="full"><label>Color principal</label><div class="bg-marca-color"><input type="color" id="bgm-color" value="'+h(m.color)+'">'+
+        '<button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById(\'bgm-color\').value=BG_MARCA_DEF.color">Volver al original</button></div></div>'+
+      '</div>',guardar,'Guardar');
+    pintarLogo();
+  };
+  async function guardar(){
+    var o={nombre:(g('bgm-nombre').value||'').trim(),lema:(g('bgm-lema').value||'').trim(),ruc:(g('bgm-ruc').value||'').trim(),telefono:(g('bgm-telefono').value||'').trim(),direccion:(g('bgm-direccion').value||'').trim(),color:g('bgm-color').value,logo:logoTmp||''};
+    if(!o.nombre){toast('Poné el nombre del comercio','err');return;}
+    guardarLocal(o);closeModal();
+    var remoto=false;
+    try{ if(typeof sb!=='undefined'&&sb){var r=await sb.from('bodega_config').upsert(Object.assign({id:1,updated_at:new Date().toISOString()},o));remoto=!r.error;} }catch(e){}
+    toast(remoto?'Datos del comercio guardados':'Guardado en este dispositivo');
+    if(g('content')&&document.querySelector('.bg-marca-card')&&typeof goTo==='function')goTo('usuarios');
+  }
+  /* Si existe la tabla bodega_config, la marca se comparte entre dispositivos */
+  var intentos=0;
+  (function cargarRemoto(){
+    if(typeof sb==='undefined'||!sb){ if(++intentos<40)setTimeout(cargarRemoto,500); return; }
+    sb.from('bodega_config').select('*').eq('id',1).maybeSingle().then(function(r){
+      if(r&&!r.error&&r.data&&r.data.nombre){guardarLocal(r.data);var ov=g('bg-login');if(ov){var mk=ov.querySelector('.bg-login-marca');if(mk)mk.innerHTML=bgMarcaLogoHtml(64)+'<h1>'+bgMarcaNombre()+'</h1><p>'+h(bgMarca().lema)+'</p>';}}
+    }).catch(function(){});
+  })();
+})();
+</script>
+<style id="bg-onb-css">
+.bg-onb{background:var(--bg2);border:1px solid var(--accent);border-radius:14px;padding:16px 18px}
+.bg-onb-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.bg-onb-h b{font-size:15px;color:var(--text)}.bg-onb-h span{display:block;font-size:12px;color:var(--text2);margin-top:2px}
+.bg-onb-h button{border:0;background:none;color:var(--text2);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline;white-space:nowrap}
+.bg-onb-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bg-onb-step{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--border);background:var(--bg3);border-radius:12px;padding:12px;color:var(--text);font:inherit;cursor:pointer}
+.bg-onb-step i{flex:0 0 26px;height:26px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:12px;font-weight:800;color:var(--text2)}
+.bg-onb-step.ok i{background:var(--green);border-color:var(--green);color:#fff}
+.bg-onb-step b{display:block;font-size:13px}.bg-onb-step small{display:block;font-size:11px;color:var(--text2)}
+@media (max-width:700px){.bg-onb-steps{grid-template-columns:1fr}}
+</style>
+<script id="bg-onb-js">
+/* Primeros pasos: guía para una instalación nueva (sin productos cargados) */
+(function(){
+  function hecho(){try{return localStorage.getItem('bg_onb_ok')==='1';}catch(e){return true;}}
+  function paso(n,ok,t,d,fn){return '<button type="button" class="bg-onb-step'+(ok?' ok':'')+'" onclick="'+fn+'"><i>'+(ok?'✓':n)+'</i><span><b>'+t+'</b><small>'+d+'</small></span></button>';}
+  function pintar(){
+    var c=document.querySelector('#content .in3');
+    if(!c||hecho())return;
+    var ya=c.querySelector('.bg-onb');
+    if(ya){var p3=ya.querySelectorAll('.bg-onb-step')[2];if(p3&&!p3.classList.contains('ok')&&document.querySelector('.in3-caja.on')){p3.classList.add('ok');p3.querySelector('i').textContent='✓';}return;}
+    var prods=(typeof prodCache!=='undefined'&&prodCache)?prodCache.length:0;
+    if(prods>0)return; /* comercio ya en uso: no molestar */
+    var marca=false;try{marca=!!localStorage.getItem('bg_marca');}catch(e){}
+    var caja=!!document.querySelector('.in3-caja.on');
+    var d=document.createElement('div');d.className='bg-onb';
+    d.innerHTML='<div class="bg-onb-h"><div><b>Primeros pasos</b><span>Dejá el sistema listo para vender en tres pasos.</span></div><button type="button" onclick="bgOnbCerrar()">No mostrar más</button></div>'+
+      '<div class="bg-onb-steps">'+
+      paso(1,marca,'Datos del comercio','Nombre, RUC, logo y color','bgMarcaEditar()')+
+      paso(2,prods>0,'Cargar productos','Precios, stock y códigos','goTo(\'productos\')')+
+      paso(3,caja,'Abrir la caja','Importe inicial del turno','goTo(\'caja\')')+'</div>';
+    var top=c.querySelector('.in3-top');
+    if(top&&top.nextSibling)c.insertBefore(d,top.nextSibling);else c.insertBefore(d,c.firstChild);
+  }
+  window.bgOnbCerrar=function(){try{localStorage.setItem('bg_onb_ok','1');}catch(e){}var d=document.querySelector('.bg-onb');if(d)d.remove();};
+  function iniciar(){var c=document.getElementById('content');if(!c)return;new MutationObserver(function(){pintar();}).observe(c,{childList:true,subtree:true});pintar();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
+})();
+</script>
+<script id="bg-tablas-num">
+/* Tablas: columnas de importes y cantidades alineadas a la derecha (solo escritorio) */
+(function(){
+  var NUM=/^(Gs\.?\s*)?-?\d[\d.]*(,\d+)?\s*%?$/, seq=0, t=null;
+  var st=document.createElement('style');st.id='bg-tablas-num-css';document.head.appendChild(st);
+  function revisar(){
+    var reglas=[];
+    document.querySelectorAll('#content table, #modal-body table').forEach(function(tb){
+      if(tb.classList.contains('productos-excel'))return;
+      var cont=tb.parentElement; /* si la tabla desborda su contenedor, alinear a la derecha escondería los importes */
+      if(cont&&tb.offsetWidth>cont.clientWidth+2){tb.removeAttribute('data-bgt');return;}
+      var filas=[].slice.call(tb.querySelectorAll('tbody > tr')).filter(function(r){return r.children.length>1&&![].some.call(r.children,function(c){return c.colSpan>1;});}).slice(0,12);
+      if(!filas.length){tb.removeAttribute('data-bgt');return;}
+      var cols=filas[0].children.length, der=[];
+      for(var c=0;c<cols;c++){var ok=0,tot=0;
+        filas.forEach(function(r){var td=r.children[c];if(!td||td.querySelector('button,input,select,a'))return;var x=td.textContent.trim();if(!x||x==='-')return;tot++;if(NUM.test(x))ok++;});
+        if(tot>0&&ok===tot&&c>0)der.push(c+1);}
+      if(!der.length){tb.removeAttribute('data-bgt');return;}
+      var id=tb.getAttribute('data-bgt');if(!id){id='t'+(++seq);tb.setAttribute('data-bgt',id);}
+      der.forEach(function(i){reglas.push('table[data-bgt="'+id+'"] tr>*:nth-child('+i+')');});
+    });
+    var css=reglas.length?'@media (min-width:901px){'+reglas.join(',')+'{text-align:right!important;font-feature-settings:"tnum"}}':'';
+    if(st.textContent!==css)st.textContent=css;
+  }
+  function prog(){clearTimeout(t);t=setTimeout(revisar,180);}
+  function iniciar(){['content','modal-body'].forEach(function(id){var e=document.getElementById(id);if(e)new MutationObserver(prog).observe(e,{childList:true,subtree:true});});prog();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
+})();
+</script>
 <style id="bg-pulido-v1">
+.bg-dias-card{margin-bottom:12px}
+.bg-dias-svg{display:block;width:100%;height:auto;max-height:260px}
+.bg-dias-res{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:2px 0 8px}
+.bg-dias-res b{color:var(--text)}
 /* Íconos de acción (reemplazan emojis) */
-.bg-ico{display:inline-block;width:14px;height:14px;vertical-align:-2px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}
-.bg-ico-edit{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E")}
-.bg-ico-trash{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E")}
-.bg-ico-box{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E")}
+:root{--bg-i-edit:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E");--bg-i-trash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E");--bg-i-box:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E");--bg-i-cart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h2l2.5 11h10L20 7H6'/%3E%3Cpath d='M9 20a1 1 0 1 0 0-.01M17 20a1 1 0 1 0 0-.01'/%3E%3C/svg%3E");--bg-i-users:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1'/%3E%3Cpath d='M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3Cpath d='M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E");--bg-i-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8'/%3E%3C/svg%3E");--bg-i-list:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4h6v3H9Z'/%3E%3Cpath d='M9 5H6v16h12V5h-3'/%3E%3Cpath d='M9 12h6M9 16h6'/%3E%3C/svg%3E");--bg-i-tag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12V4h8l10 10-8 8Z'/%3E%3Cpath d='M7.5 8.5h.01'/%3E%3C/svg%3E");--bg-i-cash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v11H3Z'/%3E%3Cpath d='M3 11h18'/%3E%3Cpath d='M7 15h3'/%3E%3C/svg%3E");--bg-i-chart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V4'/%3E%3Cpath d='M4 20h16'/%3E%3Cpath d='M8 16v-5M12 16V8M16 16v-3'/%3E%3C/svg%3E");--bg-i-camera:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l2-3h6l2 3h3v11H4Z'/%3E%3Cpath d='M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'/%3E%3C/svg%3E");--bg-i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");--bg-i-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z'/%3E%3Cpath d='M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6'/%3E%3C/svg%3E")}
+.bg-ico{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.18em;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat;font-style:normal;flex:0 0 auto}
+.bg-ico-edit{--i:var(--bg-i-edit)}.bg-ico-trash{--i:var(--bg-i-trash)}.bg-ico-box{--i:var(--bg-i-box)}.bg-ico-cart{--i:var(--bg-i-cart)}.bg-ico-users{--i:var(--bg-i-users)}.bg-ico-user{--i:var(--bg-i-user)}.bg-ico-list{--i:var(--bg-i-list)}.bg-ico-tag{--i:var(--bg-i-tag)}.bg-ico-cash{--i:var(--bg-i-cash)}.bg-ico-chart{--i:var(--bg-i-chart)}.bg-ico-camera{--i:var(--bg-i-camera)}.bg-ico-search{--i:var(--bg-i-search)}.bg-ico-eye{--i:var(--bg-i-eye)}
 #content .btn:has(> .bg-ico:only-child){min-width:32px;justify-content:center}
 /* Pulido visual general (cabecera, tarjetas, tablas, barras) */
 #topbar #live-clock{flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.15!important}
