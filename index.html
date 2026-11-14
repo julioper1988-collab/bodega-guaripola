@@ -15333,7 +15333,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     d.innerHTML='<button type="button" class="bg5-exacto" onclick="bg5Billete(\'exacto\')">Exacto</button>'+
       '<button type="button" class="bg5-limpiar" onclick="bg5Billete(\'clear\')" title="Borrar importe">✕ Borrar</button>'+
       [1000,2000,5000,10000,20000,50000,100000].map(function(b){
-        var img=b<=20000?'<img src="img/billetes/'+b+'.webp" alt="" loading="lazy" decoding="async" onerror="this.remove()">':'';
+        var img=b<=100000?'<img src="img/billetes/'+b+'.webp" alt="" loading="lazy" decoding="async" onerror="this.remove()">':'';
         return '<button type="button" class="bg5-bill'+(img?' con-img':'')+'" onclick="bg5Billete('+b+')" title="Sumar Gs. '+b.toLocaleString('es-PY')+'">'+img+'<span>+'+(b/1000)+'k</span></button>';
       }).join('');
     var g=imp.closest('.form-group')||imp.parentElement; g.id='bg5-imp-group'; g.appendChild(d);
