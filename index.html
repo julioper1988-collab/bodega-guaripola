@@ -342,7 +342,7 @@ window.safeHtml = escapeHtml;
               <div style="font-weight:800;font-size:15px">${escapeHtml(it.nombre)}</div>
               <div style="font-size:12px;color:var(--text2)">${escapeHtml(it.codigo_barra||'-')} · Sistema: <b>${it.stock_sistema}</b> · Total contado: <b style="color:${color}">${total}</b> · Dif: <b style="color:${color}">${dif>0?'+':''}${dif}</b></div>
             </div>
-            <button class="btn btn-danger btn-sm" onclick="removeInvItem(${i})" style="flex-shrink:0">🗑</button>
+            <button class="btn btn-danger btn-sm" onclick="removeInvItem(${i})" style="flex-shrink:0" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button>
           </div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:2px;font-weight:700">DEPÓSITOS:</div>
           ${deps}
@@ -1559,7 +1559,9 @@ input[type=number] { -moz-appearance: textfield; }
 body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 18px !important; opacity: .8; }
 
 /* ══ STAT CARD CON ICONO ══════════════════════════════════════ */
-.stat-card { display: flex; align-items: flex-start; gap: 14px; }
+.stat-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 14px; }
+.stat-card > .label, .stat-card > .value, .stat-card > .sub { flex: 0 0 100%; min-width: 0; }
+.stat-card .value { overflow-wrap: anywhere; font-feature-settings: 'tnum'; }
 .stat-card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .stat-card > div:last-child { flex: 1; min-width: 0; }
 .stat-card .value { font-size: 22px; font-weight: 800; margin-top: 4px; letter-spacing: -.5px; line-height: 1.1; }
@@ -2426,9 +2428,9 @@ async function renderProductos(){
         <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
         <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
         <td style="display:flex;gap:4px">
-          <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button>
-          <button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">📦</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑</button>
+          <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${p.nombre.replace(/'/g,"\\'")}')" title="Embalajes" aria-label="Embalajes"><i class="bg-ico bg-ico-box"></i></button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${p.nombre.replace(/'/g,"\\'")}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button>
         </td>
       </tr>`).join('')}
     </tbody></table>
@@ -2709,7 +2711,7 @@ async function openEmbModal(prodId,prodNombre){
         <td style="padding:10px">${fmtGs(e.precio_costo)}</td>
         <td style="padding:10px;font-weight:600;color:var(--accent2)">${fmtGs(e.precio_venta)}</td>
         <td style="padding:10px;color:var(--teal)">${fmtGs(e.precio_mayorista)}</td>
-        <td style="padding:10px"><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodNombre.replace(/'/g,"\\'")}')">🗑</button></td>
+        <td style="padding:10px"><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodNombre.replace(/'/g,"\\'")}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
       </tr>`).join('')}
       ${!(embs||[]).length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
     </tbody>
@@ -3348,7 +3350,7 @@ async function renderHistorialCompras(page){
         <td style="font-weight:600;color:var(--amber)">${fmtGs(c.total)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verCompra('${c.id}')">👁</button>
-          <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarCompra('${c.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
           ${c.estado==='en_proceso'?`<button class="btn btn-green btn-sm" onclick="confirmarFinalizar('${c.id}')">✓ Finalizar</button>`:''}
         </td>
       </tr>`).join('')}
@@ -3387,8 +3389,8 @@ async function renderProveedores(){
   <div class="card"><table><thead><tr><th>Nombre</th><th>RUC</th><th>Teléfono</th><th>Email</th><th></th></tr></thead><tbody>
     ${(data||[]).map(p=>`<tr>
       <td style="font-weight:500">${escapeHtml(p.nombre)}</td><td>${p.ruc||'-'}</td><td>${p.telefono||'-'}</td><td>${p.email||'-'}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="editProv('${p.id}')">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteProv('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑</button></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="editProv('${p.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProv('${p.id}','${p.nombre.replace(/'/g,"\\'")}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
     </tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -3547,7 +3549,7 @@ async function renderCategorias(){
     ${(data||[]).map(c=>`<tr>
       <td><span style="display:inline-block;width:18px;height:18px;background:${c.color};border-radius:4px"></span></td>
       <td style="font-weight:500">${escapeHtml(c.nombre)}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="openCatModal('${c.id}','${c.nombre.replace(/'/g,"\\'")}','${c.color}')">✏️</button></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openCatModal('${c.id}','${c.nombre.replace(/'/g,"\\'")}','${c.color}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button></td>
     </tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -4753,7 +4755,7 @@ initMobileShell();
           <td>${fmtGs(p.precio_costo)}</td>
           <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
           <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
-          <td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')">📦</button><button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')">🗑</button></td>
+          <td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')" title="Embalajes" aria-label="Embalajes"><i class="bg-ico bg-ico-box"></i></button><button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
         </tr>`).join('')}
         ${!data.length?'<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:24px">Sin resultados</td></tr>':''}
       </tbody></table>
@@ -5156,7 +5158,7 @@ initMobileShell();
           <td style="padding:10px">${fmtGs(e.precio_costo)}</td>
           <td style="padding:10px;font-weight:600;color:var(--accent2)">${fmtGs(e.precio_venta)}</td>
           <td style="padding:10px;color:var(--teal)">${fmtGs(e.precio_mayorista)}</td>
-          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')">🗑</button></td>
+          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
         </tr>`).join('')}
         ${!embs.length?'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
@@ -5277,7 +5279,7 @@ initMobileShell();
           <td style="color:var(--accent2);font-weight:600">${fmtGs(p.precio_venta)}</td>
           <td>${bgMarginHtml(p.precio_costo,p.precio_venta)}</td>
           <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
-          <td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}' )">📦</button><button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')">🗑</button></td>
+          <td style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}' )" title="Embalajes" aria-label="Embalajes"><i class="bg-ico bg-ico-box"></i></button><button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${String(p.nombre).replace(/'/g,"\\'")}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
         </tr>`).join('')}
         ${!data.length?'<tr><td colspan="9" style="text-align:center;color:var(--text2);padding:24px">Sin resultados</td></tr>':''}
       </tbody></table>
@@ -5504,7 +5506,7 @@ initMobileShell();
           <td style="padding:10px;font-weight:600;color:var(--accent2)">${fmtGs(e.precio_venta)}</td>
           <td style="padding:10px">${bgMarginHtml(e.precio_costo,e.precio_venta)}</td>
           <td style="padding:10px;color:var(--teal)">${fmtGs(e.precio_mayorista)}</td>
-          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')">🗑</button></td>
+          <td style="padding:10px;display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" onclick="editEmb('${e.id}')">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="deleteEmb('${e.id}','${prodId}','${prodArg}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
         </tr>`).join('')}
         ${!embs.length?'<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Sin presentaciones todavía</td></tr>':''}
       </tbody>
@@ -5627,7 +5629,7 @@ initMobileShell();
     const today=fechaHoyPY(), first=today.slice(0,7)+'-01';
     gs('content').innerHTML=`
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header"><h3>📈 Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="card-header"><h3>Reportes avanzados</h3><button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button></div>
         <div style="padding:14px 16px">
           <div class="rpt-filters">
             <div class="form-group"><label>Desde</label>
@@ -5859,7 +5861,7 @@ initMobileShell();
       <td>${escapeHtml(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="borrarGastoCaja('${g.id}')">🗑</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="borrarGastoCaja('${g.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header"><h3>Gastos varios de caja</h3><span class="badge">Total: ${fmtGs(gastos.total||0)}</span></div>
@@ -6065,8 +6067,8 @@ initMobileShell();
   async function renderUsuarios(){
     const {data,error}=await sb.from('bodega_usuarios').select('*').order('created_at',{ascending:false});
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe la tabla bodega_usuarios. Ejecutá el SQL de usuarios.</div>`;return;}
-    const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')">🗑</button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
-    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>🛟 Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>📋 Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    const rows=(data||[]).map(u=>`<tr><td>${escapeHtml(u.nombre)}</td><td>${escapeHtml(u.rol)}</td><td>${u.activo?'Activo':'Inactivo'}</td><td>${modsToText(u)}</td><td><button class="btn btn-secondary btn-sm" onclick="openUsuarioModal('${u.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-danger btn-sm" onclick="desactivarUsuario('${u.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:18px">Sin usuarios creados. Creá un administrador primero.</td></tr>';
+    gs('content').innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Respaldo de datos</h3></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0 0 12px">Descargá una copia de seguridad de toda la base (productos, ventas, stock, compras, fiados, caja...). Guardala en tu compu o Google Drive. Recomendado: cada fin de semana.</p><button class="btn btn-primary" onclick="bgDescargarRespaldo(this)">⬇️ Descargar respaldo</button></div></div><div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Auditoría</h3><button class="btn btn-secondary btn-sm" onclick="bgVerAuditoria()">Ver registro</button></div><div style="padding:14px"><p style="color:var(--text2);font-size:13px;margin:0">Quién hizo qué y cuándo: ventas, compras, precios, caja, fiados y logins. Registra todo, desde cualquier dispositivo.</p></div></div><div class="card"><div class="card-header"><h3>Usuarios y permisos</h3><button class="btn btn-primary" onclick="openUsuarioModal()">+ Usuario</button></div><div class="alert alert-warning" style="margin:14px">Esto sirve para ordenar el uso interno y ocultar módulos. No reemplaza seguridad de base de datos.</div><div style="overflow-x:auto"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Módulos visibles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
   window.bgVerAuditoria = function(){
     if(typeof openModal!=='function') return;
@@ -6369,7 +6371,7 @@ initMobileShell();
     const vals=caja.denominaciones_apertura||{};
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-        <h3>✏️ Editar importe inicial de apertura</h3>
+        <h3>Editar importe inicial de apertura</h3>
         <span class="badge">Apertura: ${fmtGs(caja.apertura_efectivo||0)}</span>
         <span style="color:var(--text2);font-size:18px;margin-left:auto">⌄</span>
       </div>
@@ -6406,7 +6408,7 @@ initMobileShell();
       <td>${escapeHtml(g.descripcion||'Gasto')}</td>
       <td style="font-weight:600;color:var(--red)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})}</td>
-      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar gasto" onclick="borrarGastoCajaTurno('${g.id}')">🗑</button>`:'-'}</td>
+      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar gasto" onclick="borrarGastoCajaTurno('${g.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button>`:'-'}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin gastos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header"><h3>Gastos varios del turno</h3><span class="badge">Total: ${fmtGs(gastos.total||0)}</span></div>
@@ -6430,7 +6432,7 @@ initMobileShell();
       <td>${escapeHtml(g.descripcion||'Ingreso')}</td>
       <td style="font-weight:600;color:var(--green)">${fmtGs(g.monto)}</td>
       <td style="font-size:11px;color:var(--text2)">${new Date(g.created_at||Date.now()).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})}</td>
-      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar ingreso" onclick="borrarIngresoCajaTurno('${g.id}')">🗑</button>`:'-'}</td>
+      <td>${puedeEditar?`<button class="btn btn-danger btn-sm" title="Borrar ingreso" onclick="borrarIngresoCajaTurno('${g.id}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button>`:'-'}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:14px">Sin ingresos varios cargados</td></tr>`;
     return `<div class="card" style="margin-bottom:16px">
       <div class="card-header"><h3>Ingresos varios del turno</h3><span class="badge">Total: ${fmtGs(ingresos.total||0)}</span></div>
@@ -7055,7 +7057,7 @@ initMobileShell();
     content.innerHTML=`
       <div class="card" style="margin-bottom:14px">
         <div class="card-header">
-          <h3>📈 Reportes</h3>
+          <h3>Reportes</h3>
           <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir / PDF</button>
         </div>
         <div style="padding:14px 16px">
@@ -7366,7 +7368,7 @@ initMobileShell();
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="verCuentaCliente('${c.id}')">Ver cuenta</button>
           <button class="btn btn-green btn-sm" onclick="registrarPagoCliente('${c.id}')" ${r.deuda>0?'':'disabled style="opacity:.45;cursor:not-allowed"'}>Cobrar</button>
-          <button class="btn btn-secondary btn-sm" onclick="editarClienteDesdeModulo('${c.id}')">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarClienteDesdeModulo('${c.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
         </td>
       </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:20px">Sin clientes con ese filtro.</td></tr>';
       content.innerHTML=`
@@ -7528,9 +7530,9 @@ initMobileShell();
       <td>${typeof bgMarginHtml==='function'?bgMarginHtml(p.precio_costo,p.precio_venta):''}</td>
       <td style="color:var(--teal);font-size:12px">${(embCache[p.id]||[]).length} packs</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')">✏️</button>
-        <button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${safeNom}')">📦</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${safeNom}')">🗑</button>
+        <button class="btn btn-secondary btn-sm" onclick="editProd('${p.id}')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button>
+        <button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal('${p.id}','${safeNom}')" title="Embalajes" aria-label="Embalajes"><i class="bg-ico bg-ico-box"></i></button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}','${safeNom}')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button>
       </td>
     </tr>`;
   };
@@ -10151,7 +10153,7 @@ async function revertirStockCompraReal(compraId, detalles){
     window.__inicioAgrupadoReal = true;
 
     pages['dashboard'] = window.renderInicio;
-    titles['dashboard'] = 'Inicio';
+    titles['dashboard'] = 'Dashboard';
 
     var navDash = byId('nav-dashboard');
     if(navDash){
@@ -10742,7 +10744,7 @@ async function revertirStockCompraReal(compraId, detalles){
       +'<td class="num"><span class="prod-gain '+cls+'">'+fmtMoney(m.ganancia)+'</span></td>'
       +'<td class="num"><span class="prod-margin '+cls+'">'+fmtPct(m.margen)+'</span></td>'
       +'<td class="num" style="color:var(--teal);font-weight:800">'+((embCache[p.id]||[]).length)+'</td>'
-      +'<td><div class="prod-actions"><button class="btn btn-secondary btn-sm" onclick="editProd(\''+p.id+'\')">✏️</button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal(\''+p.id+'\',\''+safe+'\')">📦</button><button class="btn btn-danger btn-sm" onclick="deleteProd(\''+p.id+'\',\''+safe+'\')">🗑</button></div></td>'
+      +'<td><div class="prod-actions"><button class="btn btn-secondary btn-sm" onclick="editProd(\''+p.id+'\')" title="Editar" aria-label="Editar"><i class="bg-ico bg-ico-edit"></i></button><button class="btn btn-secondary btn-sm" title="Embalajes" onclick="openEmbModal(\''+p.id+'\',\''+safe+'\')" title="Embalajes" aria-label="Embalajes"><i class="bg-ico bg-ico-box"></i></button><button class="btn btn-danger btn-sm" onclick="deleteProd(\''+p.id+'\',\''+safe+'\')" title="Borrar" aria-label="Borrar"><i class="bg-ico bg-ico-trash"></i></button></div></td>'
       +'</tr>';
   }
   var prodSearchTimerExcel=null;
@@ -13232,9 +13234,9 @@ window.diagnosticarStockCompras = async function(){
           '<div><span>Compras del mes</span><b>'+money(totalComp)+'</b></div>'+
           '<div><span>Productos vendidos</span><b>'+totalUds.toLocaleString('es-PY')+'</b></div>'+
         '</div>'+
-        '<h3 style="font-size:14px;margin:10px 0 6px">🛒 Compras ('+compras.length+')</h3>'+
+        '<h3 style="font-size:14px;margin:10px 0 6px">Compras ('+compras.length+')</h3>'+
         '<div style="overflow:auto;max-height:240px"><table><thead><tr><th>Fecha</th><th>Proveedor</th><th>Estado</th><th>Total</th></tr></thead><tbody>'+compRows+'</tbody></table></div>'+
-        '<h3 style="font-size:14px;margin:14px 0 6px">📦 Productos vendidos (cantidades)</h3>'+
+        '<h3 style="font-size:14px;margin:14px 0 6px">Productos vendidos (cantidades)</h3>'+
         '<div style="overflow:auto;max-height:300px"><table><thead><tr><th>Producto</th><th style="text-align:right">Cant.</th></tr></thead><tbody>'+prodRows+'</tbody></table></div>';
       var box=document.getElementById('bg-mes-det'); if(box) box.innerHTML=html;
     }catch(e){ var b=document.getElementById('bg-mes-det'); if(b) b.innerHTML='<div class="bg-chart-empty">Error: '+esc(e.message||String(e))+'</div>'; }
@@ -14239,7 +14241,7 @@ window.renderInicio = function(){
     '</div>';
 };
 try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; pages.dashboard=window.renderInicio; } }catch(e){}
-try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Inicio'; } }catch(e){}
+try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Dashboard'; } }catch(e){}
 </script>
 
 
@@ -16269,6 +16271,47 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 </style>
 <link rel="stylesheet" href="pedidos-admin.css">
 <script src="pedidos-admin.js"></script>
+<style id="bg-pulido-v1">
+/* Íconos de acción (reemplazan emojis) */
+.bg-ico{display:inline-block;width:14px;height:14px;vertical-align:-2px;background:currentColor;-webkit-mask:var(--i) center/contain no-repeat;mask:var(--i) center/contain no-repeat}
+.bg-ico-edit{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E")}
+.bg-ico-trash{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M19 6l-1 14H6L5 6'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E")}
+.bg-ico-box{--i:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5Z'/%3E%3Cpath d='M3 8l9 5 9-5M12 13v8'/%3E%3C/svg%3E")}
+#content .btn:has(> .bg-ico:only-child){min-width:32px;justify-content:center}
+/* Pulido visual general (cabecera, tarjetas, tablas, barras) */
+#topbar #live-clock{flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.15!important}
+#sidebar nav a #ped-badge:empty,#sidebar nav a #ped-badge[style*="display:none"],#sidebar nav a #ped-badge[style*="display: none"]{display:none!important}
+a.btn{text-decoration:none!important}
+body #content .prod-excel-filters{margin:0 0 12px}
+#content td:last-child > .btn + .btn{margin-left:4px}
+.in3-card:has(> #in3-horas){display:flex;flex-direction:column;align-self:stretch}
+#in3-horas{flex:1 1 auto;display:flex;flex-direction:column}
+#in3-horas > .in3-horas{flex:1 1 auto;height:auto;min-height:110px}
+.caja-k b,.in3-k b{font-feature-settings:'tnum'}
+@media (min-width:901px){
+  body #content .prod-excel-toolbar{display:flex!important;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  body #content .prod-excel-toolbar > .scan-row{flex:1 1 320px!important;margin:0!important}
+  body #content .prod-excel-toolbar > *{margin-top:0!important;margin-bottom:0!important}
+  #inv-meta-toggle{display:none!important}
+  #topbar #live-clock br{display:none}
+  .hc-acciones .hc-btns{display:inline-flex!important;vertical-align:middle}
+  .hc-acciones .hc-pago-wrap{display:inline-block;vertical-align:middle;margin-left:4px}
+  .hc-acciones .hc-pago-toggle{margin-top:0;padding:5px 11px;font-size:12px;font-weight:600;border-radius:8px;font-family:inherit}
+  #content .stats-grid:has(> #bg-stock-dashboard-card){grid-template-columns:repeat(auto-fit,minmax(230px,1fr))!important}
+  #content .stats-grid > #bg-stock-dashboard-card{grid-column:1/-1!important;min-width:0!important}
+  #bg-stock-dashboard-card .bg-stock-main{grid-template-columns:auto 1fr!important;gap:28px!important}
+  #bg-stock-dashboard-card .bg-stock-extra{flex-direction:row!important;gap:40px!important;padding-left:28px!important}
+}
+#comp-total-floating-row{display:none!important}
+@media (max-width:900px){
+  body #content .btn{font-size:14px!important}
+  body #content .btn.btn-sm{font-size:13px!important}
+  .hc-acciones .hc-pago-toggle{font-size:13px;padding:8px 12px;border-radius:8px;margin-top:8px}
+}
+@media (min-width:901px) and (max-width:1700px){
+  .caja-ks{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+</style>
 <!-- ══ FIN PEDIDOS ONLINE ══ -->
 </body>
 </html>
