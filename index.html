@@ -15331,8 +15331,11 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
     imp.setAttribute('inputmode','numeric');
     var d=document.createElement('div'); d.id='bg5-billetes';
     d.innerHTML='<button type="button" class="bg5-exacto" onclick="bg5Billete(\'exacto\')">Exacto</button>'+
-      [2000,5000,10000,20000,50000,100000].map(function(b){ return '<button type="button" onclick="bg5Billete('+b+')">+'+(b/1000)+'k</button>'; }).join('')+
-      '<button type="button" onclick="bg5Billete(\'clear\')">✕</button>';
+      '<button type="button" class="bg5-limpiar" onclick="bg5Billete(\'clear\')" title="Borrar importe">✕ Borrar</button>'+
+      [1000,2000,5000,10000,20000,50000,100000].map(function(b){
+        var img=b<=20000?'<img src="img/billetes/'+b+'.webp" alt="" loading="lazy" decoding="async" onerror="this.remove()">':'';
+        return '<button type="button" class="bg5-bill'+(img?' con-img':'')+'" onclick="bg5Billete('+b+')" title="Sumar Gs. '+b.toLocaleString('es-PY')+'">'+img+'<span>+'+(b/1000)+'k</span></button>';
+      }).join('');
     var g=imp.closest('.form-group')||imp.parentElement; g.id='bg5-imp-group'; g.appendChild(d);
   }
 
@@ -16528,6 +16531,14 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 })();
 </script>
 <style id="bg-pulido-v1">
+/* Cobro: botones de billetes con imagen */
+#bg5-billetes{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+#bg5-billetes .bg5-exacto{grid-column:span 3}
+#bg5-billetes .bg5-limpiar{font-size:12px;color:var(--text2)}
+#bg5-billetes .bg5-bill{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 4px;min-height:54px}
+#bg5-billetes .bg5-bill img{display:block;max-width:100%;height:28px;object-fit:contain;border-radius:3px}
+#bg5-billetes .bg5-bill.con-img span{font-size:11px;line-height:1;color:var(--text2)}
+#bg5-billetes .bg5-bill:not(.con-img) span{font-size:15px}
 /* Carrito en vista grilla (PC): cada producto en dos líneas para que entren total y botón de quitar */
 @media (min-width:901px){
   #venta-layout.bg5-grid #venta-table,#venta-layout.bg5-grid #venta-tbody{display:block;width:100%}
