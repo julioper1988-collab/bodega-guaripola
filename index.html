@@ -15236,6 +15236,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
 .bg5-tile .pr{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 .bg5-tile .st{position:absolute;top:6px;right:6px;font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--amber);color:#111}
 .bg5-tile .st.cero{background:var(--red);color:#fff}
+.bg5-tile .st.ok{background:var(--bg2);color:var(--text);border:1px solid var(--border2)}
 .bg5-tile .qn{position:absolute;top:6px;left:6px;min-width:22px;height:22px;border-radius:999px;background:var(--green);color:#06210f;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 6px}
 #bg5-pag{display:flex;gap:6px;justify-content:center;flex:0 0 auto}
 #bg5-pag button{min-width:36px;height:34px;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -15783,7 +15784,7 @@ input[onkeydown^="cajaDenomEnter"]:focus{box-shadow:0 0 0 3px rgba(244,122,53,.4
       var im=p.imagen_url?'<img src="'+esc(p.imagen_url)+'" alt="" loading="lazy" decoding="async">':'<span class="ini">'+esc(iniciales(p.nombre))+'</span>';
       return '<button type="button" class="bg5-tile'+(st<=0?' sin':'')+'" onclick="bg5Tile(\''+esc(p.id)+'\')" title="'+esc(p.nombre)+'">'+
         (enCarro[p.id]?'<span class="qn">'+enCarro[p.id]+'</span>':'')+
-        (st<=0?'<span class="st cero">Sin stock</span>':(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'<span class="st">'+st+'</span>':''))+
+        (st<=0?'<span class="st cero">Sin stock</span>':'<span class="st'+(n(p.stock_minimo)>0&&st<=n(p.stock_minimo)?'':' ok')+'" title="Stock">'+st.toLocaleString('es-PY')+'</span>')+
         '<div class="im" style="'+(p.imagen_url?'':(/^#[0-9a-f]{6}$/i.test(col)?'background:'+col+'26;color:'+col:'background:'+esc(col)))+'">'+im+'</div>'+
         '<div class="nm">'+esc(p.nombre)+'</div><div class="pr">'+fmtGs(precioDe(p))+'</div></button>';
     }).join('')||'<div style="grid-column:1/-1;text-align:center;color:var(--text2);padding:30px">No hay productos para mostrar</div>';
