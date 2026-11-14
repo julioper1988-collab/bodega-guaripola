@@ -1559,7 +1559,9 @@ input[type=number] { -moz-appearance: textfield; }
 body.sidebar-collapsed #sidebar nav a svg.ico { width: 18px !important; height: 18px !important; opacity: .8; }
 
 /* ══ STAT CARD CON ICONO ══════════════════════════════════════ */
-.stat-card { display: flex; align-items: flex-start; gap: 14px; }
+.stat-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 14px; }
+.stat-card > .label, .stat-card > .value, .stat-card > .sub { flex: 0 0 100%; min-width: 0; }
+.stat-card .value { overflow-wrap: anywhere; font-feature-settings: 'tnum'; }
 .stat-card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .stat-card > div:last-child { flex: 1; min-width: 0; }
 .stat-card .value { font-size: 22px; font-weight: 800; margin-top: 4px; letter-spacing: -.5px; line-height: 1.1; }
@@ -10151,7 +10153,7 @@ async function revertirStockCompraReal(compraId, detalles){
     window.__inicioAgrupadoReal = true;
 
     pages['dashboard'] = window.renderInicio;
-    titles['dashboard'] = 'Inicio';
+    titles['dashboard'] = 'Dashboard';
 
     var navDash = byId('nav-dashboard');
     if(navDash){
@@ -14239,7 +14241,7 @@ window.renderInicio = function(){
     '</div>';
 };
 try{ if(typeof pages==='object'&&pages){ pages.inicio=window.renderInicio; pages.dashboard=window.renderInicio; } }catch(e){}
-try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Inicio'; } }catch(e){}
+try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashboard='Dashboard'; } }catch(e){}
 </script>
 
 
@@ -16269,6 +16271,38 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 </style>
 <link rel="stylesheet" href="pedidos-admin.css">
 <script src="pedidos-admin.js"></script>
+<style id="bg-pulido-v1">
+/* Pulido visual general (cabecera, tarjetas, tablas, barras) */
+#topbar #live-clock{flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.15!important}
+#sidebar nav a #ped-badge:empty,#sidebar nav a #ped-badge[style*="display:none"],#sidebar nav a #ped-badge[style*="display: none"]{display:none!important}
+a.btn{text-decoration:none!important}
+body #content .prod-excel-filters{margin:0 0 12px}
+#content td:last-child > .btn + .btn{margin-left:4px}
+.in3-card:has(> #in3-horas){display:flex;flex-direction:column;align-self:stretch}
+#in3-horas{flex:1 1 auto;display:flex;flex-direction:column}
+#in3-horas > .in3-horas{flex:1 1 auto;height:auto;min-height:110px}
+.caja-k b,.in3-k b{font-feature-settings:'tnum'}
+@media (min-width:901px){
+  body #content .prod-excel-toolbar{display:flex!important;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  body #content .prod-excel-toolbar > .scan-row{flex:1 1 320px!important;margin:0!important}
+  body #content .prod-excel-toolbar > *{margin-top:0!important;margin-bottom:0!important}
+  #inv-meta-toggle{display:none!important}
+  #topbar #live-clock br{display:none}
+  .hc-acciones .hc-btns{display:inline-flex!important;vertical-align:middle}
+  .hc-acciones .hc-pago-wrap{display:inline-block;vertical-align:middle;margin-left:4px}
+  .hc-acciones .hc-pago-toggle{margin-top:0;padding:5px 11px;font-size:12px;font-weight:600;border-radius:8px;font-family:inherit}
+  #content .stats-grid:has(> #bg-stock-dashboard-card){grid-template-columns:repeat(auto-fit,minmax(230px,1fr))!important}
+  #content .stats-grid > #bg-stock-dashboard-card{grid-column:1/-1!important;min-width:0!important}
+  #bg-stock-dashboard-card .bg-stock-main{grid-template-columns:auto 1fr!important;gap:28px!important}
+  #bg-stock-dashboard-card .bg-stock-extra{flex-direction:row!important;gap:40px!important;padding-left:28px!important}
+}
+@media (max-width:900px){
+  .hc-acciones .hc-pago-toggle{font-size:13px;padding:8px 12px;border-radius:8px;margin-top:8px}
+}
+@media (min-width:901px) and (max-width:1700px){
+  .caja-ks{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+</style>
 <!-- ══ FIN PEDIDOS ONLINE ══ -->
 </body>
 </html>
