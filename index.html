@@ -12870,23 +12870,34 @@ window.diagnosticarStockCompras = async function(){
   };
 
   // Restaurar compra
-  window.bgRestaurarBorradorCompra = function(){
+  // renderCompras() vacía compraItems: primero se dibuja la pantalla y después se cargan los productos.
+  // El borrador se borra recién cuando los productos quedaron cargados.
+  window.bgRestaurarBorradorCompra = async function(){
     var d=lsGet(DC); if(!d||!d.compraItems||!d.compraItems.length){ if(typeof toast==='function') toast('No hay borrador de compra','err'); return; }
-    try{ compraItems=d.compraItems; }catch(e){_swallow(e)}
-    if(typeof renderCompras==='function') renderCompras();
-    setTimeout(function(){
-      var el;
-      if(d.fecha   && (el=document.getElementById('comp-fecha')))    el.value=d.fecha;
-      if(d.prov    && (el=document.getElementById('comp-prov')))     el.value=d.prov;
-      if(d.factura && (el=document.getElementById('comp-factura')))  el.value=d.factura;
-      if(d.metpago && (el=document.getElementById('comp-metpago')))  el.value=d.metpago;
-      if(d.estado  && (el=document.getElementById('comp-estado')))   el.value=d.estado;
-      if(d.notas   && (el=document.getElementById('comp-notas')))    el.value=d.notas;
-      if(typeof renderCompraItems==='function') renderCompraItems();
-    }, 400);
-    var mins=Math.round((Date.now()-d.ts)/60000);
-    if(typeof toast==='function') toast('Compra restaurada ('+mins+' min \u00b7 '+d.compraItems.length+' productos)');
-    lsDel(DC);
+    var items=d.compraItems.slice(), mins=Math.round((Date.now()-d.ts)/60000);
+    try{
+      if(typeof window.goTo==='function') await window.goTo('compras');
+      else if(typeof renderCompras==='function') renderCompras();
+    }catch(e){_swallow(e)}
+    var t0=Date.now();
+    while(!document.getElementById('ccomp-items') && Date.now()-t0<4000){ await new Promise(function(r){setTimeout(r,100);}); }
+    await new Promise(function(r){setTimeout(r,150);});
+    try{ compraItems=items; }catch(e){_swallow(e)}
+    try{ window.compraItems=items; }catch(e){_swallow(e)}
+    var el;
+    if(d.fecha   && (el=document.getElementById('comp-fecha')))    el.value=d.fecha;
+    if(d.prov    && (el=document.getElementById('comp-prov')))     el.value=d.prov;
+    if(d.factura && (el=document.getElementById('comp-factura')))  el.value=d.factura;
+    if(d.metpago && (el=document.getElementById('comp-metpago')))  el.value=d.metpago;
+    if(d.estado  && (el=document.getElementById('comp-estado')))   el.value=d.estado;
+    if(d.notas   && (el=document.getElementById('comp-notas')))    el.value=d.notas;
+    try{ if(typeof renderCompraItems==='function') renderCompraItems(); }catch(e){ console.error('No se pudo dibujar la compra restaurada',e); }
+    if(getCompraItems().length===items.length){
+      lsDel(DC);
+      if(typeof toast==='function') toast('Compra restaurada ('+mins+' min \u00b7 '+items.length+' productos)');
+    }else if(typeof toast==='function'){
+      toast('No se pudo restaurar la compra. El borrador sigue guardado: probá de nuevo.','err');
+    }
   };
 
   // Interceptar clicks del menú en fase de captura
