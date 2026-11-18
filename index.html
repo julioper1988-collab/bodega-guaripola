@@ -16612,5 +16612,37 @@ body #content .prod-excel-filters{margin:0 0 12px}
 }
 </style>
 <!-- ══ FIN PEDIDOS ONLINE ══ -->
+<!-- ══ COMPRA COMPACTA: más espacio para productos cargados ══ -->
+<style id="bg-compra-compacta">
+.compra-order-head{padding:6px 10px!important;font-size:13px!important}
+.compra-order-meta{padding:6px 8px!important}
+.compra-order-meta .form-grid{grid-template-columns:1.4fr .9fr 1fr .9fr 1.2fr!important;gap:4px 6px!important}
+.compra-order-meta .form-group{margin:0!important}
+.compra-order-meta label{font-size:10px!important;margin-bottom:2px!important}
+.compra-order-meta input,.compra-order-meta select{min-height:30px!important;height:30px!important;padding:3px 8px!important;font-size:13px!important}
+#comp-total-top-wrap{padding:4px 10px!important;gap:8px!important}
+#comp-total-top-wrap>div:first-child>div:nth-child(2){display:none!important}
+#comp-total-top{font-size:20px!important}
+#comp-venta-top>div:nth-child(2){font-size:16px!important}
+#comp-venta-top>div:nth-child(3){margin-top:0!important}
+#ccomp-items{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}
+#ccomp-items .compra-item-row{padding-top:4px!important;padding-bottom:4px!important}
+#ccomp-items .compra-item-name{font-size:13px!important}
+#ccomp-items .compra-item-sub{font-size:11px!important;line-height:1.25!important}
+#ccomp-items input{min-height:30px!important}
+#ccomp-items .compra-cost-label{font-size:9px!important;margin-bottom:1px!important}
+/* footer: total ya está arriba; notas y botón en una línea */
+.compra-footer,#compra-footer-guardar{padding:6px 10px!important;display:grid!important;grid-template-columns:1fr 240px;gap:6px;align-items:center}
+.compra-footer>div:has(#comp-total),#comp-total-venta-row,#comp-total-floating-row{display:none!important}
+.compra-footer .form-group{margin:0!important}
+.compra-footer .form-group label{display:none!important}
+.compra-footer textarea{min-height:34px!important;height:34px!important;padding:6px 8px!important;resize:none}
+.compra-footer .btn,.compra-footer button{padding:8px 10px!important;font-size:14px!important;margin:0!important}
+@media (max-width:900px){
+  .compra-order-meta .form-grid{grid-template-columns:1fr 1fr!important}
+  .compra-footer,#compra-footer-guardar{grid-template-columns:1fr}
+  #ccomp-items{min-height:50vh!important}
+}
+</style>
 </body>
 </html>
