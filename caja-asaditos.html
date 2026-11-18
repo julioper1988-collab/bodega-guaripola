@@ -240,9 +240,18 @@ $('cobrar').onclick=async()=>{
   const claves=new Set(sel.map(l=>l.key)),resto=lineasCarrito().filter(l=>!claves.has(l.key)).map(l=>({id:l.id,cant:l.cant,persona:l.p}));
   if(!items.length||cobrando)return;
   if(metodo==='ef'&&$('recibido').value&&+$('recibido').value<totalCarrito()){$('err').textContent='El monto recibido no alcanza.';return}
-  cobrando=true;$('err').textContent='';render();
+  $('err').textContent='';
+  // Venta simple: se cobra al instante y se guarda en segundo plano; si falla, vuelve el carrito
+  if(!mesa){
+    const met=metodo,tot=totalCarrito();
+    sel.forEach(l=>delete carrito[l.key]);if(!resto.length){carrito={};pers=0}cobrarP=null;sucio=false;$('recibido').value='';metodo='ef';render();toast('Cobrado '+money(tot));
+    api('venta',{fecha:hoy(),metodo:met,items}).then(out=>{if(!ventas.some(v=>v.id===out.venta.id))ventas.unshift(out.venta);renderVentas();cargarVentas().catch(()=>{})})
+      .catch(err=>{if(!mesa){sel.forEach(l=>{carrito[l.key]=(carrito[l.key]||0)+l.cant});metodo=met;render()}$('err').textContent='No se guardó la venta: '+err.message;alert('No se guardó la venta de '+money(tot)+': '+err.message)});
+    return;
+  }
+  cobrando=true;render();
   try{
-    const out=mesa?await api('mesa_cobrar',{id:mesa.id,fecha:hoy(),metodo,items,resto}):await api('venta',{fecha:hoy(),metodo,items});
+    const out=await api('mesa_cobrar',{id:mesa.id,fecha:hoy(),metodo,items,resto});
     // Se saca del carrito lo cobrado; si queda algo (otras personas), sigue abierto
     sel.forEach(l=>delete carrito[l.key]);cobrarP=null;
     if(!resto.length){carrito={};mesa=null;pers=0}

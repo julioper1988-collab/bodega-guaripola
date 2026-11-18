@@ -49,9 +49,10 @@ async function requireSession(token: string | undefined) {
 
 // Arma las líneas de un ticket con nombre y precio del sistema (no del cliente)
 async function armarItems(accountId: string, lineas: any[], vacioOk = false) {
-  const { data: st, error } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', accountId).maybeSingle();
+  // Solo la lista de productos (no todo el historial de días)
+  const { data: st, error } = await db.from('asaditos_v2_app_state').select('products:data->products').eq('account_id', accountId).maybeSingle();
   if (error) return { error: 'No se pudo cargar la base.' };
-  const productos = new Map<string, any>((st?.data?.products ?? []).map((p: any) => [String(p.id), p]));
+  const productos = new Map<string, any>(((st as any)?.products ?? []).map((p: any) => [String(p.id), p]));
   // persona: 0 = sin asignar, 1 a 8 = cuenta separada de una mesa
   const items: { id: string; nombre: string; precio: number; cant: number; persona?: number }[] = [];
   for (const l of lineas) {
@@ -113,9 +114,9 @@ Deno.serve(async (req) => {
 
   // Para la caja: solo nombre y precio de los productos (sin costos ni días)
   if (action === 'productos') {
-    const { data, error } = await db.from('asaditos_v2_app_state').select('data').eq('account_id', session.accountId).maybeSingle();
+    const { data, error } = await db.from('asaditos_v2_app_state').select('products:data->products').eq('account_id', session.accountId).maybeSingle();
     if (error) return json({ error: 'No se pudo cargar la base.' }, 500);
-    const productos = (data?.data?.products ?? []).filter((p: any) => p.active !== false)
+    const productos = ((data as any)?.products ?? []).filter((p: any) => p.active !== false)
       .map((p: any) => ({ id: p.id, name: p.name, price: p.price }));
     return json({ ok: true, productos });
   }
