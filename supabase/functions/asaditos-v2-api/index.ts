@@ -181,17 +181,20 @@ Deno.serve(async (req) => {
   if (action === 'ventas') {
     const fecha = String(body.fecha || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
-    const { data, error } = await db.from('asaditos_v2_ventas')
-      .select('id,fecha,items,total,metodo,anulada,created_at')
-      .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false });
+    // Las 4 consultas en paralelo
+    const [{ data, error }, { data: stock }, { data: conteo }, { data: mesas }] = await Promise.all([
+      db.from('asaditos_v2_ventas')
+        .select('id,fecha,items,total,metodo,anulada,created_at')
+        .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false }),
+      // Solo los agotados de la noche actual: la caja no muestra cuánto stock hay.
+      db.rpc('asadito_stock'),
+      db.from('asaditos_v2_conteos').select('total,billetes,usuario,created_at')
+        .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      db.from('asaditos_v2_mesas').select('id,nombre,items,usuario,created_at,updated_at')
+        .eq('account_id', session.accountId).eq('cerrada', false).order('created_at'),
+    ]);
     if (error) return json({ error: 'No se pudieron cargar las ventas.' }, 500);
-    // Solo los agotados de la noche actual: la caja no muestra cuánto stock hay.
-    const { data: stock } = await db.rpc('asadito_stock');
     const agotados = (stock ?? []).filter((s: any) => s.disponible !== null && s.disponible <= 0).map((s: any) => s.prod_id);
-    const { data: conteo } = await db.from('asaditos_v2_conteos').select('total,billetes,usuario,created_at')
-      .eq('account_id', session.accountId).eq('fecha', fecha).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    const { data: mesas } = await db.from('asaditos_v2_mesas').select('id,nombre,items,usuario,created_at,updated_at')
-      .eq('account_id', session.accountId).eq('cerrada', false).order('created_at');
     return json({ ok: true, ventas: data, agotados, conteo, mesas: mesas ?? [] });
   }
 
@@ -245,10 +248,12 @@ Deno.serve(async (req) => {
     const metodo = String(body.metodo || '');
     if (!FECHA_RE.test(fecha)) return json({ error: 'Fecha inválida.' }, 400);
     if (!METODOS.includes(metodo)) return json({ error: 'Método de pago inválido.' }, 400);
-    const armado = await armarItems(session.accountId, Array.isArray(body.items) ? body.items : []);
-    if ('error' in armado) return json({ error: armado.error }, 400);
     // resto: lo que queda sin cobrar (otras personas); si hay, la mesa sigue abierta con eso
-    const resto = await armarItems(session.accountId, Array.isArray(body.resto) ? body.resto : [], true);
+    const [armado, resto] = await Promise.all([
+      armarItems(session.accountId, Array.isArray(body.items) ? body.items : []),
+      armarItems(session.accountId, Array.isArray(body.resto) ? body.resto : [], true),
+    ]);
+    if ('error' in armado) return json({ error: armado.error }, 400);
     if ('error' in resto) return json({ error: resto.error }, 400);
     // Se cierra primero (solo si sigue abierta): así dos celulares no la cobran dos veces
     const { data: mesa } = await db.from('asaditos_v2_mesas')
