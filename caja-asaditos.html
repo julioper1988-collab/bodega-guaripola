@@ -116,7 +116,7 @@ details.card>summary{cursor:pointer;font-weight:700;list-style:none}details.card
 <script>
 const API_URL='https://sdpysvowvwucjfnyosuf.supabase.co/functions/v1/asaditos-v2-api';
 const API_KEY='sb_publishable_Px9Uz083rGIy3drTUvlDdw_otNlwCvs';
-const TOKEN_KEY='caja_asaditos_token';
+const TOKEN_KEY='caja_asaditos_token',PROD_KEY='caja_asaditos_productos';
 const METODOS={ef:'Efectivo',pos:'POS',tr:'Transf.',py:'Pedidos Ya',mo:'Monchis',ch:'Chompi',mi:'Mirna',ju:'Julio'}; // ch/mi/ju: consumo sin pago en caja
 const $=id=>document.getElementById(id);
 const DENOM=[100000,50000,20000,10000,5000,2000,1000,500,100,50];
@@ -139,7 +139,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.style.display='block';
 
 async function cargarProductos(){
   const out=await api('productos');
-  productos=out.productos||[];
+  productos=out.productos||[];try{localStorage.setItem(PROD_KEY,JSON.stringify(productos))}catch(e){}
   Object.keys(carrito).forEach(k=>{if(!productos.some(p=>p.id===cid(k)))delete carrito[k]});
   render();
 }
@@ -150,7 +150,9 @@ async function cargarVentas(){const out=await api('ventas',{fecha:hoy()});ventas
 async function iniciar(){
   $('fechaTxt').textContent=new Date(hoy()+'T12:00:00').toLocaleDateString('es-PY',{weekday:'long',day:'numeric',month:'long'});
   if(!token){$('auth').classList.add('on');return}
-  try{await cargarProductos();await cargarVentas()}catch(e){$('err').textContent=e.message}
+  // Productos guardados de la última vez: la pantalla se ve al instante mientras carga
+  try{productos=JSON.parse(localStorage.getItem(PROD_KEY))||[];if(productos.length)render()}catch(e){productos=[]}
+  try{await Promise.all([cargarProductos(),cargarVentas()])}catch(e){$('err').textContent=e.message}
 }
 
 // Líneas del carrito ordenadas por persona; cobrarP elige a quién se cobra (null = todo)
@@ -269,7 +271,7 @@ $('borrarMesa').onclick=async()=>{
   if(!mesa||!confirm('¿Borrar '+mesa.nombre+'? No se cobra nada.'))return;
   try{await api('mesa_borrar',{id:mesa.id});carrito={};mesa=null;sucio=false;pers=0;cobrarP=null;toast('Mesa borrada');await cargarVentas()}catch(err){alert(err.message)}
 };
-$('recargar').onclick=async()=>{try{await cargarProductos();await cargarVentas();toast('Actualizado')}catch(e){$('err').textContent=e.message}};
+$('recargar').onclick=async()=>{try{await Promise.all([cargarProductos(),cargarVentas()]);toast('Actualizado')}catch(e){$('err').textContent=e.message}};
 $('salir').onclick=async()=>{if(!confirm('¿Cerrar sesión?'))return;try{await api('logout')}catch(e){}token='';localStorage.removeItem(TOKEN_KEY);$('auth').classList.add('on')};
 $('entrar').onclick=async()=>{
   $('authErr').textContent='';
