@@ -703,12 +703,12 @@ window.bgLoadZXing=function(){
   --bg4:       #222638;
 
   /* ── Borders ── */
-  --border:    #2a2e3f;
-  --border2:   #363a50;
+  --border:    #3b4058;
+  --border2:   #4c526c;
 
   /* ── Text ── */
   --text:      #e8eaf0;
-  --text2:     #7c839e;
+  --text2:     #a9b0c8;
   --text3:     #b0b8d0;
 
   /* ── Brand / Accent ── */
@@ -3219,7 +3219,7 @@ async function loadVentaStats(){
 }
 function ventaStatsBadge(prodId){
   const st=ventaStatsMap[prodId]||{ayer:0,prom:0};
-  return `<div style="font-size:11px;color:var(--text2)">Ayer: <b style="color:#fbbf24">${st.ayer}</b> · Prom: <b style="color:#34d399">${st.prom}</b>/d</div>`;
+  return `<div style="font-size:12px;font-weight:600;color:var(--text3)">Ayer: <b style="color:var(--amber)">${st.ayer}</b> · Prom: <b style="color:var(--green)">${st.prom}</b>/d</div>`;
 }
 function renderCompras(){
   compraItems=[];
@@ -14373,8 +14373,8 @@ try{ if(typeof titles==='object'&&titles){ titles.inicio='Inicio'; titles.dashbo
 <style id="bg-theme-light-css">
 body.theme-light{
   --bg:#f4f6fa; --bg2:#ffffff; --bg3:#eef1f7; --bg4:#e3e7f0;
-  --border:#d7dce8; --border2:#c2c9da;
-  --text:#161a24; --text2:#6b7280; --text3:#374151;
+  --border:#bfc6d6; --border2:#a6afc4;
+  --text:#161a24; --text2:#4b5563; --text3:#374151;
   --accent:#d65413; --accent2:#b8460f; --accent-rgb:214,84,19;
   --accent-bg:rgba(214,84,19,.10); --accent-glow:0 0 20px rgba(214,84,19,.18);
   --green:#16a34a; --green-bg:rgba(22,163,74,.10);
@@ -15225,8 +15225,8 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
 /* Tema oscuro suave (gris azulado): reemplaza el casi negro. El tema claro no cambia */
 body:not(.theme-light){
   --bg:#1f2534; --bg2:#283044; --bg3:#232a3b; --bg4:#313a51;
-  --border:#3a4560; --border2:#47536f;
-  --text:#eef1f8; --text2:#a3acc4; --text3:#cbd2e3;
+  --border:#4d5a7a; --border2:#5d6a8a;
+  --text:#eef1f8; --text2:#c3cadc; --text3:#cbd2e3;
   --accent:#f47a35; --accent2:#e0621c; --accent-rgb:244,122,53;
   --accent-bg:rgba(244,122,53,.16); --accent-glow:0 0 20px rgba(244,122,53,.22);
   --shadow:0 2px 8px rgba(8,12,24,.25); --shadow-md:0 4px 20px rgba(8,12,24,.30); --shadow-lg:0 8px 40px rgba(8,12,24,.35);
