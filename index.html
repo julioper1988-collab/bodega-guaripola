@@ -1867,7 +1867,7 @@ async function bgRegistrarVenta(args, fiados){
   // Sin red (o la respuesta no llegó): guardar en el dispositivo con el mismo uuid
   const list=bgVentasPendientes();
   // caja abierta al momento de vender (se respeta al enviar)
-  try{ const cj=JSON.parse(localStorage.getItem('bg_caja_activa')||'null'); if(cj&&cj.id) args=Object.assign({},args,{p_caja_id:cj.id}); }catch(e){_swallow(e)}
+  try{ const cj=JSON.parse(localStorage.getItem('bg_caja_activa')||'null'); if(cj&&cj.id) args=Object.assign({},args,{p_caja_id:cj.id,p_vendido_at:new Date().toISOString()}); }catch(e){_swallow(e)}
   list.push({uuid,args,fiados:fiados||[],ts:Date.now()});
   if(!bgGuardarPendientes(list)) return {ok:false,error:'Sin conexión y no se pudo guardar en el dispositivo'};
   window.__bgOffline=true; bgSetOnlineBadge(false);

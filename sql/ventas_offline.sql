@@ -49,7 +49,13 @@ begin
 
   -- venta hecha sin conexión: mantener la caja que estaba abierta al vender
   v_caja := nullif(p_venta->>'p_caja_id', '')::uuid;
-  if v_caja is not null and not exists (select 1 from public.bodega_caja where id = v_caja) then
+  -- la caja cacheada puede estar vieja (otro equipo la cerró y abrió otra): solo se respeta si
+  -- estaba abierta a la hora de la venta (p_vendido_at); si no, queda la caja abierta del servidor.
+  if v_caja is not null and not exists (
+       select 1 from public.bodega_caja c
+        where c.id = v_caja
+          and (c.closed_at is null
+               or c.closed_at >= coalesce((p_venta->>'p_vendido_at')::timestamptz, 'infinity'::timestamptz))) then
     v_caja := null;
   end if;
 
