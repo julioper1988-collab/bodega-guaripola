@@ -338,6 +338,7 @@ window.safeHtml = escapeHtml;
   window.addInvItem = function(prodId){
     const p=prodCache.find(x=>x.id===prodId); if(!p) return;
     let it=invItems.find(x=>x.producto_id===prodId);
+    const isNew=!it;
     if(!it){
       it={producto_id:p.id,nombre:p.nombre,codigo_barra:p.codigo_barra||'',
           stock_sistema:Number(p.stock)||0,precio_costo:Number(p.precio_costo)||0,
@@ -349,16 +350,75 @@ window.safeHtml = escapeHtml;
       it.depositos.push({nombre:'Depósito '+(it.depositos.length+1),contado:0});
     }
     renderInvItems();
-    // Abrir drawer en móvil
+    // Móvil: modo rápido 1 a 1 (ficha a pantalla completa)
     if(window.innerWidth<=900){
-      const panel=gs('inv-panel-conteo');
-      if(panel && !panel.classList.contains('inv-drawer-open')) invDrawerToggle();
+      invQuickOpen(it, it.depositos.length-1, isNew);
+      return;
     }
     const idx=invItems.indexOf(it);
     setTimeout(()=>{
       const input=document.querySelector(`#inv-dep-${prodId}-${it.depositos.length-1}`);
       if(input){input.focus();input.select();}
     },80);
+  };
+
+  // ── MODO RÁPIDO MÓVIL ───────────────────────────────────────
+  let invQuick=null; // {it, di, isNew}
+  window.invQuickOpen=function(it,di,isNew){
+    invQuick={it,di,isNew};
+    if(document.activeElement) try{document.activeElement.blur();}catch(e){_swallow(e)}
+    let ov=gs('inv-quick');
+    if(!ov){ ov=document.createElement('div'); ov.id='inv-quick'; document.body.appendChild(ov); }
+    const otros=invTotalContado(it)-(Number(it.depositos[di].contado)||0);
+    ov.innerHTML=`
+      <div class="invq-box">
+        <div class="invq-name">${escapeHtml(it.nombre)}</div>
+        <div class="invq-sub">${escapeHtml(it.codigo_barra||'-')} · Sistema: <b>${it.stock_sistema}</b>${it.depositos.length>1?` · Otros depósitos: <b>${otros}</b>`:''}</div>
+        <input id="invq-dep" class="invq-dep" value="${escapeHtml(it.depositos[di].nombre)}" placeholder="Depósito">
+        <div class="invq-row">
+          <button type="button" class="invq-btn" onclick="invQuickStep(-1)">−</button>
+          <input id="invq-num" class="invq-num" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+            value="${it.depositos[di].contado}" onfocus="this.select()">
+          <button type="button" class="invq-btn" onclick="invQuickStep(1)">+</button>
+        </div>
+        <button type="button" class="btn btn-primary invq-ok" onclick="invQuickOk()">Guardar y siguiente</button>
+        <button type="button" class="btn btn-secondary invq-cancel" onclick="invQuickCancel()">Cancelar</button>
+      </div>`;
+    ov.style.display='flex';
+    document.body.classList.add('invq-open');
+    gs('invq-num').onkeydown=function(e){ if(e.key==='Enter'){e.preventDefault();invQuickOk();} };
+  };
+  window.invQuickStep=function(d){
+    const el=gs('invq-num'); if(!el) return;
+    el.value=Math.max(0,(parseInt(el.value,10)||0)+d);
+  };
+  function invQuickClose(){
+    const ov=gs('inv-quick'); if(ov){ ov.style.display='none'; ov.innerHTML=''; }
+    document.body.classList.remove('invq-open');
+    invQuick=null;
+    renderInvItems();
+    // Volver a la búsqueda, visible arriba de la pantalla
+    window.scrollTo(0,0);
+    const s=gs('inv-search');
+    if(s){ s.value=''; invSearch=''; renderInvProductList();
+      s.scrollIntoView({block:'start'}); s.focus(); }
+  }
+  window.invQuickOk=function(){
+    if(!invQuick) return;
+    const {it,di}=invQuick;
+    const dep=it.depositos[di]; if(dep){
+      dep.contado=Math.max(0,parseInt(gs('invq-num')?.value,10)||0);
+      dep.nombre=(gs('invq-dep')?.value||'').trim()||('Depósito '+(di+1));
+    }
+    toast(it.nombre+': '+invTotalContado(it));
+    invQuickClose();
+  };
+  window.invQuickCancel=function(){
+    if(!invQuick) return;
+    const {it,di,isNew}=invQuick;
+    if(isNew){ const i=invItems.indexOf(it); if(i>=0) invItems.splice(i,1); }
+    else it.depositos.splice(di,1);
+    invQuickClose();
   };
 
   window.renderInvItems = function(){
@@ -665,6 +725,22 @@ window.safeHtml = escapeHtml;
       .inv-panel-conteo.inv-drawer.inv-drawer-open #inv-panel-inner{display:flex!important;}
       #inv-meta-row{grid-template-columns:1fr!important;}
     }
+  `;
+  invCss.textContent+=`
+    #inv-quick{display:none;position:fixed;inset:0;z-index:20000;background:var(--bg,#0f1117);
+      align-items:flex-start;justify-content:center;overflow-y:auto;
+      padding:calc(env(safe-area-inset-top,0px) + 16px) 16px 24px;}
+    body.invq-open{overflow:hidden;}
+    .invq-box{width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;}
+    .invq-name{font-size:22px;font-weight:900;line-height:1.2;}
+    .invq-sub{font-size:14px;color:var(--text2);}
+    .invq-dep{font-size:16px!important;min-height:44px;}
+    .invq-row{display:flex;gap:10px;align-items:stretch;}
+    .invq-btn{width:72px;min-height:72px;font-size:34px;font-weight:900;border-radius:14px;
+      border:1px solid var(--border);background:var(--bg2);color:var(--text);touch-action:manipulation;}
+    .invq-num{flex:1;min-width:0;text-align:center;font-size:40px!important;font-weight:900;min-height:72px;border-radius:14px;}
+    .invq-ok{min-height:56px;font-size:17px!important;font-weight:800;}
+    .invq-cancel{min-height:46px;}
   `;
   document.head.appendChild(invCss);
   setTimeout(function(){
