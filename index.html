@@ -10076,8 +10076,8 @@ async function revertirStockCompraReal(compraId, detalles){
     }
     const navHistorial = byId('nav-historial-compras');
     const navProveedores = byId('nav-proveedores');
-    if(navHistorial) navHistorial.style.setProperty('display','none','important');
-    if(navProveedores) navProveedores.style.setProperty('display','none','important');
+    if(navHistorial && !navHistorial.closest('#macos-main-menu')) navHistorial.style.setProperty('display','none','important');
+    if(navProveedores && !navProveedores.closest('#macos-main-menu')) navProveedores.style.setProperty('display','none','important');
   }
 
   async function capturarPantallaOriginal(tab){
@@ -10304,7 +10304,7 @@ async function revertirStockCompraReal(compraId, detalles){
 
     // Ocultar del nav los items que van dentro del panel
     ['nav-categorias','nav-ajustes','nav-inventario'].forEach(function(id){
-      var el = byId(id); if(el) el.style.setProperty('display','none','important');
+      var el = byId(id); if(el && !el.closest('#macos-main-menu')) el.style.setProperty('display','none','important');
     });
   }
 
@@ -10318,8 +10318,8 @@ async function revertirStockCompraReal(compraId, detalles){
 
 <style>
 /* Oculta sí o sí las entradas separadas: queda un solo módulo Compras. */
-#nav-historial-compras,
-#nav-proveedores{ display:none !important; }
+#nav-historial-compras:not(#macos-main-menu *),
+#nav-proveedores:not(#macos-main-menu *){ display:none !important; }
 
 /* ===== ESTILO DE PESTAÑAS PARA MÓDULO COMPRAS ===== */
 .compras-module-shell{
