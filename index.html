@@ -93,6 +93,38 @@ window.safeHtml = escapeHtml;
   let invItems = [];
   let invSearch = '';
   let invEditing = false;
+  let invBorradorId = null; // id de bodega_inventarios si se continúa un borrador
+  const INV_DRAFT_KEY='bg_inv_draft_v1';
+  function invDraftGet(){ try{ const v=localStorage.getItem(INV_DRAFT_KEY); return v?JSON.parse(v):null; }catch(e){ return null; } }
+  function invDraftClear(){ try{ localStorage.removeItem(INV_DRAFT_KEY); }catch(e){_swallow(e)} }
+  window.invAutosave=function(){
+    try{
+      if(!invItems.length){ invDraftClear(); return; }
+      localStorage.setItem(INV_DRAFT_KEY, JSON.stringify({
+        items:invItems, borradorId:invBorradorId,
+        fecha:gs('inv-fecha')?.value||'', responsable:gs('inv-responsable')?.value||'',
+        ts:Date.now()}));
+    }catch(e){_swallow(e)}
+  };
+  function invAplicarEstado(d){
+    invItems=Array.isArray(d.items)?d.items:[];
+    invBorradorId=d.borradorId||null;
+    if(d.fecha && gs('inv-fecha')) gs('inv-fecha').value=d.fecha;
+    if(d.responsable!=null && gs('inv-responsable')) gs('inv-responsable').value=d.responsable;
+    renderInvItems(); renderInvProductList();
+  }
+  async function invOfrecerBorradorLocal(){
+    const d=invDraftGet();
+    if(!d || !Array.isArray(d.items) || !d.items.length) return;
+    const n=d.items.length;
+    const cuando=d.ts?new Date(d.ts).toLocaleString('es-PY'):'';
+    const ok=await bgConfirm(`Tenés un conteo sin guardar en este dispositivo: <b>${n} producto${n!==1?'s':''}</b>${cuando?'<br><span style="font-size:12px;color:var(--text2)">'+escapeHtml(cuando)+'</span>':''}`,
+      { title:'Conteo pendiente', confirmText:'Continuar', cancelText:'Descartar', variant:'primary' });
+    if(ok){ invAplicarEstado(d); return; }
+    // Confirmar antes de borrar (X / Cancelar no deben perder el conteo)
+    const seguro=await bgConfirm('Se perderá el conteo pendiente de este dispositivo.',{ title:'¿Descartar conteo?', confirmText:'Sí, descartar', cancelText:'No, continuar', variant:'warning' });
+    if(seguro) invDraftClear(); else invAplicarEstado(d);
+  }
 
   function normalInv(s){
     return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -147,7 +179,7 @@ window.safeHtml = escapeHtml;
   }
 
   window.renderInventario = async function(){
-    invItems=[]; invSearch=''; invEditing=false;
+    invItems=[]; invSearch=''; invEditing=false; invBorradorId=null;
     const today=fechaHoyPY();
     const isMob=window.innerWidth<=900;
     gs('content').className='';
@@ -187,8 +219,8 @@ window.safeHtml = escapeHtml;
               <span class="badge" id="inv-count-badge">0</span>
             </div>
             <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="inv-meta-row">
-              <div class="form-group"><label>Fecha</label><input id="inv-fecha" type="date" value="${today}"></div>
-              <div class="form-group"><label>Responsable</label><input id="inv-responsable" placeholder="Julio / empleado"></div>
+              <div class="form-group"><label>Fecha</label><input id="inv-fecha" type="date" value="${today}" onchange="invAutosave()"></div>
+              <div class="form-group"><label>Responsable</label><input id="inv-responsable" placeholder="Julio / empleado" oninput="invAutosave()"></div>
               <div class="form-group"><label>Estado</label>
                 <select id="inv-estado">
                   <option value="finalizado">Finalizado · ajustar stock</option>
@@ -209,6 +241,43 @@ window.safeHtml = escapeHtml;
       </div>`;
     renderInvProductList(); renderInvItems();
     invInitMobile();
+    if(window.__invSkipDraftPrompt) window.__invSkipDraftPrompt=false;
+    else invOfrecerBorradorLocal();
+  };
+
+  // Continuar un borrador guardado en la base (desde otro dispositivo)
+  window.continuarInventario = async function(id){
+    const local=invDraftGet();
+    if(local && local.items && local.items.length && local.borradorId!==id){
+      if(!(await bgConfirm('Hay otro conteo sin guardar en este dispositivo. Si continuás este borrador, se reemplaza.',{ title:'Reemplazar conteo', confirmText:'Reemplazar', variant:'warning' }))) return;
+    }
+    const [{data:cab,error:e1},{data:det,error:e2}]=await Promise.all([
+      sb.from('bodega_inventarios').select('*').eq('id',id).single(),
+      sb.from('bodega_inventario_detalle').select('*,bodega_productos(nombre,codigo_barra,stock,precio_costo)').eq('inventario_id',id).order('created_at',{ascending:true})
+    ]);
+    if(e1||e2||!cab){ toast('No se pudo abrir el borrador: '+((e1||e2)?.message||''),'err'); return; }
+    if(cab.estado!=='borrador'){ toast('Ese inventario ya está finalizado','err'); return; }
+    const items=(det||[]).map(d=>{
+      const p=prodCache.find(x=>x.id===d.producto_id)||{};
+      const bp=d.bodega_productos||{};
+      const contado=Number(d.stock_contado)||0;
+      let deps=[];
+      String(d.notas||'').split(' | ').forEach(part=>{
+        const k=part.lastIndexOf(':'); if(k<1) return;
+        const n=Number(part.slice(k+1).trim());
+        if(Number.isFinite(n)) deps.push({nombre:part.slice(0,k).trim(),contado:n});
+      });
+      if(!deps.length || deps.reduce((a,x)=>a+x.contado,0)!==contado) deps=[{nombre:'Depósito 1',contado}];
+      return {producto_id:d.producto_id, nombre:p.nombre||bp.nombre||'-', codigo_barra:p.codigo_barra||bp.codigo_barra||'',
+        stock_sistema:Number(p.stock!=null?p.stock:(bp.stock!=null?bp.stock:d.stock_sistema))||0,
+        precio_costo:Number(p.precio_costo!=null?p.precio_costo:(bp.precio_costo!=null?bp.precio_costo:d.costo_unitario))||0,
+        notas:'', depositos:deps};
+    });
+    window.__invSkipDraftPrompt=true;
+    await renderInventario();
+    invAplicarEstado({items, borradorId:id, fecha:cab.fecha, responsable:cab.responsable||''});
+    invAutosave();
+    toast('Borrador cargado: '+items.length+' productos');
   };
 
   function invInitMobile(){
@@ -338,6 +407,7 @@ window.safeHtml = escapeHtml;
   window.addInvItem = function(prodId){
     const p=prodCache.find(x=>x.id===prodId); if(!p) return;
     let it=invItems.find(x=>x.producto_id===prodId);
+    const isNew=!it;
     if(!it){
       it={producto_id:p.id,nombre:p.nombre,codigo_barra:p.codigo_barra||'',
           stock_sistema:Number(p.stock)||0,precio_costo:Number(p.precio_costo)||0,
@@ -349,16 +419,75 @@ window.safeHtml = escapeHtml;
       it.depositos.push({nombre:'Depósito '+(it.depositos.length+1),contado:0});
     }
     renderInvItems();
-    // Abrir drawer en móvil
+    // Móvil: modo rápido 1 a 1 (ficha a pantalla completa)
     if(window.innerWidth<=900){
-      const panel=gs('inv-panel-conteo');
-      if(panel && !panel.classList.contains('inv-drawer-open')) invDrawerToggle();
+      invQuickOpen(it, it.depositos.length-1, isNew);
+      return;
     }
     const idx=invItems.indexOf(it);
     setTimeout(()=>{
       const input=document.querySelector(`#inv-dep-${prodId}-${it.depositos.length-1}`);
       if(input){input.focus();input.select();}
     },80);
+  };
+
+  // ── MODO RÁPIDO MÓVIL ───────────────────────────────────────
+  let invQuick=null; // {it, di, isNew}
+  window.invQuickOpen=function(it,di,isNew){
+    invQuick={it,di,isNew};
+    if(document.activeElement) try{document.activeElement.blur();}catch(e){_swallow(e)}
+    let ov=gs('inv-quick');
+    if(!ov){ ov=document.createElement('div'); ov.id='inv-quick'; document.body.appendChild(ov); }
+    const otros=invTotalContado(it)-(Number(it.depositos[di].contado)||0);
+    ov.innerHTML=`
+      <div class="invq-box">
+        <div class="invq-name">${escapeHtml(it.nombre)}</div>
+        <div class="invq-sub">${escapeHtml(it.codigo_barra||'-')} · Sistema: <b>${it.stock_sistema}</b>${it.depositos.length>1?` · Otros depósitos: <b>${otros}</b>`:''}</div>
+        <input id="invq-dep" class="invq-dep" value="${escapeHtml(it.depositos[di].nombre)}" placeholder="Depósito">
+        <div class="invq-row">
+          <button type="button" class="invq-btn" onclick="invQuickStep(-1)">−</button>
+          <input id="invq-num" class="invq-num" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+            value="${it.depositos[di].contado}" onfocus="this.select()">
+          <button type="button" class="invq-btn" onclick="invQuickStep(1)">+</button>
+        </div>
+        <button type="button" class="btn btn-primary invq-ok" onclick="invQuickOk()">Guardar y siguiente</button>
+        <button type="button" class="btn btn-secondary invq-cancel" onclick="invQuickCancel()">Cancelar</button>
+      </div>`;
+    ov.style.display='flex';
+    document.body.classList.add('invq-open');
+    gs('invq-num').onkeydown=function(e){ if(e.key==='Enter'){e.preventDefault();invQuickOk();} };
+  };
+  window.invQuickStep=function(d){
+    const el=gs('invq-num'); if(!el) return;
+    el.value=Math.max(0,(parseInt(el.value,10)||0)+d);
+  };
+  function invQuickClose(){
+    const ov=gs('inv-quick'); if(ov){ ov.style.display='none'; ov.innerHTML=''; }
+    document.body.classList.remove('invq-open');
+    invQuick=null;
+    renderInvItems();
+    // Volver a la búsqueda, visible arriba de la pantalla
+    window.scrollTo(0,0);
+    const s=gs('inv-search');
+    if(s){ s.value=''; invSearch=''; renderInvProductList();
+      s.scrollIntoView({block:'start'}); s.focus(); }
+  }
+  window.invQuickOk=function(){
+    if(!invQuick) return;
+    const {it,di}=invQuick;
+    const dep=it.depositos[di]; if(dep){
+      dep.contado=Math.max(0,parseInt(gs('invq-num')?.value,10)||0);
+      dep.nombre=(gs('invq-dep')?.value||'').trim()||('Depósito '+(di+1));
+    }
+    toast(it.nombre+': '+invTotalContado(it));
+    invQuickClose();
+  };
+  window.invQuickCancel=function(){
+    if(!invQuick) return;
+    const {it,di,isNew}=invQuick;
+    if(isNew){ const i=invItems.indexOf(it); if(i>=0) invItems.splice(i,1); }
+    else it.depositos.splice(di,1);
+    invQuickClose();
   };
 
   window.renderInvItems = function(){
@@ -406,15 +535,18 @@ window.safeHtml = escapeHtml;
     if(gs('inv-count-badge')) gs('inv-count-badge').textContent=total+' prod.';
     if(gs('inv-drawer-label')) gs('inv-drawer-label').textContent=`${total} producto${total!==1?'s':''} contado${total!==1?'s':''}`;
     actualizarResumenInventario();
+    invAutosave();
   };
 
   window.invSetDepNombre=function(i,di,v){
     if(invItems[i]?.depositos[di]) invItems[i].depositos[di].nombre=v;
+    invAutosave();
   };
   window.invSetDepContado=function(i,di,v){
     if(!invItems[i]?.depositos[di]) return;
     invItems[i].depositos[di].contado=Number(v)||0;
     actualizarResumenInventario();
+    invAutosave();
     // Actualizar totales en el DOM sin re-render completo
     const it=invItems[i];
     const total=invTotalContado(it);
@@ -457,7 +589,7 @@ window.safeHtml = escapeHtml;
   window.removeInvItem=async function(i){invItems.splice(i,1);renderInvItems();};
   window.limpiarInventarioActual=async function(){
     if(invItems.length&&!(await bgConfirm('¿Limpiar el conteo actual?',{ title:'Limpiar conteo', confirmText:'Limpiar', variant:'warning' }))) return;
-    invItems=[]; renderInvItems();
+    invItems=[]; invBorradorId=null; invDraftClear(); renderInvItems();
   };
 
   window.guardarInventarioActual = async function(){
@@ -465,6 +597,14 @@ window.safeHtml = escapeHtml;
     const estado=gs('inv-estado')?.value||'finalizado';
     const fecha=gs('inv-fecha')?.value||fechaHoyPY();
     const responsable=gs('inv-responsable')?.value||null;
+    // Releer stock actual del sistema (pudo cambiar desde que se empezó a contar)
+    try{
+      const ids=invItems.map(it=>it.producto_id);
+      const {data:cur,error:eS}=await sb.from('bodega_productos').select('id,stock').in('id',ids);
+      if(eS) throw eS;
+      (cur||[]).forEach(r=>{ const it=invItems.find(x=>x.producto_id===r.id); if(it) it.stock_sistema=Number(r.stock)||0; });
+      renderInvItems();
+    }catch(e){ toast('No se pudo leer el stock actual. Revisá la conexión.','err'); return; }
     // Calcular totales sumando todos los depósitos
     let difTotal=0, difMontoTotal=0;
     invItems.forEach(it=>{
@@ -489,7 +629,17 @@ window.safeHtml = escapeHtml;
       }
     }
     const cab={fecha,estado,responsable,total_productos:invItems.length,diferencia_total:difTotal,diferencia_monto:difMontoTotal,created_at:new Date().toISOString()};
-    const {data:inv,error:e1}=await sb.from('bodega_inventarios').insert(cab).select().single();
+    let inv, e1;
+    if(invBorradorId){
+      delete cab.created_at; cab.updated_at=new Date().toISOString();
+      ({data:inv,error:e1}=await sb.from('bodega_inventarios').update(cab).eq('id',invBorradorId).eq('estado','borrador').select().single());
+      if(!e1){
+        const {error:eD}=await sb.from('bodega_inventario_detalle').delete().eq('inventario_id',invBorradorId);
+        if(eD){toast('Error actualizando borrador: '+eD.message,'err');return;}
+      }
+    } else {
+      ({data:inv,error:e1}=await sb.from('bodega_inventarios').insert(cab).select().single());
+    }
     if(e1){toast('Error inventario: '+e1.message,'err');return;}
     // Guardar detalle con el total contado (suma depósitos) + notas con detalle por depósito
     const detalles=invItems.map(it=>{
@@ -512,13 +662,13 @@ window.safeHtml = escapeHtml;
       // reflejar en cache local sin más red
       invItems.forEach(function(it){ var p=prodCache.find(function(x){return x.id===it.producto_id;}); if(p) p.stock=invTotalContado(it); });
     }
-    toast('Inventario guardado'); loadCaches(true); invItems=[]; renderInventario();
+    toast('Inventario guardado'); loadCaches(true); invItems=[]; invBorradorId=null; invDraftClear(); renderInventario();
   };
 
   window.renderHistorialInventarios = async function(){
     const {data,error}=await sb.from('bodega_inventarios').select('*').order('created_at',{ascending:false}).limit(80);
     if(error){gs('content').innerHTML=`<div class="alert alert-error">No existe bodega_inventarios. Ejecutá el SQL de inventario.</div>`;return;}
-    const rows=(data||[]).map(i=>{ const du=Number(i.diferencia_total||0); const dm=Number(i.diferencia_monto||0); return `<tr><td>${fmtDate(i.fecha)}</td><td>${escapeHtml(i.estado)}</td><td>${escapeHtml(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td><td><button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
+    const rows=(data||[]).map(i=>{ const du=Number(i.diferencia_total||0); const dm=Number(i.diferencia_monto||0); return `<tr><td>${fmtDate(i.fecha)}</td><td>${escapeHtml(i.estado)}</td><td>${escapeHtml(i.responsable||'-')}</td><td>${i.total_productos||0}</td><td style="font-weight:800;color:${du===0?'var(--text2)':du>0?'var(--green)':'var(--red)'}">${du>0?'+':''}${du}</td><td style="font-weight:800;color:${dm===0?'var(--text2)':dm>0?'var(--green)':'var(--red)'}">${fmtGs(dm)}</td><td style="white-space:nowrap">${i.estado==='borrador'?`<button class="btn btn-primary btn-sm" onclick="continuarInventario('${i.id}')">Continuar</button> `:''}<button class="btn btn-secondary btn-sm" onclick="verInventario('${i.id}')">Ver</button></td></tr>`; }).join('')||'<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text2)">Sin inventarios guardados.</td></tr>';
     gs('content').innerHTML=`<div class="card"><div class="card-header"><h3>Historial de inventarios</h3><button class="btn btn-primary" onclick="renderInventario()">+ Nuevo inventario</button></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Estado</th><th>Responsable</th><th>Productos</th><th>Dif. unidades</th><th>Dif. Gs.</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   };
   window.verInventario = async function(id){
@@ -665,6 +815,22 @@ window.safeHtml = escapeHtml;
       .inv-panel-conteo.inv-drawer.inv-drawer-open #inv-panel-inner{display:flex!important;}
       #inv-meta-row{grid-template-columns:1fr!important;}
     }
+  `;
+  invCss.textContent+=`
+    #inv-quick{display:none;position:fixed;inset:0;z-index:20000;background:var(--bg,#0f1117);
+      align-items:flex-start;justify-content:center;overflow-y:auto;
+      padding:calc(env(safe-area-inset-top,0px) + 16px) 16px 24px;}
+    body.invq-open{overflow:hidden;}
+    .invq-box{width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;}
+    .invq-name{font-size:22px;font-weight:900;line-height:1.2;}
+    .invq-sub{font-size:14px;color:var(--text2);}
+    .invq-dep{font-size:16px!important;min-height:44px;}
+    .invq-row{display:flex;gap:10px;align-items:stretch;}
+    .invq-btn{width:72px;min-height:72px;font-size:34px;font-weight:900;border-radius:14px;
+      border:1px solid var(--border);background:var(--bg2);color:var(--text);touch-action:manipulation;}
+    .invq-num{flex:1;min-width:0;text-align:center;font-size:40px!important;font-weight:900;min-height:72px;border-radius:14px;}
+    .invq-ok{min-height:56px;font-size:17px!important;font-weight:800;}
+    .invq-cancel{min-height:46px;}
   `;
   document.head.appendChild(invCss);
   setTimeout(function(){
@@ -10076,8 +10242,8 @@ async function revertirStockCompraReal(compraId, detalles){
     }
     const navHistorial = byId('nav-historial-compras');
     const navProveedores = byId('nav-proveedores');
-    if(navHistorial) navHistorial.style.setProperty('display','none','important');
-    if(navProveedores) navProveedores.style.setProperty('display','none','important');
+    if(navHistorial && !navHistorial.closest('#macos-main-menu')) navHistorial.style.setProperty('display','none','important');
+    if(navProveedores && !navProveedores.closest('#macos-main-menu')) navProveedores.style.setProperty('display','none','important');
   }
 
   async function capturarPantallaOriginal(tab){
@@ -10304,7 +10470,7 @@ async function revertirStockCompraReal(compraId, detalles){
 
     // Ocultar del nav los items que van dentro del panel
     ['nav-categorias','nav-ajustes','nav-inventario'].forEach(function(id){
-      var el = byId(id); if(el) el.style.setProperty('display','none','important');
+      var el = byId(id); if(el && !el.closest('#macos-main-menu')) el.style.setProperty('display','none','important');
     });
   }
 
@@ -10318,8 +10484,8 @@ async function revertirStockCompraReal(compraId, detalles){
 
 <style>
 /* Oculta sí o sí las entradas separadas: queda un solo módulo Compras. */
-#nav-historial-compras,
-#nav-proveedores{ display:none !important; }
+#nav-historial-compras:not(#macos-main-menu *),
+#nav-proveedores:not(#macos-main-menu *){ display:none !important; }
 
 /* ===== ESTILO DE PESTAÑAS PARA MÓDULO COMPRAS ===== */
 .compras-module-shell{
