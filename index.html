@@ -2334,8 +2334,10 @@ async function renderDashboard(){
   }
   // Agrupar por producto
   const porProd={};
+  const esDelD=d=>/^delivery$/i.test(String(d.bodega_productos?.nombre||'').trim());
+  const tDel=detallesCaja.filter(esDelD).reduce((s,d)=>s+(Number(d.subtotal||(d.precio_unitario*(Number(d.cantidad)||0)))||0),0);
   detallesCaja.forEach(d=>{
-    const pid=d.producto_id; if(!pid) return;
+    const pid=d.producto_id; if(!pid||esDelD(d)) return;
     const nombre=d.bodega_productos?.nombre||'Desconocido';
     const stock=d.bodega_productos?.stock??'-';
     const costo=Number(d.bodega_productos?.precio_costo)||0;
@@ -2362,7 +2364,7 @@ async function renderDashboard(){
       </div>
       <div>
         <div class="label">Ventas del turno</div>
-        <div class="value" style="color:var(--green)">${fmtGs(tH)}</div>
+        <div class="value" style="color:var(--green)">${fmtGs(tH-tDel)}</div>${tDel?`<div class="sub">+ Delivery ${fmtGs(tDel)} (entra a caja)</div>`:''}
         <div class="sub">${cajaAbierta?`<span style="color:var(--green)">● Abierta</span> desde ${horaApertura||'--:--'}`:cajaActiva?`<span style="color:var(--amber)">● Cerrada</span> · turno ${fmtDate(cajaActiva.fecha)} ${horaApertura||''}`:'<span style="color:var(--red)">Sin caja</span>'} · ${ventasCaja.length} ventas</div>
       </div>
     </div>
@@ -2496,7 +2498,7 @@ async function renderDashboard(){
     }
     // Animación precisa por selector (valor correcto por card)
     const cards = [
-      {sel: '.stat-card--green .value', val: tH, isGs: true},
+      {sel: '.stat-card--green .value', val: tH-tDel, isGs: true},
       {sel: '.stat-card:nth-child(2) .value', val: totalGanancia, isGs: true},
       {sel: '.stat-card:nth-child(3) .value', val: tM, isGs: true},
       {sel: '.stat-card:nth-child(4) .value', val: tC, isGs: true},
@@ -6462,7 +6464,7 @@ initMobileShell();
   }
 
   async function resumenVentasCaja(caja){
-    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:0,fiadosDetalle:[]};
+    const r={efectivo:0,transferencia:0,qr:0,debito:0,credito:0,fiado:0,mixto:0,total:0,total_cobrado:0,cantidad:0,fiadosDetalle:[],delivery:0,delivery_n:0};
     if(!caja?.id) return r;
     // Cada jornada incluye todas las ventas vinculadas al arqueo, incluso al día siguiente.
     for(let desde=0;;desde+=500){
@@ -6491,6 +6493,9 @@ initMobileShell();
           });
         }
         r.cantidad++;r.total+=t;r.fiado+=fiado;r.total_cobrado+=cobrado;
+        // Delivery de pedidos online: suma a caja (cobrado/efectivo) pero no a ventas
+        const del=(v.bodega_ventas_detalle||[]).filter(d=>/^delivery$/i.test(String(d.bodega_productos?.nombre||'').trim())).reduce((s,d)=>s+(Number(d.subtotal)||(Number(d.cantidad)||0)*(Number(d.precio_unitario)||0)),0);
+        if(del){r.total-=del;r.delivery+=del;r.delivery_n++;}
         if(m==='efectivo'||m==='parcial')r.efectivo+=cobrado;
         else if(['transferencia','qr','debito','credito'].includes(m))r[m]+=cobrado;
         else if(m==='mixto'){
@@ -6551,6 +6556,7 @@ initMobileShell();
       <p>Sistema Bodega · ${fmtDate(caja.fecha)} · ${caja.estado==='abierta'?'Provisional: caja abierta':'Caja cerrada'}</p>
       <div class="stats-grid">
         <div class="stat-card"><div class="label">Total vendido</div><div class="value" style="font-size:28px;font-weight:800">${fmtGs(ventas.total)}</div><div class="sub">Cobrado + fiado · ${ventas.cantidad} ventas registradas</div></div>
+        ${ventas.delivery?`<div class="stat-card"><div class="label">Delivery (pedidos online)</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.delivery)}</div><div class="sub">${ventas.delivery_n} pedido(s) · entra a caja, no es venta</div></div>`:''}
         <div class="stat-card"><div class="label">Cobrado en las ventas</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.total_cobrado-(ventas.cobros_fiado||0))}</div><div class="sub">Efectivo y todos los medios de pago</div></div>
         ${ventas.cobros_fiado?`<div class="stat-card"><div class="label">Cobros de fiado del turno</div><div class="value" style="font-size:24px;font-weight:700;color:var(--green)">${fmtGs(ventas.cobros_fiado)}</div><div class="sub">${ventas.cobrosFiadoDetalle.length} pago(s) de deudas · entran a la caja</div></div>`:''}
         <div class="stat-card"><div class="label">Vendido a fiado</div><div class="value" style="font-size:24px;font-weight:700">${fmtGs(ventas.fiado)}</div><div class="sub">Importe originalmente fiado, incluidos pagos parciales</div></div>
@@ -6866,7 +6872,8 @@ initMobileShell();
         return `<div class="card caja-res"><div class="caja-res-h"><b>${caja.estado==='abierta'?'🟢 Caja abierta':'🔴 Caja cerrada'}</b><span>${cajaTurnoTitulo(caja)} · ${fmtDate(caja.fecha)}${caja.opened_at?' · desde '+new Date(caja.opened_at).toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'}):''}</span></div>
         <div class="caja-ks">
           ${k('Total vendido',fmtGs(ventas.total),ventas.cantidad+' ventas')}
-          ${k('Cobrado',fmtGs(ventas.total_cobrado-(ventas.cobros_fiado||0)),'todos los medios','var(--green)')}
+          ${ventas.delivery?k('Delivery',fmtGs(ventas.delivery),ventas.delivery_n+' pedido(s) · entra a caja, no es venta','var(--accent)'):''}
+          ${k('Cobrado',fmtGs(ventas.total_cobrado-(ventas.cobros_fiado||0)),ventas.delivery?'incl. delivery':'todos los medios','var(--green)')}
           ${ventas.fiado?k('Fiado',fmtGs(ventas.fiado),'no entra a caja','var(--amber)'):''}
           ${ventas.cobros_fiado?k('Cobros de fiado',fmtGs(ventas.cobros_fiado),ventas.cobrosFiadoDetalle.length+' pago(s) · entran','var(--green)'):''}
           ${k('Apertura',fmtGs(apertura))}
