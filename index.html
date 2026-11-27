@@ -12680,7 +12680,7 @@ small,
         var totalLinea=costo*packs;
         var costoUnit=uds>1 ? costo/uds : costo;
         var precioVenta=Number(item.precio_venta||0)||0;
-        var margen = costoUnit>0 ? ((precioVenta - costoUnit) / costoUnit) * 100 : 0;
+        var margen = precioVenta>0 ? ((precioVenta - costoUnit) / precioVenta) * 100 : 0;
         margen = isFinite(margen) ? Math.round(margen*10)/10 : 0;
 
         return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
@@ -12769,7 +12769,9 @@ small,
     var uds=Math.max(1,Number(compraItems[i].uds)||1);
     var costo=Number(compraItems[i].costo)||0;
     var costoUnit=uds>1 ? (costo/uds) : costo;
-    compraItems[i].precio_venta=Math.round(costoUnit*(1+(margen/100)));
+    // Margen sobre precio de venta: venta = costo / (1 - margen%)
+    if(margen>=100){ toast('El margen sobre venta debe ser menor a 100%','err'); renderCompraItems(); return; }
+    compraItems[i].precio_venta=Math.round(costoUnit/(1-(margen/100)));
     renderCompraItems();
   };
   window.cRemove = cRemove = function(i){compraItems.splice(i,1);renderCompraItems();};
@@ -14358,7 +14360,7 @@ if('serviceWorker' in navigator){
           var uds=Math.max(1,n(item.uds)||1), packs=Math.max(1,n(item.cantidad)||1), totalUds=packs*uds, costo=n(item.costo), bruto=costo*packs, redondeado=round500(bruto);
           var costoUnit=uds>1 ? (costo/uds) : costo;
           var precioVenta=n(item.precio_venta||0);
-          var margen=costoUnit>0 ? ((precioVenta-costoUnit)/costoUnit)*100 : 0; margen=isFinite(margen)?Math.round(margen*10)/10:0;
+          var margen=precioVenta>0 ? ((precioVenta-costoUnit)/precioVenta)*100 : 0; margen=isFinite(margen)?Math.round(margen*10)/10:0;
           var notaRed='';
           return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
             '<div style="min-width:0"><div class="compra-item-name">'+esc(item.nombre)+'</div>'+ 
@@ -14657,7 +14659,7 @@ body.sidebar-collapsed #bg-theme-btn span.lbl{display:none}
   function pintar(){
     if(!document.getElementById('ccomp-items')) return;
     var total=ventaTotal(), costo=costoTotal(), gan=total-costo;
-    var pct=costo>0?((gan/costo)*100).toFixed(1)+'%':'—';
+    var pct=total>0?((gan/total)*100).toFixed(1)+'%':'—';
 
     var ct=document.getElementById('comp-total');
     if(ct){
