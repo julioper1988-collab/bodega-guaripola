@@ -8397,8 +8397,16 @@ function compraSafeHtml(v){
 function compraEditBanner(compra){
   const content = gs('content');
   if(!content) return;
+  document.querySelectorAll('.compra-edit-banner').forEach(el=>el.remove());
+  const title = content.querySelector('.compras-mini-title');
+  if(title){
+    title.innerHTML = `<span class="compra-edit-banner compra-edit-pill" title="Los cambios se aplican recién al tocar Guardar cambios">✏️ Editando compra · ${fmtDate(compra?.fecha)} · ${compraSafeHtml(String(compra?.estado || '-').replace(/_/g,' '))}<button class="btn btn-secondary btn-sm" onclick="cancelarEdicionCompraReal()">Cancelar edición</button></span>`;
+    const b = document.querySelector('button[onclick="finalizarCompra()"]');
+    if(b) b.textContent = 'Guardar cambios de compra';
+    return;
+  }
   content.insertAdjacentHTML('afterbegin', `
-    <div class="alert alert-warning" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div class="alert alert-warning compra-edit-banner" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div><strong>✏️ Editando compra</strong> · ${fmtDate(compra?.fecha)} · Estado anterior: <strong>${compraSafeHtml(compra?.estado || '-')}</strong>. Los cambios se aplican recién al tocar <strong>Guardar cambios</strong>.</div>
       <button class="btn btn-secondary btn-sm" onclick="cancelarEdicionCompraReal()">Cancelar edición</button>
     </div>
@@ -10295,6 +10303,10 @@ async function revertirStockCompraReal(compraId, detalles){
     content.innerHTML = shellHTML(tab);
     const finalTabContent = byId('compras-tab-content');
     if(finalTabContent) finalTabContent.innerHTML = html;
+    if(finalTabContent) finalTabContent.querySelectorAll('.compra-edit-banner').forEach(el=>el.remove());
+    if(tab==='nueva' && window.__compraEditando && window.__compraEditando.compra && typeof compraEditBanner==='function'){
+      try{ compraEditBanner(window.__compraEditando.compra); }catch(e){_swallow(e)}
+    }
 
     marcarMenuCompras();
     simplificarMenu();
@@ -11566,6 +11578,13 @@ small,
   color:var(--text);
   letter-spacing:-.2px;
 }
+.compra-edit-pill{
+  display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:13px;font-weight:800;color:var(--yellow,#f59e0b);
+  background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);
+  border-radius:10px;padding:4px 6px 4px 10px;
+}
+.compra-edit-pill .btn{min-height:28px!important;padding:3px 10px!important;font-size:12px!important;}
 .compras-tabs-mini{
   display:flex;
   gap:6px;
@@ -12667,7 +12686,7 @@ small,
         return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
           '<div style="min-width:0">'+
             '<div class="compra-item-name">'+window.safeHtml(item.nombre)+'</div>'+
-            '<div class="compra-item-sub detalle-legible">Cantidad: <b>'+packs+'</b> · +<b>'+totalUds+'</b> uds al stock · Costo ref.: <b>'+fmtGs(costoUnit)+'</b> · Precio venta: <b>'+fmtGs(precioVenta)+'</b> · Margen: <b>'+margen+'%</b> · Total: <b>'+fmtGs(totalLinea)+'</b></div>'+
+            '<div class="compra-item-sub detalle-legible">'+(window.compraInfoStockAyer?window.compraInfoStockAyer(item.producto_id):'')+'</div>'+
           '</div>'+
           '<div class="compra-qty-box">'+
             '<button class="compra-qty-btn" onclick="cQty('+i+',-1)">−</button>'+
@@ -14343,7 +14362,7 @@ if('serviceWorker' in navigator){
           var notaRed='';
           return '<div class="compra-item-row compra-item-row-total compra-total-visible-row compra-row-precio-venta compra-row-margen-venta">'+
             '<div style="min-width:0"><div class="compra-item-name">'+esc(item.nombre)+'</div>'+ 
-            '<div class="compra-item-sub detalle-legible">Cantidad: <b>'+packs+'</b> · +<b>'+totalUds+'</b> uds al stock · Costo ref.: <b>'+money(costoUnit)+'</b> · Precio venta: <b>'+money(precioVenta)+'</b> · Margen: <b>'+margen+'%</b> · Total exacto: <b>'+money(bruto)+'</b>'+notaRed+'</div></div>'+ 
+            '<div class="compra-item-sub detalle-legible">'+(window.compraInfoStockAyer?window.compraInfoStockAyer(item.producto_id):'')+'</div></div>'+  
             '<div class="compra-qty-box"><button class="compra-qty-btn" onclick="cQty('+idx+',-1)">−</button><input type="number" value="'+packs+'" min="1" onchange="cQtySet('+idx+',this.value)" class="compra-input-cant"><button class="compra-qty-btn" onclick="cQty('+idx+',1)">+</button></div>'+ 
             '<div class="compra-cost-wrap"><div class="compra-cost-label">'+(uds>1?'Costo pack':'Costo unit.')+'</div><input type="number" value="'+costo+'" step="0.01" onchange="cCosto('+idx+',this.value)" class="compra-input-costo"></div>'+ 
             '<div class="compra-cost-wrap compra-venta-wrap"><div class="compra-cost-label">Precio venta</div><input type="number" value="'+precioVenta+'" step="1" onchange="cPrecioVenta('+idx+',this.value)" class="compra-input-venta"></div>'+ 
@@ -16571,6 +16590,44 @@ body:not(.con-mayorista) button[onclick^="setVTipo"]{display:none!important}
 .caja-2col{grid-template-columns:1fr;gap:0}#caja-descuadre-panel>div:first-child{grid-template-columns:1fr 1fr!important;margin-bottom:0!important}#caja-descuadre-panel{padding:10px!important}.caja-ks{grid-template-columns:1fr 1fr}.caja-k b{font-size:17px}.caja-form{grid-template-columns:1fr 96px}.caja-form .btn{grid-column:1/-1}}
 </style>
 <link rel="stylesheet" href="pedidos-admin.css">
+<script id="bg-compra-stock-ayer">
+/* Compras: debajo de cada producto mostrar solo stock actual y ventas de ayer */
+(function(){
+  var cache={fecha:null,map:null,loading:null};
+  function ayerPY(){
+    var hoy=(typeof fechaHoyPY==='function')?fechaHoyPY():new Date().toISOString().slice(0,10);
+    var d=new Date(hoy+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()-1);
+    return d.toISOString().slice(0,10);
+  }
+  function cargar(){
+    var f=ayerPY();
+    if(cache.fecha===f && (cache.map||cache.loading)) return;
+    cache.fecha=f; cache.map=null;
+    cache.loading=(async function(){
+      try{
+        var r=await sb.from('bodega_ventas').select('id').eq('fecha',f).limit(5000);
+        if(r.error) throw r.error;
+        var ids=(r.data||[]).map(function(v){return v.id;}), map={};
+        for(var i=0;i<ids.length;i+=100){
+          var d=await sb.from('bodega_ventas_detalle').select('producto_id,cantidad').in('venta_id',ids.slice(i,i+100));
+          if(d.error) throw d.error;
+          (d.data||[]).forEach(function(x){ if(x.producto_id) map[x.producto_id]=(map[x.producto_id]||0)+(Number(x.cantidad)||0); });
+        }
+        if(cache.fecha===f) cache.map=map;
+      }catch(e){ cache.fecha=null; }
+      cache.loading=null;
+      try{ if(typeof renderCompraItems==='function' && document.getElementById('ccomp-items')) renderCompraItems(); }catch(e){}
+    })();
+  }
+  window.compraInfoStockAyer=function(pid){
+    var p=(typeof prodCache!=='undefined'&&prodCache||[]).find(function(x){return x.id===pid;});
+    var stock=p?(Number(p.stock)||0):'-';
+    cargar();
+    var ayer=cache.map?(cache.map[pid]||0):'…';
+    return 'Stock actual: <b>'+stock+'</b> · Vendido ayer: <b>'+ayer+'</b>';
+  };
+})();
+</script>
 <script src="pedidos-admin.js"></script>
 <style id="bg-marca-css">
 #sidebar .logo-icon.con-logo{background:transparent!important;border:0!important;padding:0!important;overflow:hidden}
