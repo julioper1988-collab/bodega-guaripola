@@ -16893,5 +16893,77 @@ body #content .prod-excel-filters{margin:0 0 12px}
   #ccomp-items{min-height:50vh!important}
 }
 </style>
+<!-- ══ PARCHE: BLOQUEAR VENTAS SIN STOCK (opción en Configuración) ══ -->
+<script id="bg-bloqueo-stock">
+(function(){
+  var LS='bg_bloquear_sin_stock', on=false;
+  try{ on=localStorage.getItem(LS)==='1'; }catch(e){}
+  function n(v){ v=Number(v); return isFinite(v)?v:0; }
+  function esServicio(p){ var c=(typeof catCache!=='undefined'?catCache:[]).find(function(x){return x.id===p.categoria_id;}); return !!c && /^servicios$/i.test(String(c.nombre||'').trim()); }
+  function prodDe(id){ return (typeof prodCache!=='undefined'?prodCache:[]).find(function(p){return String(p.id)===String(id);}); }
+  function udsEnCarrito(id){ return (typeof cart!=='undefined'?cart:[]).filter(function(c){return String(c.producto_id)===String(id);}).reduce(function(s,c){return s+n(c.cantidad)*Math.max(1,n(c.uds)||1);},0); }
+  function aviso(p,pide){ if(typeof toast==='function') toast('⛔ '+p.nombre+': hay '+Math.max(0,n(p.stock))+' en stock'+(pide?' (pedís '+pide+')':'')+'. Venta sin stock bloqueada','err'); }
+  window.bgBloqueoStockActivo=function(){ return on; };
+  window.bgBloqueoStockToggle=async function(el){
+    on=!!(el?el.checked:!on);
+    try{ localStorage.setItem(LS,on?'1':'0'); }catch(e){}
+    var ok=false;
+    try{ var r=await sb.from('pedidos_config').update({bloquear_sin_stock:on}).eq('id',1); ok=!r.error; }catch(e){}
+    if(typeof toast==='function') toast((on?'Ventas sin stock bloqueadas':'Ventas sin stock permitidas')+(ok?'':' (solo este dispositivo)'));
+  };
+  window.bgBloqueoStockCardHtml=function(){
+    return '<div class="card" style="margin-bottom:14px"><div class="card-header"><h3>Ventas</h3></div><div style="padding:14px">'+
+      '<label style="display:flex;gap:10px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" '+(on?'checked ':'')+'onchange="bgBloqueoStockToggle(this)" style="width:18px;height:18px">'+
+      '<span><b>No vender productos sin stock</b><br><span style="font-size:12px;color:var(--text2)">Bloquea agregar o cobrar más unidades de las que hay. No aplica a SERVICIOS (ej. Delivery).</span></span></label></div></div>';
+  };
+  // Estado compartido entre dispositivos (pedidos_config.bloquear_sin_stock)
+  var intentos=0;
+  (function cargar(){
+    if(typeof sb==='undefined'||!sb){ if(++intentos<40) setTimeout(cargar,500); return; }
+    sb.from('pedidos_config').select('bloquear_sin_stock').eq('id',1).maybeSingle().then(function(r){
+      if(r&&!r.error&&r.data&&typeof r.data.bloquear_sin_stock==='boolean'){ on=r.data.bloquear_sin_stock; try{localStorage.setItem(LS,on?'1':'0');}catch(e){} }
+    }).catch(function(){});
+  })();
+  function instalar(){
+    // Tarjeta en Configuración (junto a Datos del comercio)
+    if(typeof window.bgMarcaCardHtml==='function' && !window.bgMarcaCardHtml.__bs){
+      var mc=window.bgMarcaCardHtml; window.bgMarcaCardHtml=function(){ return mc.apply(this,arguments)+bgBloqueoStockCardHtml(); }; window.bgMarcaCardHtml.__bs=true;
+    }
+    // Al agregar al carrito
+    if(typeof window.addToVenta==='function' && !window.addToVenta.__bs){
+      var oa=window.addToVenta;
+      var wa=function(prodId,embId,qty){
+        if(on){
+          var p=prodDe(prodId);
+          if(p && !esServicio(p)){
+            var emb=embId?((typeof embCache!=='undefined'&&embCache[prodId])||[]).find(function(e){return e.id===embId;}):null;
+            var pide=udsEnCarrito(prodId)+(n(qty)||1)*Math.max(1,emb?n(emb.cantidad):1);
+            if(pide>n(p.stock)){ aviso(p,pide); return; }
+          }
+        }
+        return oa.apply(this,arguments);
+      };
+      wa.__bs=true; window.addToVenta=addToVenta=wa;
+    }
+    // Al cobrar (cubre cambios de cantidad en el carrito)
+    if(typeof window.finalizarVenta==='function' && !window.finalizarVenta.__bs){
+      var of=window.finalizarVenta;
+      var wf=async function(){
+        if(on){
+          var vistos={};
+          for(var i=0;i<(cart||[]).length;i++){
+            var id=cart[i].producto_id; if(vistos[id]) continue; vistos[id]=1;
+            var p=prodDe(id); if(!p||esServicio(p)) continue;
+            var pide=udsEnCarrito(id); if(pide>n(p.stock)){ aviso(p,pide); return; }
+          }
+        }
+        return of.apply(this,arguments);
+      };
+      wf.__bs=true; window.finalizarVenta=finalizarVenta=wf;
+    }
+  }
+  instalar(); var k=0, t=setInterval(function(){ instalar(); if(++k>20) clearInterval(t); },500);
+})();
+</script>
 </body>
 </html>
